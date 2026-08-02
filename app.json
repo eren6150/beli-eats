@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Beli Eats",
+    "slug": "beli-eats",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.eren.belieats",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Beli Eats, etrafındaki restoranları göstermek için konumuna ihtiyaç duyuyor.",
+        "NSLocationAlwaysUsageDescription": "Beli Eats, etrafındaki restoranları göstermek için konumuna ihtiyaç duyuyor."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#22C55E"
+      },
+      "package": "com.eren.belieats",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-location",
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    }
+  }
+}

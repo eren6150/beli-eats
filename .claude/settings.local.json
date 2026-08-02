@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.expo.dev)",
+      "WebSearch",
+      "PowerShell(npx tsc --noEmit)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "PowerShell($node = \"C:\\\\tmp\\\\node22_extract\\\\node-v22.17.0-win-x64\\\\node.exe\"; & $node \".\\\\node_modules\\\\typescript\\\\lib\\\\tsc.js\" --noEmit)",
+      "PowerShell(Remove-Item -LiteralPath \"C:\\\\proje\\\\kodlama\\\\beli-eats\\\\src\\\\navigation\\\\ProfileStack.tsx\" -Confirm:$false)",
+      "PowerShell(if \\($?\\) { \"silindi\" })",
+      "PowerShell($node = \"C:\\\\tmp\\\\node22_extract\\\\node-v22.17.0-win-x64\\\\node.exe\"; & $node \".\\\\node_modules\\\\typescript\\\\lib\\\\tsc.js\" --noEmit; if \\($?\\) { \"typecheck temiz - 0 hata\" })",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.codegenConfig,null,2\\)\\)\")",
+      "PowerShell(node --version)",
+      "PowerShell(npx tsc --version)",
+      "PowerShell(& \"C:\\\\tmp\\\\node22_extract\\\\node-v22.17.0-win-x64\\\\node.exe\" --version)",
+      "PowerShell($node = \"C:\\\\tmp\\\\node22_extract\\\\node-v22.17.0-win-x64\\\\node.exe\"; & $node \".\\\\node_modules\\\\typescript\\\\lib\\\\tsc.js\" --noEmit; if \\($?\\) { \"TYPECHECK OK\" })",
+      "Bash(\"C:/tmp/node22_extract/node-v22.17.0-win-x64/node.exe\" -e \"try{console.log\\('RESOLVED:', require.resolve\\('@expo/vector-icons'\\)\\)}catch\\(e\\){console.log\\('NOT RESOLVABLE:', e.code\\)}\")",
+      "Bash(grep -coE \"#[0-9A-Fa-f]{3,8}\\\\b|rgba\\\\\\(\" src/screens/RestaurantDetailScreen.tsx)",
+      "Bash(grep -v \"^.*//\")",
+      "Bash(grep -n \"poiCacheRef\\\\|SearchScreen.tsx:92\\\\|003_places_fk\\\\`\\\\.\" CLAUDE.md)",
+      "Bash(grep -n \"^#\\\\{1,3\\\\} \\\\|^| # |\" CLAUDE.md)",
+      "PowerShell($node = \"C:\\\\tmp\\\\node22_extract\\\\node-v22.17.0-win-x64\\\\node.exe\"; & $node \".\\\\node_modules\\\\typescript\\\\lib\\\\tsc.js\" --noEmit; \"exit=$LASTEXITCODE\")",
+      "PowerShell(Remove-Item \"C:\\\\proje\\\\kodlama\\\\beli-eats\\\\src\\\\screens\\\\lists\\\\CreateListScreen.tsx\" -Confirm:$false)",
+      "PowerShell(\"silindi\")",
+      "PowerShell($env:PATH = \"C:\\\\tmp\\\\node22_extract\\\\node-v22.17.0-win-x64;$env:PATH\"; npx expo install @react-native-community/datetimepicker)",
+      "PowerShell(\"---GIT---\")",
+      "PowerShell(\"---ENV DOSYALARI---\")",
+      "PowerShell($node = \"C:\\\\tmp\\\\node22_extract\\\\node-v22.17.0-win-x64\\\\node.exe\"; $sp = \"C:\\\\Users\\\\eren6\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--proje-kodlama-beli-eats\\\\436bc907-8ff4-44d4-8c47-323842ef6d67\\\\scratchpad\"; & $node \"$sp\\\\gen-icons.js\" \"$sp\")",
+      "PowerShell($sp = \"C:\\\\Users\\\\eren6\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--proje-kodlama-beli-eats\\\\436bc907-8ff4-44d4-8c47-323842ef6d67\\\\scratchpad\"; $dst = \"C:\\\\proje\\\\kodlama\\\\beli-eats\\\\assets\"; foreach \\($f in @\\('icon.png','adaptive-icon.png','splash.png','favicon.png'\\)\\) { Copy-Item \"$sp\\\\$f\" \"$dst\\\\$f\" -Force }; Remove-Item \"$dst\\\\splash-icon - Copy.png\" -Force -Confirm:$false; Get-ChildItem $dst -File | Select-Object Name, Length | Format-Table -AutoSize)"
+    ]
+  }
+}

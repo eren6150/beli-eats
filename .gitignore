@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+build/
+web-build/
+
+# Ortam değişkenleri — GERÇEK DEĞERLER ASLA COMMIT EDİLMEZ.
+# `.env*` tüm varyantları kapsıyor (.env.local, .env.development.local, ...);
+# şablon dosyası tek istisna ve bilinçli olarak commit ediliyor.
+.env*
+!.env.example
+
+*.log
+*.orig.*
+.DS_Store
