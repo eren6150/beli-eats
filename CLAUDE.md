@@ -38,8 +38,10 @@ takip ettiği kişilerin aktivite akışı olacak.
   ```
   (Kullanıcı PATH'e eklediğini belirtti ama Claude'un shell'inde görünmüyor — tam yolu kullan.)
 - **Her kod değişikliğinden sonra typecheck çalıştır.**
-- Supabase anahtarları `.env` içinde, `.gitignore`'da. `app.config.ts` dinamik config
-  (API key enjeksiyonu burada), `app.json` statik kısım.
+- Supabase anahtarları `.env` içinde, `.gitignore`'da. **`app.config.js`** dinamik
+  config (API key enjeksiyonu burada), `app.json` statik kısım.
+  **Bu dosya bir dönem `app.config.ts` idi ve EAS CLI onu okuyamadı** — gerekçe
+  ve tam teşhis: Dağıtım / EAS Build §1.
 - Expo Go SDK 54 yalnızca New Architecture destekliyor.
 - **Claude uygulamayı çalıştıramıyor** — fiziksel Android cihaz kullanıcıda. Görsel/davranışsal
   doğrulamayı kullanıcıdan iste ve neye bakması gerektiğini açıkça söyle.
@@ -47,14 +49,18 @@ takip ettiği kişilerin aktivite akışı olacak.
 ## Mimari Notlar
 
 ### Veri / Backend
-- Auth: kayıt/giriş aktif; test amaçlı zorunlu e-posta onayı Supabase panelinden kapatıldı
+- Auth: kayıt/giriş aktif. **Zorunlu e-posta onayı BİLİNÇLİ OLARAK KAPALI** —
+  arkadaş testi süresince böyle kalacak. Açmanın önündeki altı somut sorun ve
+  düzeltme sırası: Mimari Notlar → **Auth / kayıt akışı**. (2026-08-03'te açılması
+  düşünüldü, analiz sonrası **ertelendi**: tek diff'e sığmıyor ve arkadaş testini
+  geciktirirdi.)
 - Takip sistemi: `follows` tablosu (`follower_id`, `following_id`)
 - **Migration'lar elle çalıştırılıyor** (Supabase SQL Editor). Sıfırdan kurulum sırası
   `supabase_schema.sql` başında yazılı:
   `schema` → `001_coords` → `002_places` → `003_places_fk` → `004_profile_fields` →
   `005_lists` → `006_reorder_list_items` → `007_move_list_items` →
   `008_move_list_items_copy` → `009_diary_entries` → `010_log_diary_entry` →
-  `011_update_diary_entry`.
+  `011_update_diary_entry` → `012_username_conflict`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -101,6 +107,175 @@ takip ettiği kişilerin aktivite akışı olacak.
     `error.message`'ı regex'lemek veya `error.code`'un varlığına bakmak demek — ikisi de
     kırılgan. Tek kısa mesaj + "Tekrar dene" ikisini de doğru karşılıyor. Metinler bu
     yüzden teşhis koymuyor: "Bağlantını kontrol et", "Bağlantı yok" değil.
+
+### Auth / kayıt akışı — E-POSTA ONAYI KAPALI, dört açık iş (analiz: 2026-08-03)
+> Altı maddeydi. **(f)** migration 012 ile **kapandı**, **(e)**'nin kodu
+> düzeltildi (cihazda doğrulanmadı) — ikisi de 2026-08-04. Kalan (a)–(d)'nin
+> hepsi yalnızca **onay açılınca** canlıya çıkıyor.
+E-posta onayını açma kararı **ertelendi**. Aşağıdaki altısı tek diff'e sığmıyordu ve
+arkadaş testini geciktirecekti. **Panelden onay açılırsa (a)–(d) o anda canlıya
+çıkar** — mevcut APK'da hiçbiri karşılanmıyor. (e) ve (f) onaydan bağımsız, bugün
+de bozuklar.
+
+Analiz burada tam olarak duruyor ki açma kararı verildiğinde sıfırdan teşhis
+gerekmesin.
+
+**Bugünkü akış:** `RegisterScreen.handleRegister` → `useAuth.signUp` →
+`supabase.auth.signUp({ email, password })` → `auth.users` insert → **trigger**
+`on_auth_user_created` profil satırını yazıyor (`supabase_schema.sql:29-46`) →
+istemci ayrıca `profiles.insert` deniyor.
+
+#### Onay açılınca kırılacaklar
+
+**(a) Başarı mesajı doğrudan yalan olur.** `RegisterScreen.tsx:48-49`:
+```ts
+Alert.alert('Başarılı!', 'Hesabın oluşturuldu. Giriş yapabilirsin.');
+navigation.navigate('Login');
+```
+Onay açıkken giriş YAPILAMAZ. Kullanıcı Login'e atılıyor, reddediliyor ve
+e-postasına bakması gerektiğini söyleyen hiçbir şey yok. "Onay bekleniyor"
+durumunu gösteren ekran/mesaj **hiç yok**.
+
+**(b) Reddedilme mesajı ham ve İngilizce.** `LoginScreen.tsx:39` →
+`Alert.alert('Giriş Hatası', error.message)`; Supabase'in `Email not confirmed`'i
+aynen ekrana basılıyor. `RegisterScreen.tsx:46` aynı ihlal. Bu zaten "ham
+`error.message` bir kullanıcı metnine ŞABLONLANMAZ" kuralının ihlali — onay
+açıkken en sık görülen hata bu olacağı için görünürlüğü tavan yapar.
+
+**(c) Zaten kayıtlı e-posta → sessiz SAHTE başarı.** Supabase onay açıkken e-posta
+sayımını (enumeration) engellemek için var olan bir adrese `signUp` çağrısında
+**hata döndürmez**; sahte bir user nesnesi döner ve ayırt edici işaret
+`data.user.identities` dizisinin **boş** olmasıdır. Kod yalnızca `error`'a baktığı
+için ekranda "Başarılı!" yazar, onay e-postası hiç gelmez, kullanıcı bekler.
+**Onay KAPALIYKEN bu senaryo düzgün hata veriyor** — yani (c) onayla birlikte
+doğan yeni bir kör nokta.
+
+**(d) "E-posta gelmedi" için çıkış yok.** Spam'e düşerse veya silinirse tekrar
+gönderme yolu yok. `supabase.auth.resend({ type: 'signup', email })` mevcut ama
+hiçbir yerden çağrılmıyor.
+
+#### Onaydan BAĞIMSIZ, bugün de bozuk
+
+**(e) Kullanıcının yazdığı kullanıcı adı ATILIYOR** → **KOD DÜZELTİLDİ
+(2026-08-04), CİHAZDA DOĞRULANMADI — versionCode 2 APK'sını bekliyor.**
+
+Neydi: trigger metadata okumak üzere yazılmıştı (`supabase_schema.sql:33-38`)
+ama `useAuth.signUp` `options.data` **göndermiyordu**. Metadata boş kaldığı için
+`coalesce` hep ikinci dala düşüyor ve kullanıcı adı **e-postanın @ öncesi**
+oluyordu.
+- Ardından istemciden `profiles.insert` yapılıyordu; satırı trigger zaten yazdığı
+  için PK çakışması (`23505`) dönüyor ve **o çağrının sonucu hiç kontrol
+  edilmiyordu** (`await` var, `error` yakalanmıyor) → hata sessizce yutuluyordu.
+  Yani ölü koddu: hiç çalışmadı, sadece bir tur ağ yaktı.
+- Onay açılsaydı bu ikinci yazma ayrıca **anon olarak** çalışacak (`signUp`
+  `session: null` döner) ve RLS'e de takılacaktı.
+
+Düzeltme: `signUp` artık `options: { data: { username } }` gönderiyor ve
+istemcideki `profiles.insert` **silindi**. **Profil yazmanın tek kaynağı trigger
+oldu** — onay açıldığı gün doğacak anon-yazma sorunu da kökten kalktı.
+- `RegisterScreen` kullanıcı adını `trim()`liyor. Bu, ad gerçekten
+  KULLANILMAYA başladığı için anlamlı hale geldi: `"   "` mevcut `!username`
+  kontrolünü geçer, sunucuda btrim'lenip boşalır ve kullanıcı sebebini
+  anlamadan `kullanici` adını alırdı (migration 012'nin boş-taban savunması).
+- Çakışma artık kaydı patlatmıyor: migration 012 trigger'da sonek üretiyor,
+  yani iki kişinin aynı kullanıcı adını **elle yazması** da `eren2`'ye düşüyor.
+
+**~~(f) Aynı @ öncesine sahip iki kullanıcı KAYIT OLAMAZ.~~ → KAPANDI
+(2026-08-04, migration 012, uçtan uca DOĞRULANDI).**
+
+Neydi: `profiles.username` `unique not null` (`supabase_schema.sql:24`),
+`eren@gmail.com` ve `eren@outlook.com` ikisi de `eren` üretiyordu. Trigger'ın
+`on conflict (id) do nothing` klozu yalnızca **id** çakışmasını karşılıyor,
+**username'i değil** → unique ihlali → trigger patlar → `auth.users` insert'i
+geri alınır → kullanıcı `Database error saving new user` görür ve **hiç kayıt
+olamazdı**. Onay kapalıyken de canlıydı ve arkadaş testi büyüdükçe olasılığı
+artıyordu.
+
+Çözüm — **migration 012** (`supabase_migration_012_username_conflict.sql`),
+sonek yaklaşımı: `eren` → `eren2` → `eren3`.
+- **Neden sonek (i), nullable username (ii) DEĞİL:** (ii) daha doğru ürün kararı
+  ama yeni ekran + "profilim tamamlanmadı" durumu + `not null` kaldırma demekti.
+  Arkadaş testinin ORTASINDAYDIK ve düzeltmenin o gün canlıya çıkması
+  gerekiyordu. (i) **saf SQL: APK gerektirmiyor**, mevcut kurulumdaki herkes
+  için anında geçerli oldu. Listedeki tek "anında canlıya çıkan" düzeltmeydi.
+  (ii) Faz 3'ün profil işiyle yeniden değerlendirilebilir.
+- **`next_available_username(base)` AYRI fonksiyon**, trigger gövdesine gömülü
+  değil. Sebep test edilebilirlik: trigger'ı denemek `auth.users`'a insert
+  atmayı gerektiriyor ve yarım auth kaydı bırakıyor; bu fonksiyon SQL
+  Editor'dan doğrudan çağrılabiliyor (`select public.next_available_username('eren');`).
+  Bu projede "SQL Editor'dan test EDİLEMEZ" notu birden çok kez düşüldü —
+  burada test edilebilirlik tasarıma katıldı. İkincil fayda: kural tek yerde
+  (`upsert_user_ranking`'in `rank_index` için yaptığının aynısı).
+- **Ön kontrol TEK BAŞINA YETMİYOR, döngü de var.** Aday üretimi ile insert
+  arasında başka bir kayıt aynı adı alabilir (iki kişi aynı anda kaydolursa).
+  Yalnızca ön kontrol, düzeltilen hatanın daha nadir bir sürümünü bırakırdı.
+  Trigger `unique_violation` yakalayıp yeni adayla tekrar deniyor; iş bölümü
+  net: **id çakışmasını `on conflict (id)` yutuyor, username çakışması
+  exception'a düşüyor.**
+- **50 denemeden sonra son çare** kullanıcının uuid parçasını ekliyor. Estetik
+  değil **garanti**: bu fonksiyondan çıkan hiçbir yol kullanıcıyı
+  "kaydolamadın" ekranında bırakmamalı — migration'ın varlık sebebi buydu.
+- **YAN DÜZELTME — `set search_path` eklendi.** Mevcut `handle_new_user`
+  `security definer` ama `set search_path` **yoktu**; projenin `upsert_place`
+  için açıkça koyduğu kuralın ("bu satır atlanmamalı, search_path hijacking'e
+  karşı") ihlaliydi. Fonksiyon zaten baştan yazıldığı için kapatıldı.
+  `next_available_username`'e de uygulandı. Panelde doğrulandı: ikisinde de
+  `proconfig = {"search_path=public, pg_temp"}`.
+- **`create or replace` yeterliydi, `drop` gerekmedi:** migration 008'in "önce
+  drop" dersi **parametre listesi** değiştiğinde geçerli (aşırı yükleme riski);
+  burada imza birebir aynı (argümansız, `returns trigger`).
+- **(e) ile ilişkisi:** (f) kapandığı için CLAUDE.md'nin eski
+  *"(e) düzeltilirse çakışma ihtimali düşer ama BİTMEZ"* uyarısı da kapandı.
+  Trigger artık **her iki kaynağı da** (metadata'daki kullanıcı adı ve e-posta
+  @ öncesi) aynı yoldan geçiriyor; (e) geldiğinde iki kişinin aynı kullanıcı
+  adını **elle yazması** da otomatik olarak `eren2`'ye düşecek.
+- **Doğrulama:** SQL adımları (boşta ad · dolu ad → sonek · boş/null taban →
+  `kullanici` · `proconfig`) geçti. Sahte UUID ile geçici satır testi
+  `profiles.id → auth.users` FK'sına takıldı — **beklenen**, migration
+  dosyasında da bu ihtimal not düşülmüştü. **Uçtan uca uygulamadan doğrulandı:**
+  aynı @ öncesine sahip yeni e-postayla kayıt önce `Database error saving new
+  user` veriyordu, migration sonrası başarılı ve `eren2` olarak kaydoldu.
+
+#### Düzeltme sırası (öneri)
+**1 → 3 → 2**, çünkü ilk ikisi küçük ve tek dosyalık, sonuncusu ekran işi:
+
+1. **`signUp`'a username'i metadata olarak geçir + ölü insert'i sil.**
+   `options: { data: { username } }` eklenince trigger doğru ismi alır; istemcideki
+   `profiles.insert` gereksizleşir (zaten çalışmıyor) ve onay açıkken anon-yazma
+   sorunu kökten kalkar. Profil yazmanın tek kaynağı trigger olur. → **(e)**
+3. **İki auth ekranında hata metinlerini kurala uydur.** Ham `error.message` yerine
+   **hata koduna** göre kısa Türkçe metin — bu, projenin zaten onayladığı ayrım
+   ("hata kodu belgeli ve kararlı bir sözleşme", ağ mesajını regex'lemekten farklı):
+   `email_not_confirmed` → "E-postanı onaylaman gerekiyor. Gelen kutunu kontrol et."
+   · `invalid_credentials` → "E-posta veya şifre hatalı." · diğerleri → "Bir şeyler
+   ters gitti, tekrar dene." + tam nesne `console.error`'a. Kayıtta ayrıca
+   `data.user.identities?.length === 0` kontrolü → "Bu e-posta zaten kayıtlı, giriş
+   yapmayı dene." → **(b)** ve **(c)**
+2. **Kayıt sonrası "onay bekleniyor" durumu.** **Ayrı ekran ÖNERİLMİYOR** — yeni
+   rota + `AuthStack` değişikliği demek, oysa gösterilecek tek bir bilgi.
+   `RegisterScreen` başarılı kayıttan sonra Login'e atmak yerine formun yerine sade
+   bir durum göstersin: e-posta ikonu + "**{email}** adresine onay bağlantısı
+   gönderdik…" + **"Tekrar gönder"** (`auth.resend`, 60 sn kilitli) + "Giriş
+   ekranına dön". Mevcut parçalarla kurulabilir (`EmptyState` deseni + `Icon`),
+   yeni tasarım dili gerekmiyor. → **(a)** ve **(d)**
+
+**(f) ayrı bir karardı ve SQL değişikliğiydi** — yukarıdaki üçünün hiçbiri
+çözmüyordu. **2026-08-04'te (i) seçilip migration 012 ile KAPANDI**; gerekçe ve
+tasarım kararları (f) maddesinde. Sıra (a)–(e)'ye kaldı, hepsi hâlâ açık.
+
+**Doğrulama notu — GÜNCELLENDİ (2026-08-04):** trigger'ın panelde ayakta olduğu
+o güne kadar hiç doğrulanmamıştı; migration 012 öncesinde **doğrulandı**
+(`tgenabled = 'O'`, gövde `supabase_schema.sql`'deki tanımla aynı, drift yok,
+`profiles_username_key` yerinde, profilsiz `auth.users` satırı yok). Trigger
+artık migration 012'nin yazdığı gövdeyi çalıştırıyor. Kontrol sorgusu:
+```sql
+select t.tgname, t.tgenabled, p.proname
+from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+where t.tgname = 'on_auth_user_created';
+```
+**(e) hâlâ `supabase_schema.sql`'deki tanıma değil, `useAuth.ts`'e dayanıyor ve
+açık:** istemci `options.data` göndermediği için kullanıcının yazdığı ad hâlâ
+atılıyor, @ öncesi kullanılıyor. Sonraki APK'ya planlandı.
 
 ### `places` cache tablosu (Faz 1a — TAMAMLANDI)
 Google'dan çekilen mekan bilgisinin paylaşılan cache'i. Migration 002 + 003.
@@ -167,6 +342,61 @@ buna bağlanacak.
 - Sorgulara `locationbias` eklendi (sonuçlar Türkiye/Ankara'ya öncelikli)
 - API'den dönen ham metinler/anlamsız karakterler filtreleniyor
 - `nearbySearch()` fonksiyonu duruyor ama **çağrılmıyor** — ileride "bu bölgede ara" için bırakıldı
+
+### Arama ekranı — durum ayrımı (2026-08-04, cihazda DOĞRULANDI)
+Arkadaş testi sırasında çıkan bir davranış hatasının teşhisi ve düzeltmesi.
+9 testin hepsi geçti.
+
+**Semptom:** `mcdonald` ara → bir sonuca dokun → detay → geri. Arama kutusunda
+**seçilen mekanın tam adı** yazılı (`McDonalds Ankara Bilkent`), altında
+**"Sonuç bulunamadı"**.
+
+**Kök neden — tamamen yerel state, ağ hiç devrede değil.**
+`handleSelect` iki satır yazıyordu: `setQuery(cleanName)` + `setPredictions([])`
+("tarayıcı adres çubuğu" deseni). `SearchScreen` `SearchStack`'in **kökü**,
+`RestaurantDetail` üstüne push ediliyor → ekran unmount olmuyor → state hayatta
+kalıyor. Dönüşte durum: kutu dolu, liste boş, `loading` false.
+- **Dönüşte YENİ İSTEK ATILMIYOR**: dosyada tek bir `useEffect`/`useFocusEffect`
+  yok, `fetchPredictions`'ın tek çağıranı `handleTextChange`'in debounce timer'ı.
+  Yani **"Sonuç bulunamadı" bir arama sonucu değil, hiç yapılmamış bir aramanın
+  varsayılan ekranıydı.** Fatura da yok, ağ da yok.
+- **Google'ın uzun adlarda boş dönmesi bu bug'ın sebebi DEĞİLDİ** (bir aday
+  olarak incelendi ve elendi). `locationbias` de sebep olamaz — adı üstünde
+  *bias*, kümeyi daraltmaz sıralar; daraltan `locationrestriction` kullanılmıyor.
+  Not: `cleanPlaceName` kesme işaretini siliyor (`McDonald's` → `McDonalds`).
+
+**Asıl yapısal kusur: "Sonuç bulunamadı" bir CATCH-ALL'dı.** Tek koşulu
+`!loading && query.length > 1` idi ve bu, çok farklı üç durumu aynı dala
+topluyordu: (a) yazıldı ama debounce dolmadı, (b) başka ekrandan dönüldü,
+(c) arandı ve gerçekten sonuç yok. Yalnızca (c) doğru. (a) yüzünden **her
+aramada 400ms'lik bir yanıp sönme** vardı — bug'ın ikinci, fark edilmemiş yüzü.
+
+**Düzeltme:**
+- `handleSelect` artık **query'ye de predictions'a da dokunmuyor** — sadece
+  `Keyboard.dismiss()` + `navigate`. Geri dönünce kullanıcı bıraktığı yerde:
+  yazdığı metin ve sonuç listesi duruyor, başka bir sonuca dokunabiliyor,
+  **ek istek yok**. Reddedilen alternatif: kutuyu temizlemek — bug'ı çözerdi
+  ama listeyi de silip kullanıcıya aramayı baştan yazdırırdı (üstelik faturalı).
+  Kural, projenin `backBehavior="history"` ve `reopenSummaryRef` kararlarıyla
+  aynı: **geri her zaman bir önceki duruma döner.**
+- **Yeni state `searchedFor`**: son TAMAMLANAN aramanın metni. "Sonuç bulunamadı"
+  ancak `searchedFor === query.trim()` iken gösteriliyor. `renderBody` daralan
+  5 dala ayrıldı; bekleme durumu artık `null` yerine **iskelet** döndürüyor,
+  yanıp sönme bu yüzden bitiyor.
+- `MIN_QUERY_LENGTH = 2` sabiti — eşik iki yerde iki farklı yazımla duruyordu
+  (`text.length < 2` ve `query.length > 1`).
+
+**Kapsam dışıyken eklenen iki parça (ikisi de gerekliydi):**
+- **`handleClear` bekleyen debounce'u iptal etmiyordu** — yazıp 400ms dolmadan
+  çarpıya basınca istek yine ateşlenip listeyi geri dolduruyordu. Ayrı bir bug.
+- **Yanıt sırası koruması (`requestSeqRef`)**: `searchedFor` ancak yanıtlar
+  sırasız gelemiyorsa güvenilir. Guard olmadan geç gelen boş bir yanıt
+  `searchedFor`'u güncel olmayan bir metne çeker ve ekranı **iskelette asılı**
+  bırakırdı — yani düzeltme yeni bir hata sınıfı doğururdu. `MapScreen`'in
+  `lastPoiTapRef`'iyle aynı desen.
+
+**Bilinçli olarak DOKUNULMADI:** `json.status` kontrolü ve `places.ts`'teki hazır
+`autocomplete()`'e geçiş. Açık iş listesinde duruyor.
 
 ### Tasarım sistemi (Faz 1b)
 `src/constants/theme.ts` — **iki katmanlı**: `Palette` (ham ramp'ler) → `Colors`
@@ -285,7 +515,8 @@ TabNavigator
 - Safe area: `SafeAreaProvider` kökte, ekranlar `react-native-safe-area-context`'ten
   `SafeAreaView` kullanıyor (RN çekirdeğininki Android'de no-op'tu), tab bar gerçek alt
   inset'i hesaba katıyor
-- `app.json` → `app.config.ts` geçişi yapıldı: statik JSON'da `${EXPO_PUBLIC_...}`
+- `app.json` → dinamik config geçişi yapıldı (o gün `app.config.ts`, 2026-08-02'de
+  `app.config.js`'e çevrildi — bkz. Dağıtım / EAS Build §1): statik JSON'da `${EXPO_PUBLIC_...}`
   interpolate edilmiyordu, Google Maps key artık doğru enjekte ediliyor.
   `newArchEnabled: false` kaldırıldı (SDK 54'te New Arch zaten varsayılan)
 - **`ProfileStack.tsx` bir kez SİLİNMİŞTİ** (ölü kod: var olmayan ekranları import
@@ -643,6 +874,39 @@ alanlardan kurularak yapılıyor.
   düzenleme, verilmezse ekleme. Rota değil bileşen olduğu için iki ekranda
   birden render ediliyor — `RestaurantDetail` (ekleme) ve `ProfileScreen`
   (düzenleme).
+- **Kaydet butonu SABİT FOOTER, ScrollView'ın İÇİNDE DEĞİL** (2026-08-05'te
+  düzeltildi, arkadaş testinden gelen ikinci geri bildirim, 9 senaryo cihazda
+  doğrulandı — büyük sistem yazı tipi ölçeğiyle tekrar dahil).
+  - **Bug:** buton formun son elemanı olarak ScrollView'ın içindeydi. Form
+    içeriğinin doğal yüksekliği neredeyse sabit (tarih + puan + ipucu + 88px
+    not alanı + buton), sheet ise `maxHeight: '85%'` ile sınırlı. Ekran KISAYSA
+    ya da sistem YAZI TİPİ ÖLÇEĞİ BÜYÜKSE o %85 yetmiyor ve kırpılan ilk şey en
+    alttaki buton oluyordu → kullanıcı kaydetmek için aşağı kaydırmak zorunda.
+  - **`flexShrink: 1` ScrollView'da ŞART.** RN'de varsayılan `flexShrink` **0**
+    (web'in tersine): onsuz ScrollView içeriği kadar yer kaplar ve `maxHeight`
+    sınırında kırpılan şey yine footer olurdu — aynı bug, başka kılıkta.
+  - **`KeyboardAvoidingView`'a `style={{flex:1, justifyContent:'flex-end'}}`.**
+    Öncesinde KAV'ın hiç `style`'ı yoktu, yani içeriğine göre boyutlanıyordu ve
+    sheet'in `maxHeight: '85%'`'i **belirsiz bir ebeveyn yüksekliğinden**
+    hesaplanıyordu. `behavior="height"` ile çakışmıyor: RN o override'ı
+    (`{height, flex:0}`) YALNIZCA klavye açıkken uyguluyor
+    (`KeyboardAvoidingView.js:237-248`, `state.bottom > 0` koşulu).
+  - **`pointerEvents="box-none"` KAV'da ZORUNLU.** KAV artık tüm ekranı
+    kapladığı için onsuz arkadaki karartma `Pressable`'ını yutar ve **dışarı
+    dokunup kapatma sessizce kaybolurdu**. Düzeltmenin doğurabileceği tek
+    regresyon buydu; test listesinde ayrıca işaretlendi.
+  - **Android'de `behavior` `undefined` → `'height'`.** Eski gerekçe *"Android'de
+    klavye pencereyi zaten yeniden boyutluyor (adjustResize)"* idi — edge-to-edge
+    altında güvenilemeyecek bir varsayım (bkz. aşağıdaki ders). Bu dosya projedeki
+    TEK aykırı yerdi: `LoginScreen:45`, `RegisterScreen:56`, `ListFormScreen:166`
+    üçü de `'height'` kullanıyor ve üçü de cihazda çalışıyor. **`'padding'`
+    DEĞİL** — pencere gerçekten yeniden boyutlanıyorsa sheet'i iki kez iterdi;
+    eski yorumun haklı olduğu tek nokta buydu.
+  - **Safe area burada BAŞTAN DOĞRUYDU:** sheet zaten `insets.bottom + Spacing.sm`
+    yazıyordu, yani toplama formu. Nav bar'daki `Math.max()` hatasının bu dosyada
+    karşılığı yoktu; formül olduğu gibi footer'a taşındı.
+  - Yan kazanç: buton ScrollView'ın dışında olduğu için klavye açıkken ilk
+    dokunuş klavyeyi kapatmakla harcanmıyor, doğrudan kaydediyor.
 - **Düzenlemede `ensurePlaceCached` gerekmiyor**: satır zaten var, FK o gün
   tutmuş. Eklemede gerekli (`diary_entries.place_id` → `places`).
 - Giriş noktası **mekan detayı**: ayrı bir "log ekle" ekranı yapılmadı, çünkü
@@ -652,8 +916,8 @@ alanlardan kurularak yapılıyor.
 - Profil → "Günlük" sekmesinde uzun basış menüsü: **İptal / Düzenle / Sil**
   (silme yine iki adımlı, `ListCard` ile aynı desen).
 - **Bağımlılık: `@react-native-community/datetimepicker`** (SDK 54 uyumlu 8.4.4).
-  `npx expo install` dinamik config'e (`app.config.ts`) yazamıyor — plugin kaydı
-  `app.json`'a **elle** eklendi, `app.config.ts` onu taban alıyor.
+  `npx expo install` dinamik config'e yazamıyor — plugin kaydı `app.json`'a
+  **elle** eklendi, dinamik config (`app.config.js`) onu taban alıyor.
 
 ## Mevcut Durum
 Uygulama fiziksel Android cihazda çalışıyor; her adım cihazda doğrulandı.
@@ -684,6 +948,14 @@ Uygulama fiziksel Android cihazda çalışıyor; her adım cihazda doğrulandı.
   ("Kaynak listeden de kaldır" anahtarı); ekleme/taşıma/kopyalama seçicisi
   paylaşılan `ListPicker`.
 - Ana Sayfa sekmesinin adı **"Ana Sayfa"** (eskiden "Keşfet").
+- **"Ziyaret Ekle" sheet'inde Kaydet butonu sabit footer'da**: form ne kadar
+  uzarsa uzasın ve klavye açıkken de her zaman görünür.
+- **Arama ekranı durum ayrımı yapıyor**: bir sonuca dokunup geri dönünce yazılan
+  metin ve sonuç listesi **korunuyor** (ek istek atmadan), "Sonuç bulunamadı"
+  yalnızca gerçekten aranmış ve boş dönmüş metinler için çıkıyor, debounce
+  penceresinde iskelet görünüyor.
+- **Sekme çubuğu her iki Android navigasyon türünde de doğru**: jest ve üç
+  butonlu modda sistem çubuğuyla arasında nefes payı var.
 - Puan güncellemesi `rank_index`'i bozmuyor
 - `user_rankings`'te 4 kayıt, `places` cache'i dolu ve çalışıyor
 - Sekme çubuğu Ionicons; aktif sekme dolu glif + marka yeşili, pasifler outline + gri
@@ -791,6 +1063,541 @@ korunuyor; puansız giriş sıralamaya hiç girmiyor. Sırada **fotoğraflar** v
 (Supabase Storage + `place_photos`).
 
 Proje "Proof of Concept" aşamasını geçti; ürün kimliği ve tasarım fazında.
+
+## Dağıtım / EAS Build (2026-08-02)
+Arkadaş testi için APK üretme hazırlığı. **Kod tarafı bitti, EAS tarafı yarım kaldı —
+kaldığımız yer §5.**
+
+### 1. `app.config.ts` → `app.config.js` (ZORUNLU dönüşüm, tercih değil)
+Dinamik config dosyası artık **düz JavaScript**. Eski TS sürümü silindi.
+
+**Hata neydi:** `npx eas-cli@latest init` şunu verdi —
+```
+Error reading Expo config at ...\app.config.ts:
+Cannot read properties of undefined (reading 'CommonJS')
+```
+
+**NEDEN:** `npx eas-cli@latest` projenin `node_modules`'ünün **DIŞINDA**, kendi npx
+önbelleğinden çalışıyor. `app.config.ts`'i okumak için TypeScript'i transpile etmesi
+gerekiyor; projede **`ts-node` yok** (doğrulandı) ve Expo'nun kendi `sucrase`'ini
+(3.35.1, kurulu) kendi konumundan çözemiyor. TypeScript API'sine düşüyor, `ts` nesnesi
+tanımsız kalıyor ve `ts.ModuleKind.CommonJS` okunamıyor. Hata mesajındaki `CommonJS`
+tam olarak bu.
+
+- **Bu YALNIZCA `eas init`'i değil `eas build`'i de etkilerdi** — o da config'i
+  okuyor. Düzeltilmeseydi 20 dakikalık kuyruktan sonra aynı yerde düşerdi.
+- **TUZAK — iki hata üst üste binmişti:** `app.json`'da `extra.eas.projectId`
+  `"your-eas-project-id"` yer tutucusuyla dururken `eas init` daha erken bir adımda
+  **"Invalid UUID appId"** ile patlıyordu; config okuma hatasına hiç ulaşılamıyordu.
+  Yer tutucu silinince asıl hata ortaya çıktı. `extra` bloğunu kaldırmak hatanın
+  SEBEBİ değil, görünmesinin sebebiydi.
+- **Reddedilen alternatif:** `ts-node`'u devDependency olarak eklemek. Çalışırdı ama
+  20 satırlık bir config dosyası için kalıcı bir bağımlılık taşımak gerekirdi. Düz
+  JS'te transpile adımı HİÇ YOK — hata sınıfı ortadan kalkıyor.
+- **KAYBEDİLEN:** `ExpoConfig` / `ConfigContext` tip kontrolü. Dosya artık tsc
+  tarafından denetlenmiyor; alan adı yanlış yazılırsa derleme değil **çalışma anı**
+  hatası olur. Dosyanın işi 20 satırlık düz config olduğu için kabul edildi.
+- Davranış birebir korundu: `app.json` taban, Google Maps anahtarı iki platforma
+  enjekte ediliyor, anahtar yoksa `console.warn`. Node ile çağırılıp çıktısı
+  doğrulandı.
+
+### 2. `android.package = com.eren.belieats`
+**KALICI KARAR.** Uygulama bir kez Play Store'a yüklendiğinde paket adı
+**değiştirilemez**; değiştirmek yeni bir uygulama yayınlamak demektir. Yükleme
+öncesi olduğumuz için şimdi belirlendi.
+
+- Öncesinde `com.belieats.app` idi (şablondan kalma). `ios.bundleIdentifier` de aynı
+  eski değerdeydi, **hizalandı** — iki farklı kimlik bırakmak ileride tuzak olurdu.
+- `versionCode: 1` eklendi (yoktu). Her yeni APK'da **elle artırılmalı**;
+  `eas.json`'da `appVersionSource: "local"` seçildi, yani sürüm `app.json`'dan
+  okunuyor, EAS uzaktan yönetmiyor. Bu aşamada öngörülebilirlik için bilinçli.
+
+> ### ⚠️ SÜRÜM YÜKSELTME RİTÜELİ (her build'de, İSTİSNASIZ)
+> **1. `android.versionCode` HER build'de +1.** Aynı `versionCode` ile ikinci bir
+> APK, mevcut kurulumun üzerine yüklenmez.
+> **2. `version` — NATIVE bir şey değiştiyse +1** (ör. `1.0.0` → `1.1.0`).
+>
+> İkincisi 2026-08-05'te **kritik** hale geldi: `runtimeVersion` politikası
+> `appVersion`, yani **OTA runtime'ı doğrudan `version` alanı.** Native değişip
+> `version` aynı kalırsa, `eas update` ile gönderilen JS **uyumsuz bir binary'ye
+> iner** ve uygulama çöker. `fingerprint` politikası bunu otomatik yapıyordu ama
+> build'i patlattı (gerekçe §9) — koruma bu yüzden ritüele bağlandı.
+>
+> **"Native değişiklik" sayılanlar:** native kodu olan yeni paket · SDK/RN
+> yükseltmesi · `app.json`'ın native alanları (`plugins`, `permissions`,
+> `package`, `adaptiveIcon`, `splash`) · config plugin değişikliği.
+> **Sayılmayanlar:** `src/` altındaki her şey, saf JS bağımlılıkları — bunlar
+> zaten OTA ile gidebilir, yeni build bile gerekmez.
+>
+> `version` bugün **1.0.0** ve versionCode 3'te öyle kalıyor: `expo-updates`
+> native bir eklemeydi ama bu **ilk** OTA'lı build, yani uyumsuz kalacağı önceki
+> bir runtime yok. Bir sonraki native değişiklikte yükseltilecek.
+- **`splash.image` yolu KIRIKTI** (`./assets/splash-icon.png` — dosya yok).
+  Expo Go bunu görmezden geliyordu (splash'ı JS tarafında biz çiziyoruz) ama
+  `eas build` "asset not found" ile düşerdi. `./assets/splash.png` olarak düzeltildi.
+
+### 3. `eas.json` — üç profil
+| Profil | Çıktı | Kullanım |
+|---|---|---|
+| `development` | APK + dev client | Yerel geliştirme yapısı (bugün kullanılmıyor) |
+| **`preview`** | **APK**, `distribution: internal` | **Arkadaş testi — kullanılacak olan bu** |
+| `production` | AAB (app-bundle) | Play Store; bugün gerekmiyor |
+
+Arkadaş testinin komutu: `npx eas-cli@latest build -p android --profile preview`.
+APK seçilmesinin sebebi: AAB doğrudan telefona kurulamaz, Play Store gerektirir.
+
+**Her profil ayrıca `environment` alanı taşımalı** (`preview` profilinde var, diğer
+ikisinde YOK) — panelde değişken tanımlı olması tek başına yetmiyor, gerekçe §5.2.
+(Bu, ilk APK'nın çökme sebebi DEĞİLDİ; o `expo-font` çakışmasıydı — §5.1.)
+
+### 4. Marka görselleri — GEÇİCİ
+`assets/` içindeki dört PNG **Expo şablonunun varsayılanlarıydı** (mavi "A" ikonu,
+gri ızgara splash). Yerlerine projenin kendi dilinde görseller üretildi.
+
+- **Üretim yöntemi:** tek seferlik bir Node script'i, `sharp`/`canvas` gibi bir
+  bağımlılık EKLEMEDEN — Node'un yerleşik `zlib`'i ile doğrudan RGBA PNG yazıyor
+  (yuvarlatılmış dikdörtgen + koni biçimli bıçak ağzı geometrisi, 3×3 süper
+  örneklemeli kenar yumuşatma). Script scratchpad'de kaldı, **projeye girmedi**.
+- **Renkler `theme.ts`'ten birebir:** `icon.png` = `brand` (#22C55E) zemin + beyaz
+  çatal-bıçak · `adaptive-icon.png` = **şeffaf** zemin + beyaz glif (Android ön
+  katmanı, güvenli bölgeye sığacak ölçüde) · `splash.png` = beyaz zemin +
+  `brandSubtle` (#DCFCE7) daire + `brandStrong` (#16A34A) glif, yani uygulama
+  içindeki logo lockup'ının aynısı · `favicon.png` = icon'un 196px hali.
+- **TUZAK KAPATILDI:** `adaptiveIcon.backgroundColor` `#FFFFFF` idi. Ön katman artık
+  **beyaz** glif olduğu için beyaz zeminde görünmez olurdu — marka yeşiline çevrildi.
+- Başıboş `assets/splash-icon - Copy.png` silindi (hiçbir yerden referans yoktu).
+- **Bunlar Faz 4'ün (marka) yerine geçmez.** Vektör kaynağı yok, şekiller kodla
+  çizildi. Gerçek isim/logo geldiğinde dördü de değişecek. Bugünkü işi görüyorlar:
+  arkadaşın telefonunda "hangi uygulamaydı bu" sorusu çıkmıyor.
+
+### 5. EAS projesi ve ilk build — BAĞLANDI
+- EAS projesi: `@eren6150/beli-eats`
+  → https://expo.dev/accounts/eren6150/projects/beli-eats
+- `app.json` → `extra.eas.projectId` **yazıldı**:
+  `d77bc86b-c3e4-4f7b-8136-2a1e82c3c278`. (UUID panelden de alınabilir:
+  expo.dev → proje → **Project settings → Project ID**.)
+- Üç ortam değişkeni panelden **tanımlandı** (preview + production, Plain text).
+- İlk `preview` APK'sı **üretildi ve cihaza kuruldu** — ama açılışta çöktü;
+  teşhis ve düzeltme §5.1.
+- **Keystore EAS'te üretildi ve saklanıyor.** Sonraki build'lerde "Generate a new
+  Android Keystore?" çıkarsa cevap **Hayır / mevcudu kullan**: imza değişirse yeni
+  APK mevcut kurulumun üzerine yüklenmez, kullanıcının önce uygulamayı kaldırması
+  gerekir. Arkadaş testinde bu sessiz bir "güncelleme gelmiyor" şikayetine döner.
+- `versionCode` hâlâ **1** (`app.json`). Aynı imzayla üzerine kurulum çalıştığı için
+  build'i bloklamıyor, ama §2'deki "her yeni APK'da elle artır" kuralı duruyor.
+
+### 5.1 İlk APK açılışta ÇÖKTÜ — sebep `expo-font` sürüm çakışması (2026-08-03)
+**Semptom:** APK cihaza kuruldu, açılışta **hiç arayüz göstermeden** "Beli Eats
+sürekli olarak duruyor". Expo Go'da (`npx expo start`) aynı kod sorunsuz
+çalışıyordu — yani yalnızca bağımsız build'e özgü.
+
+**Gerçek kök neden (logcat ile kanıtlandı):**
+```
+java.lang.NoSuchMethodError: No static method getDirectConverter(...)
+  in class Lexpo.modules.kotlin.types.ReturnTypeKt;
+  at expo.modules.font.FontLoaderModule.definition(FontLoaderModule.kt:98)
+  at expo.modules.kotlin.ModuleRegistry.register(ModuleRegistry.kt:27)
+```
+`expo-font@57.0.1` kurulmuştu — SDK 54 hattına ait değil, **expo-modules-core 4.x'e
+karşı derlenmiş**. `ReturnTypeKt.getDirectConverter` metodu kurulu core 3.0.30'da
+**hiç yok**. Çökme JS'ten ÖNCE, native modül kaydı sırasında oluyor.
+
+**Nasıl geldiği — asıl ders: `@expo/vector-icons`'ın SINIRSIZ peer aralığı.**
+`@expo/vector-icons@15.1.1` → `peerDependencies: { "expo-font": ">=14.0.4" }`.
+Üst sınır yok; npm 7+ eksik peer'ları otomatik kurduğu için `latest`'i (57.0.1)
+çekip **üst seviyeye** yazmış (`"peer": true`). SDK 54'ün istediği sürüm
+`~14.0.12` ve `expo`'nun kendi nested kopyası doğruydu — ama:
+- **Autolinking `package.json`'a bakmaz, dosya sistemini tarar ve üst seviye
+  kazanır.** `expo-modules-autolinking search -p android` çıktısı doğru kopyayı
+  `duplicates` diye görüp **yok sayıyordu**:
+  `expo-font: path=node_modules\expo-font 57.0.1, duplicates=[expo\node_modules\expo-font 14.0.12]`
+- **`npm uninstall` ve `npm prune` İKİSİ DE İŞE YARAMAZ.** İlki paket
+  `package.json`'da olmadığı için, ikincisi paket öksüz değil **meşru bir peer**
+  olduğu için dokunmuyor. Doğru hamle silmek değil **çözümlemeyi sınırlamak**:
+  `npx expo install expo-font` → `~14.0.12` doğrudan bağımlılık olarak yazıldı.
+  (`overrides` de çalışırdı ama `expo install --check` onu denetlemez, sessizce
+  bayatlardı. Aynı desen `@expo/vector-icons` için de uygulanmıştı.)
+- **Build neden hatasız geçti:** `expo-font` içinde **önceden derlenmiş AAR**
+  geliyor (`local-maven-repo/.../expo.modules.font-57.0.1.aar`). Gradle ikili
+  dosyayı olduğu gibi linkliyor, yereldeki `.kt` kaynağını derlemiyor → derleme
+  hatası yok, uyumsuzluk çalışma anına kalıyor.
+- **Trace'teki `FontLoaderModule.kt:98` node_modules'teki dosyaya ait DEĞİL**
+  (yerel kopyalar 82 ve 77 satır). Numara AAR'ın gömülü debug bilgisinden, yani
+  Expo'nun CI'ında derlenen orijinal kaynaktan geliyor. Çalışan bytecode ile
+  diskteki kaynak farklı — bu tür bir uyuşmazlık görülürse önce prebuilt AAR
+  ihtimali düşünülmeli.
+
+**Expo Go neden hiç göstermedi:** Expo Go SDK 54 için **kendi önceden derlenmiş
+native modül setini** taşıyor ve projenin native kodunu hiç derlemez/linklemez.
+Bozuk AAR orada hiç yüklenmiyor; JS tarafı 57.0.1'e çözülse de
+`@expo/vector-icons`'ın kullandığı yüzey (`loadAsync`/`isLoaded`) stabil olduğu
+için patlamıyor. **Bu hata sınıfı yalnızca native linkleme yapan build'de görünür.**
+
+**Doğrulama (build ALMADAN yapıldı):** `expo-modules-autolinking search -p android`
+→ `expo-font 14.0.12, duplicates=0`, tüm modüllerde duplicate sıfır.
+20-25 dakikalık build'e bu görülmeden girilmedi.
+
+**Kalan uyumsuzluk:** `npx expo install --check` → `expo@54.0.35`, beklenen
+`~54.0.36`. Aynı SDK içinde patch farkı, bu hatanın sınıfından değil; çökme
+düzeltmesinin kanıtını kirletmemek için **bilinçli olarak ertelendi**.
+
+**`app.json`'a `expo-font` plugin kaydı EKLENMEDİ.** `npx expo install` öneriyor
+(dinamik config'e kendisi yazamıyor — datetimepicker'daki durumun aynısı) ama o
+plugin yalnızca `fonts: [...]` ile **özel font dosyası gömmek** için; biz font
+gömmüyoruz, `@expo/vector-icons` fontlarını çalışma anında yüklüyor. Kayıt
+öncesinde de yoktu. Gerekirse eklemek tek satır.
+
+### 5.2 `environment` alanı — doğru düzeltme, ama ÇÖKMENİN SEBEBİ DEĞİLDİ
+Bu bölüm bir dönem çökmenin kök nedeni olarak yazılmıştı; **§5.1 onu çürüttü.**
+Çökme native modül kaydında, JS bundle hiç çalışmadan oluyordu — yani
+`supabaseClient.ts` zincirine ulaşılmıyordu bile. Aşağıdaki iki değişiklik
+**doğru ve kalıcı**, ama ikisi de o bug'ı çözmedi.
+
+**Bulgu (geçerli):** değişkenlerin expo.dev panelinde tanımlı olması **YETMİYOR** —
+panel değişkeni bir *ortama* (`development`/`preview`/`production`) yazar, profil
+ise hangi ortamı kullanacağını `eas.json`'daki `environment` alanıyla ilan eder.
+- Expo dokümanı alanı tanımlıyor ("The environment used to apply environment
+  variables for the build process") ama **atlandığında ne olduğunu YAZMIYOR** —
+  varsayılan ilan edilmemiş. Bu yüzden alanı açıkça yazmak doğru olan.
+- **`EXPO_PUBLIC_*` çalışma anında okunmaz, BUNDLE'A GÖMÜLÜR.** Expo Go'da Metro
+  yerel `.env`'den gömüyor; EAS'te `.env` `.gitignore`'da olduğu için sunucuya hiç
+  gitmiyor ve tek kaynak panel.
+- `npx eas-cli@latest env:list --environment preview` üç değişkeni de eksiksiz
+  listeledi, yani panel tarafı zaten sağlamdı.
+
+**Yapılan iki değişiklik (ikisi de kalıyor):**
+1. `eas.json` → `preview` profiline `"environment": "preview"`. Açık ve doğru
+   yapılandırma; dokümanda varsayılan ilan edilmediği için örtük davranışa
+   güvenmemek gerekiyor.
+2. **`supabaseClient.ts` artık FIRLATMIYOR.** Eksik değişkenler isimleriyle ve tam
+   düzeltme adımlarıyla `console.error`'a gidiyor; `createClient`'a boş string
+   yerine yer tutucu (`https://unconfigured.invalid`) veriliyor — boş string
+   falsy olduğu için eski `?? ''` fallback'i korumuyordu ve modül import'unda
+   `supabaseUrl is required.` fırlatılıyordu (`helpers.ts:110`). Artık uygulama
+   açılıyor, hata ekranların **mevcut** kısa şeridine ("Bağlantını kontrol et" +
+   Tekrar dene) düşüyor — "ekrana kısa metin, konsola tam nesne" kuralı.
+   `console.error` seçildi (`warn` değil): uygulamanın tamamını çalışmaz kılan bir
+   kurulum hatası, beklenen durum değil.
+   - `isSupabaseConfigured` gibi bir bayrak **export EDİLMEDİ** — bugün onu okuyan
+     ekran yok, ölü kod olurdu.
+   - Bu değişiklik teşhis sırasında yapıldı ama **bağımsız olarak değerlidir**:
+     eksik konfigürasyonu sessiz bir native çökmeye çeviren davranış zaten
+     kuralın en kötü ihlaliydi.
+
+**⚠️ HÂLÂ TEST EDİLMEDİ: `EXPO_PUBLIC_*` değerleri bundle'a gerçekten giriyor mu?**
+Uygulama o koda hiç varmadığı için bu soru **cevapsız kaldı**. Bir sonraki APK'da
+açıkça doğrulanmalı: uygulama açılıyor mu, **giriş yapılabiliyor mu** (Supabase),
+**harita geliyor mu** (Google Maps key). Açılıp da giriş ekranında "Bağlantını
+kontrol et" görülüyorsa sorun bu eksende demektir ve `supabaseClient.ts` artık
+konsola eksik değişken isimlerini yazacak.
+
+### 5.3 Cihazdan crash logu alma — bu vakayı ÇÖZEN adım
+Statik analiz yanlış sonuca götürmüştü (§5.2); vakayı kapatan şey gerçek logdu.
+**Bağımsız build çöküyorsa ilk iş logcat, tahmin değil.**
+`winget install --id Google.PlatformTools` → telefonda Ayarlar → Telefon hakkında →
+**Yapı numarası**'na 7 kez dokun → Geliştirici seçenekleri → **USB hata ayıklama**
+aç → USB ile bağla, telefondaki izni onayla → `adb devices` ile doğrula →
+`adb logcat -c` → uygulamayı aç, çöksün → `adb logcat -d > crash.txt`.
+Aranacak desenler: `FATAL`, `AndroidRuntime`, `JavascriptException`, `ReactNativeJS`.
+
+### 6. HENÜZ YAPILMAYANLAR — sıradaki oturumun yol haritası
+
+**Tamamlananlar (2026-08-02/03):** `eas init` → `projectId` `app.json`'da (§5) ·
+üç ortam değişkeni panelde tanımlı (preview + production, **Plain text** — bilinçli:
+`EXPO_PUBLIC_` değişkenleri zaten JS bundle'ına gömülüyor, "secret" işaretlemek
+yanlış bir güvenlik hissi verir; gerçek koruma Supabase'de RLS, Google'da 2.
+maddedeki kısıtlama) · ilk `preview` APK'sı üretildi, açılış çökmesi teşhis edilip
+düzeltildi (§5.1).
+
+**⚠️ Sıradaki APK'da İLK doğrulanacak şey:** uygulama açılıyor mu · **giriş
+yapılabiliyor mu** · **harita geliyor mu**. İlki `expo-font` düzeltmesini (§5.1),
+son ikisi `EXPO_PUBLIC_*` değişkenlerinin bundle'a girip girmediğini (§5.2) test
+eder — ikincisi çökme yüzünden **hiç test edilemedi**, hâlâ açık bir soru.
+
+1. ~~`production` profilinde `environment` alanı yok~~ — **KAPANDI (2026-08-04).**
+   `eas.json` → `"production": { "environment": "production", ... }`. Değişkenler
+   panelde `production` ortamında zaten tanımlıydı, eksik olan profilin onları
+   **istemesiydi**. Düzeltilmeseydi mağazadaki uygulama giriş yapamazdı.
+   - **`development` profili BİLİNÇLİ OLARAK dokunulmadan bırakıldı.** Alanı
+     oraya da eklemek cazip ama panelde `development` ortamında **hiç değişken
+     tanımlı değil** (yalnızca preview + production var, §6 girişi). Alanı
+     yazmak, bugünkü "tanımsız davranış"ı **kesin bir boşluğa** çevirirdi:
+     dev build'i Supabase/Maps anahtarları olmadan çıkardı. Profil bugün
+     kullanılmıyor; kullanılacağı gün **önce panelde `development` ortamına üç
+     değişken tanımlanmalı, sonra** alan eklenmeli. Sırası bu.
+2. **Google Cloud Console anahtar kısıtlaması — FAZ 1 YAPILDI (2026-08-05),
+   FAZ 2 (Android app kısıtlaması) AÇIK.**
+
+   **✅ Faz 1 — API kısıtlaması (kod değişikliği yok, build yok, test edildi):**
+   Anahtarda artık **yalnızca `Maps SDK for Android` + `Places API`** işaretli.
+   `Geocoding API` ve `Maps SDK for iOS` **kaldırıldı** — kodda kullanılmıyorlardı,
+   gereksiz saldırı yüzeyi açıyorlardı. Çalınan bir anahtar artık Geocoding /
+   Directions / Distance Matrix gibi pahalı API'lere kullanılamıyor. Application
+   restrictions **None** olarak bırakıldı (Faz 2'nin işi).
+   - ⚠️ **`Places API` seçilmeli, `Places API (New)` DEĞİL** — kod eski uçları
+     (`/maps/api/place/...`) kullanıyor.
+   - 🍎 **iOS İÇİN HATIRLATMA:** iOS bugün planda yok, ama bir gün eklenirse
+     **Console'da anahtara `Maps SDK for iOS`'u geri eklemek gerekiyor.**
+     Unutulursa iOS build'inde harita **sessizce** kırılır — uygulama açılır,
+     her şey çalışır, yalnızca harita boş/gri gelir ve sebebi kodda görünmez.
+     `app.config.js:91` zaten `ios.config.googleMapsApiKey`'i enjekte ediyor,
+     yani kod tarafı hazır; eksik olan yalnızca Console'daki izin olur.
+
+   **⬜ Faz 2 — Android app kısıtlaması (paket + SHA-1). Bir sonraki ZORUNLU
+   build'e bindirilecek, tek başına build almaya değmez.**
+   Buraya *"tek anahtara Application restrictions: Android apps (package + SHA-1)
+   + API restrictions: Maps SDK for Android + Places API"* diye yazılmıştı. Sorun:
+   bu projede **iki farklı Google trafiği var ve kısıtlamaya tepkileri zıt.**
+   - **Native harita** → Maps SDK for Android üzerinden. SDK isteğe paket adını
+     ve imzayı kendisi ekliyor → Android kısıtlaması **çalışır**.
+   - **Places çağrıları** (`places.ts`, `SearchScreen`) → JS'ten düz `fetch` ile
+     **REST**. Bu isteklerde paket adı/imza **yok**, dolayısıyla Android
+     uygulama kısıtlaması onları tanıyamaz → beklenti: **`REQUEST_DENIED` ile
+     arama ve mekan detaylarının kırılması.** Harita çalışmaya devam ettiği için
+     bozukluk sinsi olur; üstelik `json.status` kontrol edilmediği için ekranda
+     düzgün bir hata bile çıkmaz, sadece "sonuç yok" görünür.
+   - **DOĞRULANMADI** ve **⚠️ EXPO GO'DA DOĞRULANAMAZ** — eski plan "Expo Go'da
+     dene" diyordu, o plan GEÇERSİZ. Expo Go'nun paket adı `host.exp.exponent`
+     ve imzası Expo'ya ait; bizim kısıtımıza zaten takılır. Android kısıtlaması
+     **yalnızca gerçek APK ile** test edilebilir. Faz 2'nin bir build'e
+     bindirilmesinin ikinci sebebi bu.
+   - **Çözüm iki ayrı anahtar:**
+     | Anahtar | Application restriction | API restriction |
+     |---|---|---|
+     | A — native harita | Android apps (`com.eren.belieats` + SHA-1) | Maps SDK for Android |
+     | B — Places REST | **None** (kilitlenemiyor) | Places API |
+     B kilitlenemiyor çünkü Google'ın mobil REST çağrıları için uygulama
+     kısıtlaması yok (IP ve HTTP referrer var, ikisi de mobilde işe yaramaz).
+     B'nin koruması: API kısıtı + günlük 2.000 kota + bütçe uyarısı.
+   - **AYIRMA MALİYETİ — build gerektiriyor, JS değil:** A anahtarı
+     `app.config.js` → AndroidManifest yoluyla **build anında** gömülüyor, yani
+     yeni build **ve** `app.json`'ın native alanı değiştiği için **`version`
+     yükseltmesi** gerekiyor (§2 ritüeli). B anahtarı yalnızca JS'te okunuyor
+     (`places.ts:10`, `SearchScreen.tsx:23`) → OTA ile giderdi. İkisi birlikte
+     değişmek zorunda olduğu için iş bir bütün olarak **build'e bağımlı**.
+   - **SHA-1 nereden:** expo.dev → proje → **Credentials** → Android → Keystore
+     kartında `SHA-1 Fingerprint`. Terminal alternatifi
+     `npx eas-cli@latest credentials` (Android → preview).
+   - Nihai çözüm zaten kayıtlı: Google çağrılarını **Supabase Edge Function**
+     arkasına almak (bkz. `places` cache tablosu bölümünün sonu) — o gün B
+     anahtarı istemciden tamamen kalkar ve bu madde kökten kapanır.
+   - Bu yüzden madde "console'da 5 dakika" DEĞİL, kendi teşhisi olan bir iş.
+     Bütçe uyarısının (3) ondan önce yapılmasının sebebi de bu: koruma
+     boşluğunu o kapatıyor.
+3. ~~Bütçe uyarısı~~ — **KAPANDI (2026-08-04), üstüne KOTA da kondu.**
+   - **Bütçe uyarısı:** Console → Billing → Budgets & alerts, aylık periyot,
+     %50/%90/%100 eşikleri.
+   - **⚠️ Bütçe uyarısı harcamayı DURDURMAZ, yalnızca e-posta atar.** Eşik
+     aşılsa bile API çalışmaya devam eder. Bu yüzden asıl koruma olarak
+     **günlük kota** kondu: APIs & Services → ilgili API → Quotas →
+     **Places API ve Maps SDK for Android için günlük 2.000 istek.**
+     Kota ücretsiz, anında etkili ve limit dolunca istekler reddedilir — yani
+     kontrolsüz maliyet fiilen imkânsız. İkisi birlikte çalışıyor: uyarı "ne
+     oluyor" der, kota "daha fazlası olmasın" der.
+   - **Kota dolduğunda semptom SessizDİR — bilerek kabul edildi.** Places
+     çağrıları `OVER_QUERY_LIMIT` döner; `places.ts` üzerinden geçen yollarda
+     (mekan detayı, harita POI) düzgün `PlacesError` var, ama `SearchScreen`
+     `json.status`'ü kontrol etmediği için ekranda yalnızca **"Sonuç
+     bulunamadı"** görünür, hata olduğu anlaşılmaz. `json.status` maddesinin
+     neden açık iş listesinde durduğunun bir örneği daha; SHA-1 teşhisiyle (2)
+     birlikte ele alınmaya değer, çünkü o kısıtlamanın yanlış uygulanması da
+     tam olarak aynı sessiz semptomu üretiyor.
+4. **Dağıtım ve geri bildirim — BAŞLADI (2026-08-03).** APK en az bir arkadaşın
+   telefonuna kuruldu ve kullanılmaya başlandı; **2 haftalık geri bildirim toplama
+   süreci devam ediyor.** (Android "bilinmeyen kaynaktan kurulum" izni istenebilir.)
+   - **Gelen ilk geri bildirim:** sekme çubuğu ile sistem navigasyon çubuğu üç
+     butonlu navigasyonda iç içe duruyor → **teşhis edildi ve düzeltildi
+     (2026-08-04), iki navigasyon türünde de doğrulandı.** ⚠️ Arkadaştaki APK'da
+     hâlâ BOZUK — düzeltme ona ancak yeni build'le ulaşır.
+   - **⚠️ DERS — "cihaz YAPILANDIRMASINA bağlı bug sınıfı". İki kez ısırdı,
+     ikisi de arkadaş testinden geldi, ikisi de geliştirme cihazında HİÇ
+     görülmedi.**
+     1. **Sekme çubuğu ↔ sistem navigasyon çubuğu** (2026-08-03 bildirildi,
+        08-04 kapandı). Değişken: **navigasyon türü**. Jest navigasyonunda
+        `insets.bottom`'ın büyük kısmı boş, üç butonluda tamamı buton →
+        `paddingBottom === insets.bottom` bir modda boşluk gibi görünüp
+        diğerinde bitişik çıkıyordu.
+     2. **`DiaryEntrySheet`'in Kaydet butonu** (2026-08-05). Değişken: **ekran
+        yüksekliği + sistem yazı tipi ölçeği**. Buton ScrollView'ın içindeydi;
+        `maxHeight: '85%'` yetmediğinde kırpılan ilk şey oydu.
+     - **Ortak imza:** geliştiricinin cihazında %100 çalışıyor, kullanıcının
+       cihazında bozuk; kodda görünür bir hata yok çünkü **formül belirli bir
+       yapılandırma için doğru**. Kök neden hep aynı: koda gömülü, yazıldığı
+       gün doğru olan ama artık evrensel olmayan bir varsayım.
+     - **Çıkarım — düzeltme "ölçüp o değere göre ayarlamak" DEĞİL, formülü
+       yapılandırmadan BAĞIMSIZ kılmak olmalı.** Nav bar'da `max()` → toplama;
+       diary'de sabit yükseklik varsayımı → `flexShrink` + sabit footer.
+       İkisinde de doğru çözüm, ölçülen değeri bilmeye ihtiyaç duymuyor.
+     - **Gelen her görsel geri bildirimde sorulacaklar:** navigasyon türü ·
+       Android sürümü · ekran oranı/boyutu · **sistem yazı tipi ölçeği** ·
+       görüntü boyutu (display size) ayarı.
+     - **Kendi cihazında ucuza test edilebilir:** Ayarlar → Sistem →
+       Sistem navigasyonu (iki mod) ve Ayarlar → Ekran → Yazı tipi boyutu
+       (en büyük). İkisi de APK gerektirmiyor, Expo Go yeterli.
+   - ~~TRİYAJ: "kayıt olamıyorum" → `profiles.username` unique çakışması~~ →
+     **KAPANDI (2026-08-04, migration 012).** Trigger artık çakışmada sonek
+     üretiyor (`eren` → `eren2`) ve düzeltme **saf SQL olduğu için mevcut
+     APK'daki herkes için anında geçerli** — build beklemeye gerek yoktu.
+     Yine de "kayıt olamıyorum" şikayeti gelirse kontrol:
+     `select username from profiles order by created_at desc;` ve
+     `select public.next_available_username('<sikayet-eden-@-oncesi>');`
+   - E-posta onayı **kapalı** tutuluyor; arkadaşlardan onay maili beklemeleri
+     istenmemeli.
+
+### 7. GitHub deposu
+`eren6150/beli-eats` olarak push edildi ve doğrulandı.
+
+- **Güvenlik denetimi temiz:** kaynak kodda, `app.json`'da, `app.config.js`'te,
+  migration'larda ve yorumlarda **hard-coded anahtar YOK** (`AIza…`, `eyJ…`,
+  `service_role`, `sk_live` desenleri tarandı). Anahtarlar yalnızca `.env`'de;
+  `supabaseClient.ts` ve `app.config.js` ikisi de `process.env`'den okuyor.
+- **`.gitignore` genişletildi:** yalnızca `.env` vardı, `.env.local` /
+  `.env.*.local` dışlanmıyordu. Artık `.env*` + `!.env.example`.
+- `.env.example` zaten vardı ve temiz (yer tutucu değerler), commit ediliyor.
+- **Geçmiş riski YOK:** depo bu iş sırasında ilk kez başlatıldı, öncesinde hiçbir
+  şey commit edilmemişti — temizlenecek geçmiş yok.
+- **`.expo/dev/logs/start.log` gerçek anahtarları düz metin içeriyor** ama `.expo/`
+  `.gitignore`'da. Bu klasörü elle paylaşma/zipleme.
+- Öneri: GitHub → Settings → Code security → **Secret scanning + Push protection**.
+
+### 8. EAS Update (OTA) — kuruldu (2026-08-05), versionCode 3 ile devreye giriyor
+
+**Neden şimdi:** iki günde iki geri bildirim turu geldi (nav bar, diary Kaydet
+butonu) ve **ikisi de saf JS düzeltmesiydi** — yani ikisi de OTA ile gidebilirdi.
+Asıl kazanç 20-25 dakikalık build süresi değil, arkadaşa her seferinde
+*"şunu tekrar kur"* dememek; testi yavaşlatan sosyal maliyet o.
+
+- **⚠️ MEVCUT APK'YA OTA GÖNDERİLEMEZ — kurulum bunu geriye dönük çözmüyor.**
+  OTA, `expo-updates`'in native modül olarak **binary'ye derlenmiş olmasını**
+  gerektiriyor. versionCode 2 APK'sı onsuz build edildi, o binary güncelleme
+  sunucusunu sorgulamayı bilmiyor. Yani diary düzeltmesi için yeni build
+  zorunluydu; OTA ancak **bundan sonraki** turları kurtarıyor.
+- **Kurulan:** `expo-updates@29.0.19` (+ 6 transitive: `expo-eas-client`,
+  `expo-manifests`, `expo-structured-headers`, `expo-updates-interface`,
+  `expo-json-utils`). `npx expo install --check` bunu **işaretlemedi**, yani
+  SDK 54'ün beklediği sürüm.
+- **Autolinking build ÖNCESİ doğrulandı** (§5.1'in dersi): 16 modülün hepsinde
+  `duplicates: []`. Özellikle `expo-font` hâlâ 14.0.12 ve tek kopya — 7 yeni
+  paket ilk APK'yı çökerten çözümlemeyi bozmamış.
+- **`updates.url` `projectId`'den TÜRETİLİYOR**, elle yazılmadı (`app.config.js`).
+  İki yere kopyalamak, birini değiştirip diğerini unutmanın sessiz yolu olurdu —
+  Google anahtarındaki gerekçenin aynısı.
+- **Kanallar:** `eas.json`'da `preview` ve `production` profillerine `channel`
+  eklendi. `production`'a da eklendi çünkü kanalsız bir build güncelleme alamaz,
+  yani mağaza build'i sessizce OTA'sız kalırdı. **Bu, `environment` alanında
+  `development` profiline DOKUNMAMA kararıyla çelişmiyor:** orada gerçek tehlike
+  vardı (panelde tanımlı değişken yok → build anahtarsız çıkardı), kanallar ise
+  EAS tarafında talep üzerine oluşuyor, boş kanala işaret etmenin zararı yok.
+  `development` profiline yine dokunulmadı.
+- **Güncelleme davranışı (varsayılan, açıkça yazılmadı çünkü Expo dokümanı ilan
+  ediyor):** uygulama cache'teki bundle ile HEMEN açılır, güncellemeyi arka planda
+  indirir, **bir sonraki açılışta** uygular. Açılış hiçbir zaman ağ beklemez;
+  kullanıcı değişikliği ikinci açılışta görür.
+- **Yayınlama — `--environment preview` ŞART, opsiyonel değil:**
+  ```
+  npx eas-cli@latest update --branch preview --environment preview --message "…"
+  ```
+
+#### ⚠️ DERS — ortam değişkeninin KAYNAĞI build ile update arasında FARKLI
+İlk `eas update` çalıştırıldığında `app.config.js`'in
+*"EXPO_PUBLIC_GOOGLE_MAPS_API_KEY tanımsız"* uyarısı çıktı, oysa `.env` doluydu
+ve `eas build` hiç şikayet etmemişti. Teşhis:
+
+- **Bundle SAĞLAM, uyarı gürültüydü — kanıtlandı.** `npx expo export --platform
+  android` ile aynı bundle yerelde üretilip Hermes çıktısı arandı: üç
+  `EXPO_PUBLIC_*` değeri de gömülü, `supabaseClient`'ın `unconfigured.invalid`
+  yer tutucusu bundle'da yok. Yani gönderilen güncelleme harita/arama'yı
+  bozmadı. (Değerler ekrana yazdırılmadan, yalnızca var/yok olarak kontrol
+  edildi.)
+- **Sebep sıralama:** Expo CLI app config'i **`.env` yüklenmeden ÖNCE**
+  değerlendiriyor. Çıktı sırası bunu birebir gösteriyor:
+  `[app.config] … tanımsız` → `env: load .env` → `Starting Metro Bundler`.
+  Config eval uyarıyı basıyor, `.env` sonra yükleniyor, Metro anahtarla
+  bundle'lıyor.
+- **ASIL BULGU — iki komut değişkeni İKİ FARKLI YERDEN okuyor:**
+  | Komut | Bundle nerede üretiliyor | Değişken kaynağı |
+  |---|---|---|
+  | `eas build` | EAS sunucusunda | **EAS ortamı** (`.env` gitignore'da, sunucuya hiç gitmiyor) |
+  | `eas update` | **yerel makinede** | varsayılan olarak **yerel `.env`** |
+  Bu, sessiz bir ıraksama kapısı: yerel `.env` ile paneldeki `preview` ortamı
+  ayrışırsa (anahtar döndürülür, biri güncellenip diğeri unutulur) aynı JS iki
+  farklı değerle sahaya çıkar. Daha kötüsü: **`.env`'i olmayan bir makinede
+  `eas update` çalıştırmak, boş anahtarlı bir bundle'ı herkese gönderir** ve
+  hata ekranda "sonuç bulunamadı" diye görünür.
+- **Çözüm `--environment preview`:** EAS CLI değişkenleri sunucudaki ortamdan
+  çekiyor, yani update de build ile **aynı tek kaynağı** kullanıyor. Bu bayrak
+  olmadan update yayınlanmamalı.
+- **İki anahtar yolu birbirine karıştırılmamalı** (bu vakada karıştırılmıştı):
+  1. **Native harita anahtarı** → `app.config.js` → AndroidManifest → **build
+     anında sabitleniyor.** OTA onu değiştiremez, değiştirmesi de gerekmiyor.
+  2. **JS tarafındaki Places REST anahtarı** → Metro bundle'a gömüyor → **her
+     OTA ile yeniden gidiyor.** Riskli olan yol bu.
+  Uyarı 1. yolun değerlendirme anında çıkıyor, ama update için önemli olan 2.
+  yol. İkisi bağımsız.
+- `app.config.js`'teki uyarı metni de bu ayrımı söyleyecek şekilde güncellendi
+  (yerelde zararsız olabilir, `eas build` sırasında gerçek).
+- **`expo` patch farkı (54.0.35 ↔ ~54.0.36) bu build'de BİLİNÇLİ ertelendi.**
+  Erteleme gerekçesi değişti: eskiden "çökme kanıtını kirletmemek"ti, artık
+  "bu build zaten bir native değişiklik (`expo-updates`) taşıyor, ikinci bir
+  değişken eklenmemeli". Sahada çalıştığı kanıtlanmış kombinasyon korunuyor.
+- **`npm audit` ÇALIŞTIRILMIYOR** (16 uyarı duruyor). Expo'da bağımlılıklar SDK
+  ile uyumlu aralıklara sabitli; `npm audit fix` transitive'leri semver'e göre
+  yukarı iter ve **native/JS uyumsuzluğu üretmenin tam yolu** — `expo-font@57`
+  vakası bu sınıftandı. Uyarıların çoğu build zamanı araçlarında; cihaza giden
+  şey JS bundle'ı. Doğru araç `npx expo install --check` ve `npx expo-doctor`.
+
+### 9. `runtimeVersion`: fingerprint DENENDİ ve BUILD PATLATTI → `appVersion`
+
+İlk versionCode 3 build'i **"Configure expo-updates" aşamasında** düştü:
+```
+Runtime version calculated on local machine: 798d1817…
+Runtime version calculated on EAS:           68f17529…
+```
+
+**Kök neden: EAS, `expo prebuild` ile native ağacı ürettikten SONRA fingerprint
+hesaplıyor; yerelde o ağaç hiç yok.** (CNG projesi, `android/` yerelde yok.)
+
+Fingerprint diff'i **İKİ BAĞIMSIZ fark** gösterdi — tek kök neden değil:
+
+**Fark 1 — `bareNativeDir` (`android` dizini). ÇÖZÜMÜ KANITLANDI.**
+- `resolveProjectWorkflowAsync` (`@expo/fingerprint/build/ProjectWorkflow.js:41-49`)
+  projeyi `generic` sayıyor ancak marker dosyası **varsa ve gitignore'lanmamışsa**.
+- **⚠️ `.gitignore`'a `/android` EKLEMEK ÇÖZÜM DEĞİL** — ilk akla gelen buydu ve
+  **yanlış**. Workflow'u `managed`'a döndürüyor ama hash'i tabana döndürmüyor,
+  çünkü `sourcer/Bare.js:24-33` `bareNativeDir` kaynağını **workflow'a değil
+  dizinin varlığına** bakarak ekliyor.
+- **Çözüm `.fingerprintignore`** (içine `android/` + `ios/`). Kaynak listede
+  kalıyor ama null hash'liyor, fingerprint'e girmiyor.
+- **Build ALMADAN kanıtlandı:** sahte bir `android/app/build.gradle` +
+  `AndroidManifest.xml` üretilip fingerprint üç senaryoda ölçüldü. Taban
+  `798d1817…` (hata logundaki "local machine" değeriyle **birebir aynı**,
+  yani reprodüksiyon sadık) · `android/` var + ignore yok → hash değişiyor ·
+  `android/` var + `.fingerprintignore` → **tam olarak tabana dönüyor**.
+  `.fingerprintignore` tek başına tabanı bozmuyor (kendisi `DEFAULT_IGNORE_PATHS`'te).
+
+**Fark 2 — 7 `node_modules` dizininin `rncoreAutolinkingAndroid` hash'i. AÇIK.**
+- Testte `rncoreAutolinking` kaynakları üç senaryoda da 10 adet ve hash'leri
+  **hiç değişmedi** → bu fark workflow'dan GELMİYOR. "Tek kök neden" teorisi
+  çürüdü.
+- Değişen 7 paketin hepsi **New Architecture codegen kullanan RN kütüphaneleri**
+  (async-storage, gesture-handler, maps, reanimated, safe-area-context, screens,
+  worklets). Hipotez: EAS'te gradle codegen bu paketlerin içine dosya üretiyor;
+  `DEFAULT_IGNORE_PATHS` `android/build` ve `.cxx`'i eliyor ama codegen çıktısının
+  tamamını elemiyor. Expo paketlerinin listede olmaması destekliyor — onlar
+  önceden derlenmiş AAR ile geliyor.
+- **KANITLANMADI ve yerelde kanıtlanamaz:** doğrulamak prebuild + gradle
+  çalıştırmayı, yani build almayı gerektiriyor.
+
+**Karar: `appVersion`.** Fark 1'i kapatıp Fark 2 için bahse girmek yerine
+fingerprint hesabı tamamen devre dışı bırakıldı; runtime = `version` alanı,
+yerelde ve EAS'te birebir aynı, ıraksama sınıfı kökten yok oldu. Arkadaş
+testinin ortasında olduğumuz için önce **çalışan bir OTA** tercih edildi.
+- **Bedeli ve panzehiri:** native değişiklikte runtime artık otomatik dönmüyor →
+  **§2'deki sürüm yükseltme ritüeli** bunu karşılıyor.
+- **Fingerprint'e dönmek istenirse** gereken iş: `.fingerprintignore` (Fark 1,
+  hazır ve kanıtlı) + Fark 2'nin bir build ile teşhisi. Test bittikten sonra
+  sakin kafayla ele alınabilir. **Dikkat:** politikayı değiştirmek runtime'ı
+  değiştirir ve sahadaki kurulumları OTA'dan koparır — yeni build gerektirir.
 
 ## Yol Haritası
 
@@ -1009,11 +1816,43 @@ menü fotoğrafları; mekan sayfasında ayrı "Menü" sekmesi gösterilebilsin. 
 ileride doğacak, bugün sorun değil.
 
 ### Faz 3 — Sosyal katman
-- **Leaderboard:** kapsam arkadaş + şehir, **global YOK** (büyük kullanıcı kütlesinde global
-  sıralama motive edici olmaktan çıkıp caydırıcı oluyor). `follows` tablosu zaten var.
-  Metrik kararı **henüz verilmedi** — "gidilen mekan sayısı" en basit ama en kolay suistimal
-  edilen (kimse doğrulamıyor). Alternatifler: diary girişi sayısı, veya fotoğraflı girişlere
-  ağırlık. Bu faza gelindiğinde hangi verinin gerçekten biriktiği görülüp karar verilecek.
+- **Leaderboard: MEKAN BAZLI ("mekanın kralı") — YÖN DEĞİŞTİ (2026-08-04).**
+  Kapsam artık kullanıcı ekseninde (arkadaş/şehir) değil **mekan ekseninde**: her
+  mekanın kendi detay sayfasında **"bu mekana en çok gelenler"** sıralaması.
+  Foursquare'in *mayor* (belediye başkanı) konsepti — *"Bahçeli McDonald's'ın Kralı"*.
+  - **Metrik: `diary_entries`'teki ziyaret sayısı.** `count(*) group by user_id`
+    where `place_id = ?`. **Yeni tablo GEREKMİYOR** — veri Faz 2'de zaten birikmeye
+    başladı (migration 009).
+  - **NEDEN DEĞİŞTİ — eski karar silinmedi, aşağıda duruyor.** Belirleyici sebep
+    **kritik kullanıcı kütlesi**: arkadaş/şehir leaderboard'u anlamlı olmak için
+    kalabalık ister, oysa mekan bazlısı **iki kişi aynı mekana gittiyse bile**
+    anlamlı bir sonuç üretiyor. Bugünkü kullanıcı sayımızda (arkadaş testi, bir
+    avuç kişi) şehir/arkadaş modeli boş bir ekran demekti; mekan bazlısı **çok
+    daha erken işe yarıyor**. Ayrıca ölçek büyüdükçe bozulmuyor: her mekan kendi
+    küçük yarışını taşıyor, yani "global sıralama caydırıcı olur" endişesi
+    yapısal olarak hiç doğmuyor.
+  - **Doğal yeri `RestaurantDetailScreen`** — ayrı bir ekran/sekme gerekmiyor.
+    Bu aynı zamanda referans listesindeki **Beli**'nin mekan sayfası
+    leaderboard'uyla birebir örtüşüyor.
+  - Metrik suistimale hâlâ açık (kimse ziyareti doğrulamıyor) ama **eskisinden az**:
+    yarış tek bir mekanla sınırlı olduğu için şişirmenin getirisi de o mekanla
+    sınırlı. Fotoğraflı girişlere ağırlık verme fikri duruyor, Faz 2'nin fotoğraf
+    ayağı bitince yeniden değerlendirilecek.
+  - **Karar VERİLMEYENLER** (implementasyon başlarken konuşulacak): kaç kişi
+    gösterilecek (ilk 3 mi, ilk 5 mi) · beraberlik nasıl bozulacak (ilk ziyaret
+    tarihi mi, son ziyaret mi) · `diary_entries` RLS'i **SELECT'te sahiplik
+    istiyor** (bilinçli sapma, bkz. Günlük bölümü) — leaderboard başkalarının
+    satırlarını saymak zorunda olduğu için **ya politika gevşetilecek ya da
+    sayım `security definer` bir RPC'ye alınacak; ikincisi `note` alanını hiç
+    sızdırmadığı için tercih edilen yol** · kendi profilinden "kralı olduğum
+    mekanlar" gösterilecek mi.
+  - **ESKİ KARAR (2026-07-31 — artık geçerli DEĞİL, kayıt için duruyor):**
+    kapsam arkadaş + şehir, global YOK (büyük kullanıcı kütlesinde global sıralama
+    motive edici olmaktan çıkıp caydırıcı oluyor); `follows` tablosu zaten var;
+    metrik kararı ertelenmişti — "gidilen mekan sayısı" en basit ama en kolay
+    suistimal edilen, alternatifleri diary girişi sayısı veya fotoğraflı girişlere
+    ağırlık. **Tamamen ölü değil:** arkadaş/şehir leaderboard'u kullanıcı sayısı
+    büyüdüğünde mekan bazlının **yanına** eklenebilir; bugün öncelik değil.
 - **Kişiselleşmiş öneriler:** ana sayfada öneri satırı. Kullanıcının yüksek puanladığı
   mekanların Google `types` alanlarına bakıp benzer tür mekanlar önerme (içerik tabanlı).
   İşbirlikçi filtreleme kritik kullanıcı kütlesi gerektiriyor, bugün yapılamaz.
@@ -1026,6 +1865,61 @@ ileride doğacak, bugün sorun değil.
 boşluğa isim uydurmaktan kolay.
 
 ## Bilinen Açık İşler (teknik borç)
+- ~~Sekme çubuğu ile sistem navigasyon çubuğu iç içe~~ — **KAPANDI (2026-08-04),
+  cihazda DOĞRULANDI** (iki navigasyon türünde de kontrol edildi). Arkadaş
+  testinden gelen ilk geri bildirimdi (2026-08-03). Teşhis kayıt için duruyor;
+  özellikle "eski hipotez tam ters yöndeydi" notu tekrar aranmasın diye.
+  Alt sekme çubuğu (Ana Sayfa/Ara/Harita/Profil)
+  ile telefonun **üç butonlu klasik Android navigasyonu** arasında boşluk yoktu.
+  - **Geliştirme cihazında HİÇ görülmedi** — o telefon **jest tabanlı (kaydırmalı)
+    navigasyon** kullanıyor. Sorun cihaza değil **navigasyon türüne** bağlıydı;
+    bu ayrım teşhisin can alıcı noktası oldu.
+  - **⚠️ ESKİ HİPOTEZ YANLIŞTI — hem de tam TERSİ yönde.** Buraya
+    *"üç butonlu navigasyonda `insets.bottom` 0 geliyor, taban `Spacing.sm`
+    yetmiyor"* diye yazılmıştı. Gerçek bunun tersi: `insets.bottom` 3 tuşlu
+    navigasyonda **en BÜYÜK** değeri alıyor (~48dp). Kodda o varsayımı taşıyan
+    `TAB_BAR_MIN_BOTTOM_PADDING` yorumu **edge-to-edge ÖNCESİ bir dünyadan**
+    kalmaydı ve SDK 54'te geçerliliğini yitirmişti.
+  - **Kanıt (statik, build almadan):** Expo SDK 54'te edge-to-edge **varsayılan
+    olarak açık** ve Android 16 / API 36 artık kapatılmasına izin vermiyor.
+    Projede `android.edgeToEdgeEnabled` hiç yazılmadığı için prebuild-config onu
+    `raw !== false` ile **true** yapıyor —
+    `@expo/prebuild-config/build/plugins/unversioned/edge-to-edge/withEdgeToEdge.js`
+    (`node_modules` içinde okundu; `@expo/config-types` alanı zaten
+    *"Default to true"* + `@deprecated` işaretli). Edge-to-edge'te pencere sistem
+    çubuklarının ALTINA uzanıyor, yani `insets.bottom` sıfır değil sistem
+    çubuğunun **gerçek yüksekliği**: 3 tuşlu ~48dp, jest ~16-24dp.
+  - **Asıl mekanizma:** `Math.max(insets.bottom, 12)` tabanı bu yüzden **hiç
+    devreye girmiyordu** — iki modda da sonuç düpedüz `insets.bottom` oluyordu.
+    `paddingBottom === insets.bottom` ise sekme içeriğini sistem çubuğunun tam
+    tepesine, **sıfır boşlukla** oturtuyor. Jest navigasyonunda o 24dp'nin
+    neredeyse tamamı boş olduğu için boşluk varmış gibi görünüyor; 3 tuşlu
+    navigasyonda o 48dp'nin tamamı buton olduğu için etiketler butonlara bitişik
+    çıkıyor. Semptomun navigasyon türüne bağlı olmasının sebebi tam olarak bu.
+  - **`@react-navigation/bottom-tabs@7` kendi varsayılanında da aynı formülü
+    kullanıyor** (`BottomTabBar.tsx:378` → `paddingBottom: insets.bottom`,
+    `getTabBarHeight` → `TABBAR_HEIGHT_UIKIT + inset`). Yani `tabBarStyle`
+    override'ını **silmek bug'ı ÇÖZMEZ**, aynı formüle geri döner. Eksik olan
+    şey inset'in kendisi değil, üstüne eklenecek nefes payı.
+  - **Düzeltme: `max()` değil TOPLAMA** →
+    `bottomPadding = insets.bottom + TAB_BAR_BOTTOM_GAP` (`Spacing.xs` = 8).
+    Ölçülen inset ne olursa olsun doğru, yani "önce ölç" uyarısının istediği
+    güvenceyi formülün kendisi veriyor: jest 24→32, 3 tuşlu 48→56, inset 0 ise 8.
+    Bir türe yaranıp diğerini bozmuyor.
+  - **Kod tabanının geri kalanı zaten bu deseni kullanıyordu**: `MapScreen:630`
+    ve `RestaurantDetailScreen:328` ikisi de `insets.top + Spacing.sm` yazıyor.
+    `max()` kullanan tek yer sekme çubuğuydu — tutarsızlık da oradaydı.
+  - **Doğrulama notu:** hipotez `node_modules`'teki gerçek kaynaklardan
+    okunarak kuruldu, tahminle değil. Görsel doğrulama kullanıcıda: **aynı
+    cihazda** Ayarlar → Sistem → Sistem navigasyonu ile iki mod arasında geçilip
+    ikisi de kontrol edilmeli (APK build'i gerekmiyor, Expo Go yeterli).
+    **Ders: navigasyon türü artık her görsel geri bildirimde sorulacak bir
+    değişken** — tek modda test etmek bu sınıfı yakalamıyor.
+- **Auth / kayıt akışında dört açık iş (a–d).** E-posta onayı bu yüzden bilinçli
+  olarak kapalı ve dördü de **yalnızca onay açılınca** canlıya çıkıyor. Tam
+  analiz, dosya:satır referansları ve düzeltme sırası: Mimari Notlar →
+  **Auth / kayıt akışı**. `(e)` **kod olarak düzeltildi** (2026-08-04), cihazda
+  doğrulanmayı bekliyor; `(f)` **kapandı** (migration 012).
 - **`useAuth` Context'e çevrilmeli — asıl mimari sorun bu.** `useAuth` bir Context değil;
   her çağıran kendi `useState` + `getSession()` + `onAuthStateChange` örneğini kuruyor.
   Mount anında `user` henüz null iken sorgu atılıp effect bir daha tetiklenmiyordu.
@@ -1034,10 +1928,14 @@ boşluğa isim uydurmaktan kolay.
   `follower_id=eq.` (boş string uuid) yüzünden her açılışta sessiz HTTP 400 gidiyordu, düzeltildi.
   **Kök neden hâlâ duruyor** — aynı yarış sınıfı yeni ekranlarda tekrar edecek.
   `AuthProvider` refactor'ü ~5-6 dosyaya dokunur.
-- **`src/screens/SearchScreen.tsx:87` hâlâ ham `fetch` ile autocomplete çağırıyor**,
+- **`src/screens/SearchScreen.tsx:127` hâlâ ham `fetch` ile autocomplete çağırıyor**,
   `json.status` kontrol etmiyor. `places.ts`'teki `autocomplete()` hazır ama kullanılmıyor.
   Faz 1b adım 6'da bu dosyanın stilleri elden geçirildi ama bu **bilinçli olarak
   dokunulmadı** — tasarım değil davranış değişikliği, ayrı diff olmalı.
+  (Satır numarası 2026-08-04'te `:87`den güncellendi; o gün arama ekranındaki
+  durum ayrımı düzeltildi ama bu madde yine kapsam dışı bırakıldı. Somut sonucu:
+  `REQUEST_DENIED`/`INVALID_REQUEST` gibi durumlarda `json.predictions` anahtarı
+  hiç gelmediği için liste **eski haliyle ekranda kalıyor**, hata görünmüyor.)
 - **Google API key'inde kısıtlama yok.** Cloud Console'dan Android package name + SHA-1
   kısıtlaması konmalı. `EXPO_PUBLIC_` değişkenleri JS bundle'a gömüldüğü için key
   uygulamadan çıkarılabilir. **Kod tarafında yapılacak bir şey yok — kullanıcının Console'dan
