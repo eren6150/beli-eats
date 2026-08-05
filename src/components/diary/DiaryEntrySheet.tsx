@@ -143,11 +143,39 @@ export default function DiaryEntrySheet({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <KeyboardAvoidingView
-          // Android'de klavye pencereyi zaten yeniden boyutluyor (adjustResize);
-          // orada 'padding' vermek sheet'i iki kez yukarı iter.
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          /**
+           * `flex: 1` GEREKLİ, süs değil: `sheet`'in `maxHeight: '85%'`i yüzde,
+           * yani ÇÖZÜLEBİLİR bir ebeveyn yüksekliğine ihtiyacı var. Öncesinde
+           * KAV'ın hiç `style`'ı yoktu → içeriğine göre boyutlanıyordu → yüzde
+           * belirsiz bir yükseklikten hesaplanıyordu.
+           *
+           * `behavior="height"` ile çakışmıyor: RN o davranışta `{height, flex:0}`
+           * override'ını YALNIZCA klavye açıkken uyguluyor
+           * (`KeyboardAvoidingView.js:237-248`, `state.bottom > 0` koşulu).
+           * Klavye kapalı → flex:1 (yüzde çözülüyor), açık → sabit yükseklikli
+           * kutu ve sheet yine dibe hizalı.
+           *
+           * `pointerEvents="box-none"`: KAV artık tüm ekranı kapladığı için
+           * onsuz arkadaki karartma `Pressable`'ı yutar ve **dışarı dokunup
+           * kapatma özelliği kaybolurdu**. "box-none" = kendisi dokunuş hedefi
+           * değil, çocukları hedef olmaya devam ediyor.
+           */
+          style={styles.avoider}
+          pointerEvents="box-none"
+          /**
+           * Android'de 'height' — ÖNCEDEN `undefined` idi ve gerekçesi şuydu:
+           * "klavye pencereyi zaten yeniden boyutluyor (adjustResize)". Bu,
+           * `TabNavigator`'da yanlış çıkan varsayımla AYNI SINIFTAN: edge-to-edge
+           * (SDK 54 varsayılanı) altında pencerenin yeniden boyutlanacağına
+           * güvenilemiyor. Üstelik bu dosya projedeki TEK aykırı yerdi —
+           * `LoginScreen:45`, `RegisterScreen:56` ve `ListFormScreen:166`
+           * üçü de 'height' kullanıyor ve üçü de cihazda çalışıyor.
+           * 'padding' DEĞİL: pencere gerçekten yeniden boyutlanıyorsa o sheet'i
+           * iki kez iterdi — eski yorumun haklı olduğu tek nokta buydu.
+           */
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.sm }]}>
+          <View style={styles.sheet}>
             <View style={styles.handleBar} />
 
             <View style={styles.header}>
@@ -170,7 +198,16 @@ export default function DiaryEntrySheet({
               </Pressable>
             </View>
 
+            {/**
+              * `flexShrink: 1` OLMADAN footer sheet'in dışına taşar: RN'de
+              * varsayılan `flexShrink` 0 (web'in tersine), yani ScrollView
+              * içeriği kadar yer kaplar ve `maxHeight` sınırında kırpılan şey
+              * en alttaki footer olurdu — düzeltmeye çalıştığımız bug'ın
+              * aynısı, başka kılıkta.
+              */}
             <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -255,7 +292,28 @@ export default function DiaryEntrySheet({
                 multiline
                 textAlignVertical="top"
               />
+            </ScrollView>
 
+            {/**
+              * SABİT FOOTER — buton ScrollView'ın İÇİNDEYDİ, bug buydu.
+              *
+              * Form içeriğinin doğal yüksekliği neredeyse sabit (tarih + puan +
+              * ipucu metni + 88px not alanı + buton), sheet ise `maxHeight: 85%`
+              * ile sınırlı. Ekran KISAYSA ya da sistem yazı tipi ölçeği BÜYÜKSE
+              * o %85 yetmiyor ve kırpılan ilk şey en alttaki buton oluyordu.
+              * Geliştirme cihazında görünmemesinin sebebi bu — `TabNavigator`
+              * vakasıyla aynı ders: cihaz/OS yapılandırmasına bağlı sınıf.
+              *
+              * Artık buton ScrollView'ın KARDEŞİ: içerik ne kadar uzarsa uzasın
+              * kaydırılan kısım ortadaki alan, buton her zaman ekranda.
+              *
+              * `insets.bottom + Spacing.sm` — eski `sheet` stilindeki formülün
+              * aynısı, buraya taşındı. Bu zaten TOPLAMA idi, yani nav bar'daki
+              * `max()` hatasının bu dosyada bir karşılığı YOKTU.
+              */}
+            <View
+              style={[styles.footer, { paddingBottom: insets.bottom + Spacing.sm }]}
+            >
               <Pressable
                 onPress={handleSave}
                 disabled={saving}
@@ -271,7 +329,7 @@ export default function DiaryEntrySheet({
                   <Text style={styles.saveButtonText}>Kaydet</Text>
                 )}
               </Pressable>
-            </ScrollView>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -282,8 +340,13 @@ export default function DiaryEntrySheet({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    justifyContent: 'flex-end',
     backgroundColor: Colors.scrimMedium,
+  },
+  // Dibe hizalama `root`'tan BURAYA taşındı: KAV artık araya giren tam ekran
+  // katman, hizalamanın onun içinde olması gerekiyor.
+  avoider: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: Colors.surface,
@@ -382,14 +445,36 @@ const styles = StyleSheet.create({
     minHeight: 88,
   },
 
+  scroll: {
+    // Bkz. JSX'teki not: RN'de varsayılan flexShrink 0, onsuz footer taşar.
+    flexShrink: 1,
+  },
+  scrollContent: {
+    // Son alan ile footer arasına nefes payı; footer'ın kendi paddingTop'u
+    // üstüne biniyor.
+    paddingBottom: Spacing.sm,
+  },
+
+  footer: {
+    // Tam genişlik ayırıcı: `sheet`'in yatay padding'i negatif marjla iptal
+    // edilip footer'ın kendi içinde geri veriliyor. Böylece çizgi kenardan
+    // kenara gidiyor ama buton diğer alanlarla aynı hizada kalıyor.
+    marginHorizontal: -Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    // Gölge YOK — Midas kararı: ayrım ince kenarlıktan geliyor. Kaydırılan
+    // içeriğin footer'ın altına girdiğini bu çizgi anlatıyor.
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderSubtle,
+    backgroundColor: Colors.surface,
+  },
+
   saveButton: {
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.brand,
     borderRadius: Radius.lg,
     paddingVertical: Spacing.md,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
     ...Elevation.brand,
   },
   saveButtonPressed: { opacity: 0.75 },
