@@ -31,7 +31,12 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!username || !email || !password) {
+    // Kullanıcı adı artık gerçekten KULLANILIYOR (metadata ile trigger'a gidiyor),
+    // o yüzden boşluk temizliği burada anlamlı hale geldi: `"   "` bugünkü
+    // `!username` kontrolünü geçer, sunucuda btrim'lenip boşalır ve kullanıcı
+    // sebebini anlamadan `kullanici` adını alırdı.
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername || !email || !password) {
       Alert.alert('Hata', 'Lütfen tüm alanları doldurun.');
       return;
     }
@@ -40,7 +45,7 @@ export default function RegisterScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await signUp(email, password, username);
+    const { error } = await signUp(email, password, trimmedUsername);
     setLoading(false);
     if (error) {
       Alert.alert('Kayıt Hatası', error.message);
