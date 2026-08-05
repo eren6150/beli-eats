@@ -22,6 +22,13 @@ import { useLocation } from '../hooks/useLocation';
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
+/**
+ * Bu uzunluğun altında Google'a HİÇ gidilmiyor.
+ * Eskiden aynı eşik iki yerde iki farklı yazımla duruyordu (`text.length < 2`
+ * ve `query.length > 1`); ikisi de artık bu sabiti okuyor.
+ */
+const MIN_QUERY_LENGTH = 2;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -69,13 +76,39 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
+  /**
+   * Son TAMAMLANAN aramanın metni (hiç arama yapılmadıysa null).
+   *
+   * "Sonuç bulunamadı" demeye ancak `searchedFor === query` olduğunda hakkımız
+   * var. Öncesinde ekran yalnızca `!loading && query.length > 1`e bakıyordu ve
+   * bu, birbirinden çok farklı üç durumu tek dala topluyordu:
+   *   (a) yazıldı ama debounce daha dolmadı → arama HENÜZ BAŞLAMADI
+   *   (b) başka ekrandan dönüldü, kutu dolu ama arama hiç yapılmadı
+   *   (c) arandı ve gerçekten sonuç yok
+   * Yalnızca (c) "Sonuç bulunamadı". (a) yüzünden her aramada 400ms'lik bir
+   * yanıp sönme vardı; (b) ise `handleSelect` bug'ının görünen yüzüydü.
+   */
+  const [searchedFor, setSearchedFor] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Yanıt sırası koruması: yalnızca EN SON başlatılan istek state'e yazabilir.
+   * Debounce çakışmayı azaltır ama bitirmez — yavaş bir istek, kendisinden
+   * sonra başlayan bir isteğin yanıtından SONRA dönebiliyor. Guard olmadan geç
+   * gelen boş bir yanıt `searchedFor`'u güncel olmayan bir metne çeker ve ekranı
+   * iskelette asılı bırakırdı. (`MapScreen`'in `lastPoiTapRef`'iyle aynı desen.)
+   */
+  const requestSeqRef = useRef(0);
 
-  const fetchPredictions = async (text: string) => {
-    if (!text || text.length < 2) {
+  const fetchPredictions = async (raw: string) => {
+    const input = raw.trim();
+    if (input.length < MIN_QUERY_LENGTH) {
       setPredictions([]);
+      // Arama yapılmadı — "arandı, boş döndü" iddiasını da geri al.
+      setSearchedFor(null);
       return;
     }
+
+    const seq = ++requestSeqRef.current;
     setLoading(true);
     try {
       // Konum bias: kullanıcının 50 km çevresini önceliklendir
@@ -85,7 +118,7 @@ export default function SearchScreen() {
 
       const url =
         `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-        `?input=${encodeURIComponent(text)}` +
+        `?input=${encodeURIComponent(input)}` +
         `&types=restaurant|food|cafe|bar` +
         `&language=tr` +
         biasPart +
@@ -93,9 +126,17 @@ export default function SearchScreen() {
 
       const res = await fetch(url);
       const json = await res.json();
+      // Araya yeni bir istek girdiyse bu yanıt bayat — hiçbir şeye yazma.
+      // `loading`'e de dokunma: onun sahibi artık yeni istek.
+      if (seq !== requestSeqRef.current) return;
+      // NOT: `json.status` hâlâ kontrol edilmiyor (bilinçli, ayrı iş olarak
+      // açık iş listesinde duruyor — `places.ts`'teki `autocomplete()` hazır).
       if (json.predictions) setPredictions(json.predictions);
+      // Arama bu metin için TAMAMLANDI; "sonuç yok" demeye ancak şimdi hak var.
+      setSearchedFor(input);
     } catch (e) {
       console.error('Places autocomplete error:', e);
+      if (seq !== requestSeqRef.current) return;
     }
     setLoading(false);
   };
@@ -106,11 +147,30 @@ export default function SearchScreen() {
     debounceRef.current = setTimeout(() => fetchPredictions(text), 400);
   };
 
+  /**
+   * Arama kutusuna ve sonuç listesine DOKUNMUYOR — bilinçli.
+   *
+   * Bir dönem burada `setQuery(cleanName)` + `setPredictions([])` vardı:
+   * "tarayıcı adres çubuğu" deseni (seçileni kutuya yaz, listeyi kapat). O desen
+   * ekranda KALINAN seçicilere ait; burada hemen detay ekranına gidiliyor, yani
+   * geri bildirim hiç görünmüyor — mekanın adı zaten detay ekranında yazıyor.
+   * Sıfır fayda, karşılığında şu bozuk durum:
+   *
+   *   Sonuca dokun → detay → geri. `SearchScreen` stack'in kökü olduğu için
+   *   unmount olmuyor, state hayatta kalıyor. Dönüşte kutuda seçilen mekanın
+   *   TAM adı, liste boş, `loading` false → ekran "Sonuç bulunamadı" diyordu.
+   *   Bu bir arama sonucu DEĞİLDİ: dönüşte hiçbir istek atılmıyor (fetch'in tek
+   *   çağıranı `handleTextChange`'in debounce timer'ı). Hiç yapılmamış bir
+   *   aramanın varsayılan ekranıydı.
+   *
+   * Artık geri dönüşte kullanıcı bıraktığı yerde: yazdığı metin ve sonuç listesi
+   * duruyor, başka bir sonuca dokunabiliyor — üstelik ek istek/fatura yok.
+   * Projenin `backBehavior="history"` ve `reopenSummaryRef` kararlarındaki kural:
+   * geri her zaman bir önceki duruma döner.
+   */
   const handleSelect = (prediction: PlacePrediction) => {
     Keyboard.dismiss();
     const cleanName = cleanPlaceName(prediction.structured_formatting.main_text);
-    setQuery(cleanName);
-    setPredictions([]);
     // Kendi stack'imizdeki rotaya push ediyoruz; geri tuşu arama sonuçlarına döner.
     navigation.navigate('RestaurantDetail', {
       placeId: prediction.place_id,
@@ -119,8 +179,16 @@ export default function SearchScreen() {
   };
 
   const handleClear = () => {
+    // Bekleyen debounce'u da iptal et: yoksa temizlemeden hemen önce yazılan
+    // metnin isteği 400ms sonra ateşlenip listeyi geri dolduruyordu.
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Uçuştaki yanıtı da geçersiz kıl; o yanıt artık `loading`'i kapatmayacağı
+    // için bayrağı burada elle indiriyoruz.
+    requestSeqRef.current++;
     setQuery('');
     setPredictions([]);
+    setSearchedFor(null);
+    setLoading(false);
   };
 
   // ── Skeleton rows while fetching ───────────────────────────────────────────
@@ -133,11 +201,15 @@ export default function SearchScreen() {
   );
 
   // ── Determine body content ─────────────────────────────────────────────────
+  //
+  // Dalların SIRASI anlamlı ve daralarak gidiyor. Kritik olan, en sonda duran
+  // "Sonuç bulunamadı"nın artık bir CATCH-ALL olmaması: ona ulaşmak için o metin
+  // için gerçekten tamamlanmış bir arama gerekiyor.
   const renderBody = () => {
-    if (loading && predictions.length === 0) {
-      return renderSkeletonRows();
-    }
+    const trimmed = query.trim();
 
+    // 1. Elde sonuç varsa her şeyden önce o. Yeni bir arama uçuştayken bile
+    //    mevcut listeyi iskelete çevirmiyoruz (eski davranış da böyleydi).
     if (predictions.length > 0) {
       return (
         <FlatList
@@ -182,7 +254,8 @@ export default function SearchScreen() {
       );
     }
 
-    if (query.length === 0) {
+    // 2. Hiç yazılmadı.
+    if (trimmed.length === 0) {
       return (
         <View style={styles.emptyWrapper}>
           <EmptyState
@@ -194,19 +267,29 @@ export default function SearchScreen() {
       );
     }
 
-    if (!loading && query.length > 1) {
+    // 3. Yazıldı ama Google'a gidecek kadar uzun değil. Arama yok, iddia da yok.
+    if (trimmed.length < MIN_QUERY_LENGTH) {
+      return null;
+    }
+
+    // 4. Bu metin için arama TAMAMLANDI ve gerçekten boş döndü — tek dürüst
+    //    "Sonuç bulunamadı" durumu bu.
+    if (searchedFor === trimmed && !loading) {
       return (
         <View style={styles.emptyWrapper}>
           <EmptyState
             icon="restaurant"
             title="Sonuç bulunamadı"
-            subtitle={`"${query}" için bir sonuç yok.`}
+            subtitle={`"${trimmed}" için bir sonuç yok.`}
           />
         </View>
       );
     }
 
-    return null;
+    // 5. Geriye kalan tek durum: arama debounce'ta bekliyor ya da uçuşta.
+    //    Eskiden buraya `null` düşüyordu ve arada "Sonuç bulunamadı" yanıp
+    //    sönüyordu; artık bekleme her zaman iskelet olarak görünüyor.
+    return renderSkeletonRows();
   };
 
   return (
