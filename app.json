@@ -25,7 +25,7 @@
         "backgroundColor": "#22C55E"
       },
       "package": "com.eren.belieats",
-      "versionCode": 1,
+      "versionCode": 3,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
@@ -40,8 +40,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "d77bc86b-c3e4-4f7b-8136-2a1e82c3c278"
       }
-    }
+    },
+    "owner": "eren6150"
   }
 }
