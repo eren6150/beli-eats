@@ -17,6 +17,23 @@
 // Düz JS'te transpile adımı HİÇ YOK — sorun sınıfı ortadan kalkıyor.
 // Kaybedilen tek şey `ExpoConfig` tip kontrolü; dosya 20 satırlık düz config.
 
+/**
+ * NATIVE harita anahtarı — YALNIZCA Maps SDK için.
+ *
+ * ⚠️ Places REST çağrıları BU ANAHTARI KULLANMIYOR. Onlar
+ * `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY`'i okuyor (`src/lib/places.ts`,
+ * `src/screens/SearchScreen.tsx`) ve o değişken buraya HİÇ girmiyor —
+ * Metro onu doğrudan JS bundle'ına gömüyor.
+ *
+ * Ayrımın sebebi: Maps SDK isteğe paket adını + imzayı kendisi eklediği için
+ * "Android apps (paket + SHA-1)" kısıtlaması bu anahtarda ÇALIŞIYOR; düz
+ * HTTPS ile giden Places çağrılarında o bilgi olmadığı için aynı kısıtlama
+ * onları REQUEST_DENIED'a düşürürdü.
+ *
+ * Pratik sonucu: bu anahtar build anında AndroidManifest'e gömülüyor, yani
+ * DEĞİŞTİRMEK BUILD GEREKTİRİYOR. Places anahtarı ise her OTA ile yeniden
+ * gidiyor.
+ */
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 module.exports = ({ config }) => {
