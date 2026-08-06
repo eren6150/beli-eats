@@ -60,7 +60,8 @@ takip ettiği kişilerin aktivite akışı olacak.
   `schema` → `001_coords` → `002_places` → `003_places_fk` → `004_profile_fields` →
   `005_lists` → `006_reorder_list_items` → `007_move_list_items` →
   `008_move_list_items_copy` → `009_diary_entries` → `010_log_diary_entry` →
-  `011_update_diary_entry` → `012_username_conflict`.
+  `011_update_diary_entry` → `012_username_conflict` → `013_place_photos` →
+  `014_place_photos_storage`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -395,8 +396,49 @@ aramada 400ms'lik bir yanıp sönme** vardı — bug'ın ikinci, fark edilmemiş
   bırakırdı — yani düzeltme yeni bir hata sınıfı doğururdu. `MapScreen`'in
   `lastPoiTapRef`'iyle aynı desen.
 
-**Bilinçli olarak DOKUNULMADI:** `json.status` kontrolü ve `places.ts`'teki hazır
-`autocomplete()`'e geçiş. Açık iş listesinde duruyor.
+**Bilinçli olarak DOKUNULMADI:** `json.status`'ün ARAYÜZE yansıtılması ve
+`places.ts`'teki hazır `autocomplete()`'e geçiş. Açık iş listesinde duruyor.
+(2026-08-06'da `json.status` **konsola** loglanmaya başlandı — davranış
+değişikliği değil, yalnızca körlüğü kaldırıyor; gerekçe aşağıda.)
+
+### Arama sonuçları YERELLİĞİNİ kaybediyordu (2026-08-06)
+versionCode 4 APK'sında `mcdonald` araması **başka ülkelerden** sonuç
+döndürmeye başladı; harita ise doğru konumu gösteriyordu.
+
+**Kök neden — konum bias'ının TAMAMEN düşmesi.** `SearchScreen`:
+```ts
+const biasPart = location ? `&locationbias=...` : '';   // null → bias YOK
+```
+`useLocation` konum bilinmediğinde `location`'ı **null** bırakıyor. Null iki
+ayrı durumda oluşuyor ve ikincisi gözden kaçmıştı:
+1. **İzin yok / konum alınamadı** → kalıcı null
+2. **İzin VAR ama konum HENÜZ ÇÖZÜLMEDİ** → geçici null. `resolve()` asenkron
+   ve konum geldiğinde arama **tekrarlanmıyor**; o pencerede yapılan her arama
+   bias'sız gidiyor. Vakada izin açıktı, yani canlı olan buydu.
+
+**Asıl yapısal kusur bir TUTARSIZLIKTI:** `MapScreen`'in eksik konum için
+fallback'i **vardı** (Ankara), `SearchScreen`'in **yoktu**. Aynı eksik konum
+bir ekranda görünmezken diğerinde global sonuç olarak patlıyordu. Ankara
+koordinatları da yalnızca `MapScreen`'de duruyordu.
+
+**API anahtarı bölmesi SEBEP DEĞİLDİ — elendi.** `locationbias` bir URL sorgu
+parametresi, hangi anahtarın kullanıldığıyla ilgisi yok. Belirleyici kanıt:
+**sonuçlar geliyordu.** Anahtar yanlış olsaydı `REQUEST_DENIED` alınır ve
+(`json.status` kontrol edilmediği için) ekranda "Sonuç bulunamadı" görünürdü.
+
+**Düzeltme:**
+- `DEFAULT_COORDS` → `src/constants/location.ts`, iki ekranın tek kaynağı.
+- `useLocation` artık **`effectiveLocation`** de döndürüyor (`location ?? DEFAULT_COORDS`).
+  `location` AYRI kalıyor çünkü "gerçekten biliyor muyuz" bilgisi hâlâ gerekli —
+  `MapScreen` ona bakıp "konumun alınamadı" satırını gösteriyor.
+- `SearchScreen` `effectiveLocation` kullanıyor → **bias her istekte var**,
+  iki senaryo da kapanıyor. Ölçülen değeri bilmeye ihtiyaç duymayan düzeltme
+  (nav bar ve diary derslerinin aynısı).
+- **`json.status` konsola loglanıyor.** Bu ekran sessizce bozulabilen tek
+  Google yoluydu; SHA-1 Android kısıtlaması denendiğinde ilk bakılacak yer
+  burası. Arayüze yansıtma hâlâ ayrı bir iş.
+- **Bias sıralar, DARALTMAZ:** yanlış varsayılan bile global sonuçtan iyi;
+  kullanıcı başka şehirdeyse açık arama ("kadıköy kahve") yine doğru çalışır.
 
 ### Tasarım sistemi (Faz 1b)
 `src/constants/theme.ts` — **iki katmanlı**: `Palette` (ham ramp'ler) → `Colors`
@@ -1343,8 +1385,12 @@ eder — ikincisi çökme yüzünden **hiç test edilemedi**, hâlâ açık bir 
      `app.config.js:91` zaten `ios.config.googleMapsApiKey`'i enjekte ediyor,
      yani kod tarafı hazır; eksik olan yalnızca Console'daki izin olur.
 
-   **⬜ Faz 2 — Android app kısıtlaması (paket + SHA-1). Bir sonraki ZORUNLU
-   build'e bindirilecek, tek başına build almaya değmez.**
+   **✅ Faz 2 — TAMAMLANDI (2026-08-06), gerçek APK'da (versionCode 4)
+   DOĞRULANDI: harita ve arama ikisi de sağlam.**
+   Anahtar ikiye bölündü ve beklenti doğrulandı — tek anahtara Android
+   kısıtlaması koymak Places REST'i kıracaktı, iki anahtar bunu çözdü.
+   Aşağıdaki analiz kayıt için duruyor; asıl ders **"iki farklı Google
+   trafiği var ve kısıtlamaya tepkileri zıt"**.
    Buraya *"tek anahtara Application restrictions: Android apps (package + SHA-1)
    + API restrictions: Maps SDK for Android + Places API"* diye yazılmıştı. Sorun:
    bu projede **iki farklı Google trafiği var ve kısıtlamaya tepkileri zıt.**
@@ -1986,6 +2032,27 @@ boşluğa isim uydurmaktan kolay.
   `useProfile`'da ayrıca **"satır yok" ile "sorgu patladı" ayrıştırıldı**: ilki
   `console.warn` + "Profil bilgin bulunamadı", ikincisi `console.error` +
   "Bağlantını kontrol et".
+
+## Genel yayın öncesi düşünülecekler
+> Arkadaş testi ölçeğinde **engelleyici değil**, ama uygulama tanımadığın
+> kişilere açılmadan önce çözülmesi gereken şeyler. Bugün bilinçli olarak
+> ertelendiler; buradaki amaç "unutulmasın" demek.
+
+- **Fotoğraflarda moderasyon / şikayet mekanizması YOK (2026-08-05, migration 013).**
+  `place_photos` SELECT politikası `using (true)` — fotoğraflar **herkese açık
+  ve kalıcı**; kullanıcı yalnızca **kendi** yüklediğini silebiliyor.
+  - **Bu bilinçli bir takas:** bir menü fotoğrafının varlık sebebi paylaşılmak,
+    gizli fotoğraf anlamsız olurdu. Ayrıca `diary_entries`'in tersi bir karar
+    ve gerekçesi migration 013'te yazılı.
+  - **Eksik olan:** başkasının yüklediği uygunsuz/yanlış içeriği bildirme yolu,
+    yöneticinin silme yetkisi, ve yükleyene karşı bir yaptırım.
+  - Gerektiğinde muhtemel yol: `photo_reports` tablosu (şikayet eden, sebep,
+    durum) + `place_photos`'a `hidden boolean` + SELECT politikasına
+    `and not hidden` + yöneticiler için `service_role` üzerinden silme.
+    Veri migration'ı gerektirmiyor, yani sonradan eklemek ucuz — bu yüzden
+    bugün yapılmadı.
+  - **Tetikleyici:** uygulamanın arkadaş çevresi dışına açılması. Ondan önce
+    değil, ondan sonra da geciktirmeden.
 
 ## Konuşulacak (kullanıcı isteği, karar VERİLMEDİ)
 - **Bir listeye dokununca haritadaki pin'lerin o listeye göre filtrelenmesi/vurgulanması**
