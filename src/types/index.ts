@@ -159,6 +159,33 @@ export interface DiaryEntry {
   places?: Place | null;
 }
 
+/**
+ * Fotoğraf türü — mekan sayfasındaki sekmelerin sözleşmesi.
+ * Değerler İNGİLİZCE (şemanın geri kalanı gibi); Türkçe etiketler arayüzde.
+ * DB tarafında `place_photos_kind_valid` CHECK kısıtı ile aynı küme
+ * (migration 013) — buraya yeni tür eklemek SQL kısıtını da güncellemek demek.
+ */
+export type PlacePhotoKind = 'menu' | 'food' | 'venue' | 'other';
+
+export interface PlacePhoto {
+  id: string;
+  user_id: string;
+  place_id: string;
+  kind: PlacePhotoKind;
+  /** Storage yolu — uzun kenar 1280. Public URL'e `photoPublicUrl()` çeviriyor. */
+  storage_path: string;
+  /**
+   * Storage yolu — uzun kenar 400. AYRI kolon, `storage_path`'ten türetilmiyor
+   * (gerekçe migration 013'te). Listeler/ızgaralar YALNIZCA bunu kullanmalı:
+   * ücretsiz katmanda egress hesabı buna dayanıyor.
+   */
+  thumb_path: string;
+  caption: string | null;
+  created_at: string;
+  /** `select '*, profiles(*)'` ile gelen join — "kim yükledi" için. */
+  profiles?: Profile | null;
+}
+
 export interface Follow {
   follower_id: string;
   following_id: string;

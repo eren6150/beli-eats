@@ -150,6 +150,14 @@ export const Colors = {
   /** Modal/sheet arkası */
   scrimMedium: 'rgba(0,0,0,0.45)',
   /**
+   * Tam ekran görsel görüntüleyici zemini (`PhotoGrid`).
+   * `scrimMedium` burada YETMİYOR: arkadaki arayüz fotoğrafın kenarlarından
+   * sızıp dikkat dağıtıyor ve açık renkli fotoğraflarda kontrast kayboluyor.
+   * Ayrı bir rol, çünkü modal arkası ile görsel zemini farklı işler —
+   * birini koyulaştırmak diğerini de koyulaştırmamalı.
+   */
+  scrimStrong: 'rgba(0,0,0,0.92)',
+  /**
    * Opacity'si ANİMASYONLANAN örtüler için opak taban.
    * rgba token'ı kullanılamaz: kendi alfası animasyonlu opacity ile çarpışıp
    * beklenenden açık bir örtü verir.

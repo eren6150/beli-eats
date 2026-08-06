@@ -1,0 +1,99 @@
+import { useState, useCallback } from 'react';
+import { PostgrestError } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+import { PlacePhoto, PlacePhotoKind } from '../types';
+
+type MutationError = PostgrestError | Error;
+
+/**
+ * Bir mekanın fotoğrafları.
+ *
+ * TÜRE GÖRE FİLTRELEME İSTEMCİDE, sorguda DEĞİL — bilinçli. Sekme değiştirmek
+ * yeni bir istek atmıyor; bir mekanın fotoğraf sayısı (arkadaş testi ölçeğinde
+ * ve sonrasında da) tek seferde çekilecek kadar az. Sekme başına sorgu atmak
+ * dört kat istek ve her sekme geçişinde spinner demekti.
+ *
+ * Sunucu tarafı indeks yine de `(place_id, kind, created_at desc)`: ileride
+ * sayfalama gerekirse sorgu türe göre daraltılabilir, indeks hazır.
+ */
+export function usePlacePhotos(placeId: string | undefined) {
+  const [photos, setPhotos] = useState<PlacePhoto[]>([]);
+  const [loading, setLoading] = useState(false);
+  /** Kullanıcıya GÖSTERİLEN kısa metin — ham hata mesajı değil. */
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPhotos = useCallback(async () => {
+    if (!placeId) return;
+
+    setLoading(true);
+    setError(null);
+
+    const { data, error: queryError } = await supabase
+      .from('place_photos')
+      .select('*, profiles(*)')
+      .eq('place_id', placeId)
+      .order('created_at', { ascending: false });
+
+    if (queryError) {
+      console.error('[usePlacePhotos] fotoğraflar okunamadı:', queryError);
+      setError('Fotoğraflar yüklenemedi. Bağlantını kontrol et.');
+    } else {
+      setPhotos((data ?? []) as PlacePhoto[]);
+    }
+
+    setLoading(false);
+  }, [placeId]);
+
+  /** Tek bir türün fotoğrafları — sekmeler bunu kullanıyor. */
+  const byKind = useCallback(
+    (kind: PlacePhotoKind) => photos.filter((p) => p.kind === kind),
+    [photos]
+  );
+
+  /** Sekme başlıklarındaki sayılar. */
+  const countOf = useCallback(
+    (kind: PlacePhotoKind) => photos.filter((p) => p.kind === kind).length,
+    [photos]
+  );
+
+  /**
+   * Fotoğrafı siler.
+   *
+   * ⚠️ ÖNCE SATIR, SONRA NESNELER — yükleme akışının TERSİ, ve bilinçli.
+   * Satır gidince fotoğraf arayüzden hemen kaybolur; Storage silme başarısız
+   * olursa geriye yalnızca öksüz nesne kalır (görünmez, küçük). Ters sırada
+   * ise nesne silinip satır kalsaydı ızgarada KIRIK KARE görünürdü.
+   *
+   * Storage silme hatası kullanıcıya YANSITILMIYOR: onun açısından iş bitti,
+   * fotoğraf gitti. Konsola düşüyor.
+   */
+  const removePhoto = async (
+    photo: PlacePhoto
+  ): Promise<{ error: MutationError | null }> => {
+    const { error: deleteError } = await supabase
+      .from('place_photos')
+      .delete()
+      .eq('id', photo.id);
+
+    if (deleteError) {
+      console.error('[usePlacePhotos] fotoğraf satırı silinemedi:', deleteError);
+      return { error: deleteError };
+    }
+
+    const { error: storageError } = await supabase.storage
+      .from('place-photos')
+      .remove([photo.storage_path, photo.thumb_path]);
+
+    if (storageError) {
+      console.warn(
+        '[usePlacePhotos] satır silindi ama nesneler kaldı (öksüz):',
+        storageError
+      );
+    }
+
+    setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+    return { error: null };
+  };
+
+  return { photos, loading, error, fetchPhotos, byKind, countOf, removePhoto };
+}

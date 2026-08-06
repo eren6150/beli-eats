@@ -19,7 +19,13 @@ import {
   useFocusEffect,
   RouteProp,
 } from '@react-navigation/native';
-import { Place, RestaurantDetailStackParamList } from '../types';
+import * as ImagePicker from 'expo-image-picker';
+import {
+  Place,
+  PlacePhoto,
+  PlacePhotoKind,
+  RestaurantDetailStackParamList,
+} from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useRankings } from '../hooks/useRankings';
 import { photoUrl } from '../lib/places';
@@ -32,6 +38,10 @@ import Chip from '../components/ui/Chip';
 import Icon from '../components/ui/Icon';
 import AddToListSheet from '../components/lists/AddToListSheet';
 import DiaryEntrySheet from '../components/diary/DiaryEntrySheet';
+import SegmentedTabs from '../components/ui/SegmentedTabs';
+import PhotoGrid from '../components/photos/PhotoGrid';
+import { usePlacePhotos } from '../hooks/usePlacePhotos';
+import { makePhotoRenditions, uploadPlacePhoto } from '../lib/placePhotos';
 
 // Ekran üç stack'te birden kayıtlı; route tipi bu yüzden tek bir stack'in
 // param listesine değil, paylaşılan tipe bağlı.
@@ -61,6 +71,34 @@ function RatingSelector({
     </View>
   );
 }
+
+// ─── Fotoğraf sekmeleri ───────────────────────────────────────────────────────
+//
+// Değerler İngilizce (DB'deki `place_photos_kind_valid` kısıtıyla birebir),
+// etiketler Türkçe — `SearchScreen`'in CUISINE_TR haritasıyla aynı ayrım.
+// Buraya tür eklemek migration 013'teki CHECK kısıtını da güncellemek demek.
+
+const PHOTO_TABS: ReadonlyArray<{ key: PlacePhotoKind; label: string }> = [
+  { key: 'menu', label: 'Menü' },
+  { key: 'food', label: 'Yemek' },
+  { key: 'venue', label: 'Mekan' },
+  { key: 'other', label: 'Diğer' },
+];
+
+/** Aksiyon butonu aktif sekmeye göre konuşuyor — tür bağlamdan geliyor. */
+const PHOTO_ADD_LABEL: Record<PlacePhotoKind, string> = {
+  menu: 'Menü ekle',
+  food: 'Yemek ekle',
+  venue: 'Mekan ekle',
+  other: 'Fotoğraf ekle',
+};
+
+const PHOTO_EMPTY_LABEL: Record<PlacePhotoKind, string> = {
+  menu: 'Henüz menü fotoğrafı yok. İlk ekleyen sen ol.',
+  food: 'Henüz yemek fotoğrafı yok.',
+  venue: 'Henüz mekan fotoğrafı yok.',
+  other: 'Henüz fotoğraf yok.',
+};
 
 // ─── Ekran ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +138,24 @@ export default function RestaurantDetailScreen() {
 
   /** "Tekrar dene" bunu artırıyor; effect bağımlılığı olduğu için yükleme tekrarlanır. */
   const [reloadToken, setReloadToken] = useState(0);
+
+  /** Fotoğraf bölümü — aktif sekme, yükleme durumu ve kısa hata metni. */
+  const [photoTab, setPhotoTab] = useState<PlacePhotoKind>('menu');
+  /**
+   * Yükleme HANGİ TÜRE yapılıyor — boolean DEĞİL, bilinçli.
+   * Yer tutucu kare yalnızca hedef sekmede görünmeli: kullanıcı yükleme
+   * sürerken başka sekmeye geçerse, boolean'la spinner yanlış sekmede
+   * belirir ve oraya bir fotoğraf gelecekmiş gibi görünürdü.
+   */
+  const [uploadingKind, setUploadingKind] = useState<PlacePhotoKind | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const {
+    fetchPhotos,
+    byKind,
+    countOf,
+    removePhoto,
+    error: photoFetchError,
+  } = usePlacePhotos(placeId);
 
   const existingRanking = rankings.find((r) => r.place_id === placeId);
 
@@ -161,7 +217,10 @@ export default function RestaurantDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchRankings();
-    }, [fetchRankings])
+      // Fotoğraflar da odakta tazeleniyor: başka bir cihazdan/kullanıcıdan
+      // eklenen kareler geri dönüşte görünsün.
+      fetchPhotos();
+    }, [fetchRankings, fetchPhotos])
   );
 
   useEffect(() => {
@@ -196,6 +255,105 @@ export default function RestaurantDetailScreen() {
       return null;
     }
   }, [place, placeId, placeName]);
+
+  /**
+   * Fotoğraf ekleme — tür AKTİF SEKMEDEN geliyor, ayrı bir seçici yok.
+   *
+   * `ensurePlaceCached()` galeriyi açmadan ÖNCE çalışıyor: `place_photos`
+   * `places`'e FK ve cache satırı garanti edilemiyorsa kullanıcıya fotoğraf
+   * seçtirip sonra hata göstermek olurdu — hatanın yeri seçilen fotoğraf
+   * değil, mekanın kendisi. `AddToListSheet`'te kurulan desenin aynısı.
+   *
+   * İki kopya (1280px tam boy + 400px ızgara) `makePhotoRenditions` ile
+   * İSTEMCİDE üretiliyor: Supabase Free planda sunucu tarafı görsel
+   * dönüştürme yok ve ızgaranın küçük kopyayı kullanması egress'in 5 GB
+   * sınırına sığmasının koşulu.
+   */
+  const handleAddPhoto = async () => {
+    if (!user) {
+      Alert.alert('Giriş gerekli', 'Fotoğraf eklemek için giriş yapmalısın.');
+      return;
+    }
+
+    const resolved = await ensurePlaceCached();
+    if (!resolved) {
+      setPhotoError('Mekan bilgisi alınamadı, tekrar dene.');
+      return;
+    }
+
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        'İzin gerekli',
+        'Fotoğraf eklemek için galeri erişimine izin vermelisin.'
+      );
+      return;
+    }
+
+    // `quality: 1` — burada SIKIŞTIRMA YOK. Sıkıştırmayı `makePhotoRenditions`
+    // yapıyor; burada da sıkıştırmak çift kayıp olur ve kaliteyi boşuna düşürür.
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return;
+
+    const asset = picked.assets[0];
+
+    // Hedef tür SEÇİM ANINDA sabitleniyor: kullanıcı yükleme sürerken sekme
+    // değiştirse bile fotoğraf başladığı sekmeye gitmeli.
+    const targetKind = photoTab;
+    setUploadingKind(targetKind);
+    setPhotoError(null);
+
+    try {
+      const { fullUri, thumbUri } = await makePhotoRenditions({
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+      });
+
+      const { error: uploadError } = await uploadPlacePhoto({
+        placeId,
+        userId: user.id,
+        kind: targetKind,
+        fullUri,
+        thumbUri,
+      });
+
+      if (uploadError) {
+        // Ekrana kısa metin, konsola tam nesne — projenin hata kuralı.
+        // Ham mesaj ŞABLONLANMIYOR.
+        setPhotoError('Fotoğraf yüklenemedi. Bağlantını kontrol et.');
+        return;
+      }
+
+      await fetchPhotos();
+    } catch (e) {
+      // Küçültme/kaydetme aşaması: bozuk veya desteklenmeyen görsel.
+      console.error('[RestaurantDetail] fotoğraf hazırlanamadı:', e);
+      setPhotoError('Fotoğraf işlenemedi. Başka bir görsel dene.');
+    } finally {
+      setUploadingKind(null);
+    }
+  };
+
+  /** Uzun basış → onaylı silme. `ListCard` / `DiaryRow` ile aynı desen. */
+  const handleDeletePhoto = (photo: PlacePhoto) => {
+    Alert.alert('Fotoğrafı sil', 'Bu fotoğraf kalıcı olarak silinecek.', [
+      { text: 'Vazgeç', style: 'cancel' },
+      {
+        text: 'Sil',
+        style: 'destructive',
+        onPress: async () => {
+          const { error: deleteError } = await removePhoto(photo);
+          if (deleteError) {
+            setPhotoError('Fotoğraf silinemedi, tekrar dene.');
+          }
+        },
+      },
+    ]);
+  };
 
   const handleSave = async () => {
     if (rating === 0) {
@@ -394,6 +552,59 @@ export default function RestaurantDetailScreen() {
             <RatingSelector value={rating} onChange={setRating} />
           </View>
 
+          {/* ── Fotoğraflar ──
+              Sekmeler `SegmentedTabs` ile: CLAUDE.md'de "Faz 2'de fotoğraf
+              türü sekmeleri aynısını kullanacak" diye zaten planlanmıştı.
+
+              DÖRT SEKME DE HER ZAMAN GÖRÜNÜR, boş olan gizlenmiyor. Dolu
+              olana göre sekme gizlemek, aynı mekanda sekmelerin yer
+              değiştirmesine yol açardı; proje "sekmeler arası geçerken göz
+              kaymasın" ilkesini birden çok yerde uyguladı. */}
+          <View style={styles.photosSection}>
+            <SectionHeader
+              title="Fotoğraflar"
+              subtitle="Menü, yemek ve mekan kareleri"
+              // Aksiyon etiketi AKTİF SEKMEYE göre değişiyor — yükleme türünü
+              // ayrı bir seçiciyle sormak yerine bağlamdan alıyoruz. Ekstra
+              // sheet yok, kullanıcı zaten baktığı sekmeye ekliyor.
+              actionLabel={
+                uploadingKind ? 'Yükleniyor…' : PHOTO_ADD_LABEL[photoTab]
+              }
+              onAction={uploadingKind ? undefined : handleAddPhoto}
+            />
+
+            {/* Yükleme/silme hatası ile okuma hatası aynı şeride düşüyor:
+                kullanıcı için ikisi de "fotoğraflarda bir sorun var".
+                Yazma hatası önceliklendiriliyor — o, kullanıcının az önce
+                yaptığı bir eylemin sonucu. */}
+            {(photoError ?? photoFetchError) && (
+              <ErrorBanner
+                message={(photoError ?? photoFetchError) as string}
+                style={styles.photoBanner}
+              />
+            )}
+
+            <SegmentedTabs
+              tabs={PHOTO_TABS.map((t) => ({
+                key: t.key,
+                label: `${t.label} (${countOf(t.key)})`,
+              }))}
+              active={photoTab}
+              onChange={setPhotoTab}
+              style={styles.photoTabs}
+            />
+
+            <PhotoGrid
+              photos={byKind(photoTab)}
+              horizontalPadding={Spacing.lg}
+              currentUserId={user?.id}
+              onDelete={handleDeletePhoto}
+              emptyLabel={PHOTO_EMPTY_LABEL[photoTab]}
+              // Yer tutucu YALNIZCA yüklemenin hedeflendiği sekmede.
+              pending={uploadingKind === photoTab ? 1 : 0}
+            />
+          </View>
+
           {/* ── Yorum ── */}
           <View style={styles.reviewSection}>
             <SectionHeader title="Yorumun" subtitle="İsteğe bağlı" />
@@ -579,6 +790,10 @@ const styles = StyleSheet.create({
     color: Colors.brandStrong,
     marginTop: Spacing.xs,
   },
+
+  photosSection: { marginBottom: Spacing.xl },
+  photoTabs: { marginBottom: Spacing.sm },
+  photoBanner: { marginBottom: Spacing.sm },
 
   reviewSection: { marginBottom: Spacing.xl },
   reviewInput: {
