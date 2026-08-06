@@ -7,7 +7,30 @@
 
 const BASE = 'https://maps.googleapis.com/maps/api/place';
 
-export const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+/**
+ * ⚠️ NATIVE HARİTA ANAHTARINDAN AYRI — `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` DEĞİL.
+ *
+ * Projede iki farklı Google trafiği var ve kısıtlamaya tepkileri ZIT:
+ *
+ *   A) Native harita → Maps SDK for Android. SDK isteğe paket adını ve imzayı
+ *      kendisi ekliyor, bu yüzden "Android apps (paket + SHA-1)" kısıtlaması
+ *      ÇALIŞIYOR. O anahtar `app.config.js` → AndroidManifest yoluyla BUILD
+ *      ANINDA gömülüyor ve `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` olarak kalıyor.
+ *
+ *   B) Bu dosyanın yaptığı Places REST çağrıları → JS'ten düz HTTPS. Bu
+ *      isteklerde paket adı/imza YOK, dolayısıyla Android uygulama kısıtlaması
+ *      onları tanıyamaz ve konsaydık hepsi REQUEST_DENIED olurdu.
+ *
+ * Bu yüzden B ayrı bir anahtar: Application restrictions = None (mobil REST
+ * çağrıları kilitlenemiyor — IP ve HTTP referrer mobilde işe yaramaz),
+ * API restrictions = yalnızca Places API. Korumaları: API kısıtı + günlük
+ * 2.000 kota + bütçe uyarısı.
+ *
+ * Kalıcı çözüm CLAUDE.md'de kayıtlı: Google çağrılarını Supabase Edge Function
+ * arkasına almak — o gün bu anahtar istemciden tamamen kalkar.
+ */
+export const GOOGLE_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 
 // ─── Hata tipi ────────────────────────────────────────────────────────────────
 
@@ -21,7 +44,7 @@ const STATUS_HINTS: Record<string, string> = {
   NOT_FOUND: 'place_id bulunamadı — kayıt eski/geçersiz olabilir.',
   UNKNOWN_ERROR: 'Google tarafında geçici hata, tekrar denenebilir.',
   NO_API_KEY:
-    'EXPO_PUBLIC_GOOGLE_MAPS_API_KEY tanımsız. .env dosyasını kontrol et ve Metro\'yu yeniden başlat.',
+    'EXPO_PUBLIC_GOOGLE_PLACES_API_KEY tanımsız. .env dosyasını kontrol et ve Metro\'yu yeniden başlat. (Native harita anahtarı AYRI: EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.)',
 };
 
 export class PlacesError extends Error {

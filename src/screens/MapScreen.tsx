@@ -30,6 +30,7 @@ import {
   TabParamList,
 } from '../types';
 import { Colors, Type, Spacing, Radius, Elevation } from '../constants/theme';
+import { DEFAULT_COORDS } from '../constants/location';
 import Icon from '../components/ui/Icon';
 import MapSummarySheet from '../components/map/MapSummarySheet';
 import RestaurantBottomSheet, {
@@ -38,10 +39,15 @@ import RestaurantBottomSheet, {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Ankara merkezi — konum izni olmadığında veya koordinat geçersizse fallback */
+/**
+ * Ankara merkezi — konum izni olmadığında veya koordinat geçersizse fallback.
+ * Koordinatlar `constants/location.ts`'ten geliyor: bir dönem yalnızca burada
+ * duruyorlardı ve `SearchScreen`'in fallback'i hiç yoktu, o yüzden aynı eksik
+ * konum haritada görünmezken aramada global sonuç olarak patlıyordu. Tek kaynak.
+ * Delta'lar haritaya özgü, o yüzden burada kalıyor.
+ */
 const ANKARA_COORDS = {
-  latitude: 39.9334,
-  longitude: 32.8597,
+  ...DEFAULT_COORDS,
   latitudeDelta: 0.08,
   longitudeDelta: 0.08,
 };
@@ -262,10 +268,16 @@ export default function MapScreen() {
       if (!GOOGLE_API_KEY) {
         // Bu bir KURULUM hatası, kullanıcının çözebileceği bir şey değil —
         // çözüm adımları (.env, Metro) geliştiriciye, konsola.
+        // Buradaki `GOOGLE_API_KEY` `places.ts`'ten geliyor, yani PLACES
+        // anahtarı — haritanın kendisini çizen native anahtar AYRI
+        // (`EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, AndroidManifest'ten). Bu yüzden
+        // uyarı yalnızca POI detayları ve fotoğraflar için geçerli; pinler ve
+        // harita karoları bundan etkilenmiyor.
         console.warn(
-          '[MapScreen] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY tanımsız — mekan ' +
-            'detayları ve fotoğraflar çalışmaz. .env dosyasını kontrol edip ' +
-            'Metro\'yu yeniden başlat.'
+          '[MapScreen] EXPO_PUBLIC_GOOGLE_PLACES_API_KEY tanımsız — mekan ' +
+            'detayları ve fotoğraflar çalışmaz (harita karoları ayrı ' +
+            'anahtarla çiziliyor, onlar etkilenmez). .env dosyasını kontrol ' +
+            'edip Metro\'yu yeniden başlat.'
         );
         setDataError('Mekan detayları şu an kullanılamıyor.');
       }

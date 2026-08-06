@@ -20,7 +20,18 @@ import Chip from '../components/ui/Chip';
 import Icon from '../components/ui/Icon';
 import { useLocation } from '../hooks/useLocation';
 
-const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+/**
+ * ⚠️ Places REST anahtarı — native harita anahtarından AYRI.
+ * Gerekçe `places.ts`'in başında tam olarak yazılı: bu ekrandaki autocomplete
+ * çağrısı düz HTTPS, yani paket adı/imza taşımıyor ve Android uygulama
+ * kısıtlaması onu tanıyamaz.
+ *
+ * NOT: bu dosya hâlâ ham `fetch` kullanıyor ve `json.status`'ü KONTROL
+ * ETMİYOR (açık iş). Somut sonucu: anahtar yanlışsa `REQUEST_DENIED` döner,
+ * `json.predictions` hiç gelmez ve ekranda yalnızca "Sonuç bulunamadı"
+ * görünür — yani anahtar bölmesi yanlış yapılırsa hata SESSİZ olur.
+ */
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 
 /**
  * Bu uzunluğun altında Google'a HİÇ gidilmiyor.
@@ -72,7 +83,8 @@ function formatCategory(types: string[]): string {
 
 export default function SearchScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<SearchStackParamList>>();
-  const { location } = useLocation();
+  // `location` DEĞİL `effectiveLocation`: gerekçe `fetchPredictions` içinde.
+  const { effectiveLocation } = useLocation();
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,10 +123,24 @@ export default function SearchScreen() {
     const seq = ++requestSeqRef.current;
     setLoading(true);
     try {
-      // Konum bias: kullanıcının 50 km çevresini önceliklendir
-      const biasPart = location
-        ? `&locationbias=circle:50000@${location.latitude},${location.longitude}`
-        : '';
+      /**
+       * Konum bias: kullanıcının 50 km çevresini önceliklendir.
+       *
+       * ⚠️ `effectiveLocation` KULLANILIYOR, `location` DEĞİL — bu bir hata
+       * düzeltmesi. Öncesinde `location` null olduğunda bias parametresi
+       * TAMAMEN düşüyordu ve Google dünya genelinden sonuç döndürüyordu
+       * ("mcdonald" → başka ülkelerdeki şubeler). Null iki durumda oluyor:
+       * izin yokken (kalıcı) ve konum HENÜZ ÇÖZÜLMEMİŞKEN (geçici) — ikincisi
+       * izin verilmiş cihazlarda da yaşanıyordu, çünkü `useLocation` asenkron
+       * ve konum geldiğinde arama tekrarlanmıyor.
+       *
+       * `effectiveLocation` hiçbir zaman null olmuyor, yani bias her istekte
+       * var. Bias sıralıyor, daraltmıyor; yanlış varsayılan bile global
+       * sonuçtan iyi.
+       */
+      const biasPart =
+        `&locationbias=circle:50000@` +
+        `${effectiveLocation.latitude},${effectiveLocation.longitude}`;
 
       const url =
         `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
@@ -129,8 +155,25 @@ export default function SearchScreen() {
       // Araya yeni bir istek girdiyse bu yanıt bayat — hiçbir şeye yazma.
       // `loading`'e de dokunma: onun sahibi artık yeni istek.
       if (seq !== requestSeqRef.current) return;
-      // NOT: `json.status` hâlâ kontrol edilmiyor (bilinçli, ayrı iş olarak
-      // açık iş listesinde duruyor — `places.ts`'teki `autocomplete()` hazır).
+
+      /**
+       * `json.status` hâlâ ARAYÜZE yansıtılmıyor (açık iş: `places.ts`'teki
+       * `autocomplete()`'e geçiş) ama artık KONSOLA düşüyor.
+       *
+       * Sebep: bu ekran sessizce bozulabilen tek Google yolu. Anahtar yanlış,
+       * kota dolu veya API kısıtı hatalıysa `predictions` hiç gelmiyor ve
+       * ekranda yalnızca "Sonuç bulunamadı" görünüyor — yani teşhis edilemez
+       * hale geliyor. Bu satır davranışı DEĞİŞTİRMİYOR (kural gereği ayrı bir
+       * diff'e ait), yalnızca körlüğü kaldırıyor. SHA-1 Android kısıtlaması
+       * denendiğinde ilk bakılacak yer burası olacak.
+       */
+      if (json.status && json.status !== 'OK' && json.status !== 'ZERO_RESULTS') {
+        console.warn(
+          `[SearchScreen] Places autocomplete status=${json.status}`,
+          json.error_message ?? ''
+        );
+      }
+
       if (json.predictions) setPredictions(json.predictions);
       // Arama bu metin için TAMAMLANDI; "sonuç yok" demeye ancak şimdi hak var.
       setSearchedFor(input);

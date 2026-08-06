@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
+import { DEFAULT_COORDS } from '../constants/location';
 
 export interface LocationCoords {
   latitude: number;
@@ -92,5 +93,25 @@ export function useLocation() {
     };
   }, [resolve]);
 
-  return { location, errorMsg, loading, retry: resolve };
+  /**
+   * Konum + fallback. `location` null olduğu HER durumda Ankara'ya düşüyor.
+   *
+   * ── NEDEN AYRI BİR DEĞER, `location`'ı doldurmak DEĞİL ───────────────────
+   * `location === null` bilgisi hâlâ gerekli: `MapScreen` ona bakıp "konumun
+   * alınamadı" satırını gösteriyor. `location`'ı fallback'le doldursaydık o
+   * ayrım kaybolur ve harita, konumu bilmediğini kullanıcıya söyleyemezdi.
+   * Yani: `location` = "gerçekten biliyor muyuz", `effectiveLocation` =
+   * "hesaplamada ne kullanalım".
+   *
+   * ── HANGİ İKİ SENARYOYU BİRDEN KAPSIYOR ──────────────────────────────────
+   *   1. İzin verilmedi / konum alınamadı → `location` kalıcı olarak null
+   *   2. İzin var ama HENÜZ ÇÖZÜLMEDİ → `location` geçici olarak null
+   * İkincisi gözden kaçan taraftı: `resolve()` asenkron, ve bu arada yapılan
+   * bir arama bias'sız gidip dünya genelinden sonuç döndürüyordu. Tüketiciler
+   * `effectiveLocation` kullandığında iki senaryo da kendiliğinden kapanıyor —
+   * ölçülen değeri bilmeye ihtiyaç duymayan bir düzeltme (nav bar dersi).
+   */
+  const effectiveLocation = location ?? DEFAULT_COORDS;
+
+  return { location, effectiveLocation, errorMsg, loading, retry: resolve };
 }
