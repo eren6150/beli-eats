@@ -1966,14 +1966,41 @@ boşluğa isim uydurmaktan kolay.
   analiz, dosya:satır referansları ve düzeltme sırası: Mimari Notlar →
   **Auth / kayıt akışı**. `(e)` **kod olarak düzeltildi** (2026-08-04), cihazda
   doğrulanmayı bekliyor; `(f)` **kapandı** (migration 012).
-- **`useAuth` Context'e çevrilmeli — asıl mimari sorun bu.** `useAuth` bir Context değil;
-  her çağıran kendi `useState` + `getSession()` + `onAuthStateChange` örneğini kuruyor.
-  Mount anında `user` henüz null iken sorgu atılıp effect bir daha tetiklenmiyordu.
-  `ProfileScreen`, `HomeScreen`, `RestaurantDetailScreen` tek tek
-  `useFocusEffect(useCallback(..., [fetchX]))` kalıbıyla yamalandı; `HomeScreen`'de ayrıca
-  `follower_id=eq.` (boş string uuid) yüzünden her açılışta sessiz HTTP 400 gidiyordu, düzeltildi.
-  **Kök neden hâlâ duruyor** — aynı yarış sınıfı yeni ekranlarda tekrar edecek.
-  `AuthProvider` refactor'ü ~5-6 dosyaya dokunur.
+- ~~`useAuth` Context'e çevrilmeli~~ — **KAPANDI (2026-08-06), Expo Go'da
+  13 testle DOĞRULANDI.** Faz 3'ün ÖN KOŞULU olarak yapıldı: o faz en az üç
+  yeni ekran getiriyor (`UserProfile`, `FollowersList`, `EditProfile`) ve
+  refactor olmadan her biri aynı yamayı gerektirecekti.
+  - **Neydi:** `useAuth` düz bir hook'tu, her çağıran kendi `useState` +
+    `getSession()` + `onAuthStateChange` örneğini kuruyordu. **10 çağrı
+    noktası** vardı (dört ekran, iki modal bileşeni, iki auth ekranı,
+    `RootNavigator`, liste formu), yani açılışta 10'a kadar ayrı oturum
+    sorgusu ve 10 abonelik.
+  - **Asıl zarar performans değil YARIŞTI:** her örnek `user = null` ile
+    başlıyor, ekran `user?.id` ile sorgu atıyor, oturum çözülünce sorgu
+    tekrarlanmıyordu. Dört ekran tek tek
+    `useFocusEffect(useCallback(..., [fetchX]))` ile yamalanmıştı.
+  - **Çözüm:** `useAuth.ts` → `useAuth.tsx`; `AuthProvider` bir kez
+    (`App.tsx`, `RootNavigator`'ın üstünde — o da tüketici). **Diff yalnızca
+    2 DOSYA.**
+  - **Dönüş şekli BİREBİR korundu** (`{ session, user, loading, signIn,
+    signUp, signOut }`), bu yüzden 10 çağrı noktasının hiçbiri değişmedi,
+    importları bile aynı kaldı. Refactor'ün riskini düşük tutan şey buydu:
+    değişen tek şey değerin nereden geldiği.
+  - **`useFocusEffect` yamaları SİLİNMEDİ — bilinçli.** O kalıp iki iş
+    görüyor: (a) oturum çözülünce sorguyu tekrarlamak (Context bunu
+    gereksizleştirdi), (b) ekrana her dönüşte veriyi TAZELEMEK (hâlâ
+    isteniyor). Silmek ayrı bir davranış değişikliği olurdu.
+  - **`useMemo` + `useCallback` süs değil:** tek örnek olduğu için provider'ın
+    her render'ında yeni nesne üretmenin maliyeti uygulama geneline yayılır ve
+    tüketicilerin bağımlılık dizilerini durmadan geçersiz kılardı.
+  - **Provider yoksa `useAuth` açıkça FIRLATIYOR**, sessiz varsayılan
+    döndürmüyor: sessiz bir "kullanıcı yok" değeri herkesi giriş ekranına atar
+    ve sebebi kodda görünmezdi.
+  - **Modal sınırı ayrıca test edildi** (`ListPicker`, `MapSummarySheet`):
+    React Context RN `Modal`'ı geçiyor — varsayılmadı, doğrulandı.
+  - **Saf JS, build gerektirmedi**, OTA ile gitti. Ama gönderilen en riskli
+    OTA'ydı: bozsaydı kullanıcı giriş yapamaz, uygulamaya hiç ulaşamazdı.
+    Bu yüzden Expo Go'da tam doğrulama yapılmadan gönderilmedi.
 - **`src/screens/SearchScreen.tsx:127` hâlâ ham `fetch` ile autocomplete çağırıyor**,
   `json.status` kontrol etmiyor. `places.ts`'teki `autocomplete()` hazır ama kullanılmıyor.
   Faz 1b adım 6'da bu dosyanın stilleri elden geçirildi ama bu **bilinçli olarak
