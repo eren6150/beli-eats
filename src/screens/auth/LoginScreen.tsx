@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +14,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../hooks/useAuth';
 import Icon from '../../components/ui/Icon';
-import { Colors, Type, Spacing, Radius, Elevation } from '../../constants/theme';
+import TextField from '../../components/ui/TextField';
+import Button from '../../components/ui/Button';
+import { Colors, Type, Spacing, Radius } from '../../constants/theme';
 
 /** Logo dairesinin çapı — `Radius.full` ile daire kalır. */
 const LOGO_SIZE = 80;
@@ -60,42 +60,29 @@ export default function LoginScreen() {
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Giriş Yap</Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>E-posta</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ornek@eposta.com"
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-          </View>
+          <TextField
+            label="E-posta"
+            placeholder="ornek@eposta.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Şifre</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-          </View>
+          <TextField
+            label="Şifre"
+            placeholder="••••••••"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
 
-          <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+          <Button
+            label="Giriş Yap"
             onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={Colors.textOnBrand} />
-            ) : (
-              <Text style={styles.primaryButtonText}>Giriş Yap</Text>
-            )}
-          </TouchableOpacity>
+            loading={loading}
+            style={styles.primaryButton}
+          />
 
           <TouchableOpacity
             style={styles.secondaryButton}
@@ -158,46 +145,14 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: Spacing.xl,
   },
-  inputGroup: {
-    marginBottom: Spacing.md,
-  },
-  label: {
-    ...Type.captionStrong,
-    color: Colors.textStrong,
-    marginBottom: Spacing.xs,
-  },
-  input: {
-    // DİKKAT: `...Type.body` SPREAD EDİLMİYOR. `lineHeight` bir TextInput'a
-    // verildiğinde Android'de metni dikeyde kırpabiliyor (StarRating'de aynı
-    // sınıf sorun yaşandı). Token'ları tek tek okuyoruz — değer yine tek
-    // kaynaktan geliyor, riskli özellik dışarıda kalıyor.
-    fontSize: Type.body.fontSize,
-    fontWeight: Type.body.fontWeight,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.canvasAlt,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1.5,
-    // Odaklanma durumu için ayrılmış yuva — kenarlık kalınlığı sabit kalsın,
-    // yoksa odaklanınca içerik zıplar.
-    borderColor: 'transparent',
-  },
-  primaryButton: {
-    backgroundColor: Colors.brand,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    marginTop: Spacing.xs,
-    ...Elevation.brand,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  primaryButtonText: {
-    ...Type.bodyStrong,
-    color: Colors.textOnBrand,
-  },
+  /**
+   * Butonun GÖRÜNÜMÜ artık `Button` primitive'inde; burada yalnızca bu ekrana
+   * özgü konumlandırma kalıyor. `inputGroup` / `label` / `input` stilleri de
+   * SİLİNDİ — üçü `TextField`'e taşındı ve değerleri birebir aynıydı, yani
+   * taşıma görsel olarak nötr. (`...Type.body` spread etmeme gerekçesi de
+   * `TextField`'in başında duruyor; burada ikinci bir kopyası kalmasın.)
+   */
+  primaryButton: { marginTop: Spacing.xs },
   secondaryButton: {
     marginTop: Spacing.lg,
     alignItems: 'center',
