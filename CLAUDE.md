@@ -961,6 +961,158 @@ alanlardan kurularak yapılıyor.
   `npx expo install` dinamik config'e yazamıyor — plugin kaydı `app.json`'a
   **elle** eklendi, dinamik config (`app.config.js`) onu taban alıyor.
 
+## ⏸️ OTURUM DEVRİ — 2026-08-06 (buradan devam edilecek)
+
+> Oturum burada kapandı. Bu bölüm bir sonraki oturumun ilk okuyacağı yer;
+> iş bitince silinip normal bölümlere dağıtılmalı.
+
+### ✅ KAPANDI: klavye/kaydırma zinciri (2026-08-07, cihazda DOĞRULANDI)
+
+Aşağıdaki teşhis **tamamlandı ve commit edildi**. İki hipotez yanlış çıktı,
+kayıt için ikisi de duruyor — bu bölümün amacı aynı yollara tekrar girilmemesi.
+
+**Semptom (kullanıcı bildirdi):** `EditProfile`'daki "Hakkında" alanına yazarken
+metin belli bir uzunluğu geçince **yazılan satır klavyenin altında kalıyor**,
+elle kaydırmak gerekiyor.
+
+**Üç ayrı sorun çıktı, üçü de ayrı ayrı düzeltildi:**
+
+1. **Girdinin yükseklik tavanı yoktu** → `maxHeight` (aşağıdaki tablo).
+2. **`KeyboardAvoidingView` Android'de FAZLA yer açıyordu** → `enabled={false}`.
+   Ölçüm: pencere klavye için **zaten tam olarak küçülüyor** (846 → 455 = 391 =
+   klavyenin boyu), KAV üstüne çıkıp forma 431px veriyordu, oysa gerçek kalan yer
+   363'tü → **68px klavyenin arkasına düşüyordu.** O 68px **sekme çubuğunun
+   boyu**: KAV kendi alt kenarını klavyenin tepesine oturtuyor ama stack'e
+   ayrılan alan klavyeden 68px yukarıda bitiyor, arada sekme çubuğu var.
+3. **Kaydırma payı yetmiyordu** → `Spacing['4xl']`. Ölçüm: paysız içerik 530,
+   görünür alan 363, "Hakkında"yı tepeye almak ~220 istiyor. Pay 20 → 187
+   (yetmiyor), 96 → 263 (fazla), **48 → 215** (ideale 5px).
+
+**ÇÜRÜYEN İKİ HİPOTEZ — tekrar denenmesin:**
+- *"Edge-to-edge altında pencere klavye için küçülmüyor, o yüzden yer açılmıyor"*
+  → **YANLIŞ.** Küçülüyor, hem de tam olarak. Bu varsayıma dayanarak klavye boyu
+  kadar `paddingBottom` eklemek **ekranı tamamen boşalttı** (363 − 391 < 0).
+  **Pencere işi yapıyorsa üstüne bir şey EKLENMEZ.**
+- *"Klavye açık olmasa bozuk durum oluşmaz"* → arka plandan dönüş senaryosunda
+  **YANLIŞ** çıktı; ama o belirti **Expo Go artefaktıymış** (bkz. Bilinen Açık
+  İşler'in ilk maddesi), gerçek APK'da hiç oluşmuyor.
+
+**Yöntem notu:** teşhis iki tur boyunca tahminle yürüdü ve ikisi de patladı.
+Çözen şey `onLayout` / `onContentSizeChange` / `onScrollEndDrag` ile **gerçek
+sayıları ölçmek** oldu. Bu bölgede bir daha statik okumayla hipotez kurulmamalı.
+
+**Teşhis — `DiaryEntrySheet` vakasıyla AYNI AİLE ama FARKLI MEKANİZMA.**
+Bu ayrım önemli, çünkü yanlış tarafı düzeltmek zaman kaybettirirdi:
+
+| | `DiaryEntrySheet` (önce kapandı) | `TextField` |
+|---|---|---|
+| Semptom | Sabit buton görünmüyor | Yazılan satır klavyenin altında |
+| Mekanizma | Sabit eleman **kırpılıyor** | Büyüyen elemanın **imleci kaçıyor** |
+| Sebep | Buton ScrollView içindeydi | Girdinin **yükseklik tavanı yok** |
+| Çözüm | Sabit footer + `flexShrink` | **`maxHeight`** |
+
+- **`maxHeight` GEREKLİ ama TEK BAŞINA YETMEDİ.** Cihazda test edilince diary
+  tarafı düzeldi, `EditProfile` düzelmedi — aynı düzeltme, farklı sonuç. Ayrımı
+  yaratan şey girdi değil **etrafındaki iskelet**ti (sheet dibe çivili, form
+  sayfası değil) ve asıl teşhis oradan çıktı (yukarıdaki 2. ve 3. madde).
+- **Asıl mekanizma:** RN bir girdiyi görünür alana **YALNIZCA ODAKLANDIĞI ANDA**
+  kaydırıyor, büyürken tekrar kaydırmıyor. Sınırsız bir `multiline` TextInput
+  metin uzadıkça büyüyor, imleç onunla aşağı kayıyor ve klavyenin altına iniyor.
+- **Düzeltme:** `MULTILINE_MIN_HEIGHT = 88` (~3 satır) + **`MULTILINE_MAX_HEIGHT
+  = 160`** (~6 satır). Tavana ulaşınca kutu büyümeyi bırakıyor, `TextInput` kendi
+  içinde kayıyor ve RN imleci kendi sınırları içinde görünür tutuyor.
+- **Aynı eksik `DiaryEntrySheet`'in not alanında da vardı** (`:445`,
+  `minHeight: 88`, tavan yok) → oraya da `maxHeight: 160` eklendi. Sheet'in
+  `maxHeight: '85%'`'i büyümeyi dolaylı sınırladığı için geç fark ediliyordu,
+  mekanizma aynıydı. Bilinen özdeş bir hatayı bırakmamak için birlikte düzeltildi
+  — **ama bu, doğrulanmış bir ekrana dokunmak demek, regresyon testi şart.**
+
+#### Doğrulama (Expo Go + gerçek APK)
+`maxHeight`, KAV kapatma ve kaydırma payının hepsi cihazda tek tek test edildi;
+diary regresyonları (sabit footer, karartmaya dokunma) de kontrol edildi ve
+bozulmadı. **Arka plandan dönüş senaryosu ayrıca gerçek APK'da** ("Yeni Liste"
+formuyla, versionCode 4) doğrulandı — orada sorun yok.
+
+### 📦 Commit durumu — **6 commit atıldı, PUSH EDİLMEDİ**
+
+`refactor(auth): useAuth Context'e cevrildi` üstüne (2026-08-07):
+
+| # | Commit | Kapsam |
+|---|---|---|
+| 1 | `chore:` local settings takipten çıkarıldı | `.gitignore` + `git rm --cached` |
+| 2 | `feat(ui):` TextField + Button | iki yeni primitive |
+| 3 | `fix(diary):` not alanına `maxHeight` | `DiaryEntrySheet` |
+| 4 | `fix(profil):` `updateProfile` düzeltmesi | `useProfile` |
+| 5 | `feat(profil):` profil düzenleme ekranı | ekran + rota + tip + header + bağlantı |
+| 6 | `docs:` klavye teşhisi ve açık işler | bu dosya |
+
+**Klavye düzeltmesi neden AYRI commit DEĞİL:** `EditProfileScreen.tsx` hiç commit
+edilmemiş yeni bir dosyaydı, yani "önceki hali" yok. Ayrı bir fix commit'i
+uydurmak bilerek bozuk bir ara durumu tarihe gömmek olurdu. Ölçüm gerekçesi
+5'in gövdesinde ve kodun yorumlarında.
+
+**Sırada:** push → OTA (`--environment preview` ŞART) → **gerçek APK'da
+doğrulama** (Expo Go bu eksende kanıt değil, bkz. Bilinen Açık İşler).
+
+### ➡️ Sonraki iş: auth ekranlarını primitive'e taşımak
+
+`LoginScreen` ve `RegisterScreen` hâlâ kendi `formCard`/`inputGroup`/`label`/
+`input`/`primaryButton` bloklarını taşıyor. `TextField` + `Button` primitive'leri
+bu ekranlardan çıkarıldı ama **bilinçli olarak onlara BAĞLANMADI**.
+
+**Neden ayrı diff:** auth ekranları cihazda doğrulanmış ve **giriş yolunda**.
+Yeni bir primitive'i ilk kez yazarken aynı anda çalışan iki ekranı da ona
+bağlamak, bir şey ters gittiğinde giriş akışını riske atardı. Primitive önce
+yeni ve düşük riskli bir ekranda (`EditProfile`) oturdu; taşıma **ayrı diff,
+ayrı test turu**.
+
+### ✅ Bu oturumda tamamlananlar (2026-08-06)
+
+Hepsi cihazda doğrulandı:
+
+1. **SHA-1 Faz 2** — anahtar ikiye bölündü (native Maps ↔ Places REST), Android
+   app kısıtlaması konuldu, gerçek APK'da harita ve arama ayrı ayrı doğrulandı
+2. **Fotoğraf özelliği (Faz 2'nin son ayağı)** — migration 013 + 014, Storage
+   bucket, iki kopya üretimi (1280/400), tür sekmeleri, ızgara, tam ekran
+   görüntüleyici, silme, yükleme göstergesi + fade-in
+3. **Arama yerelliği** — `locationbias` her istekte gönderiliyor
+   (`effectiveLocation`), `json.status` konsola loglanıyor
+4. **`useAuth` → Context** — Faz 3'ün ön koşulu, 13 testle doğrulandı
+5. **`EditProfile` ekranı** + `TextField`/`Button` primitive'leri +
+   `updateProfile` düzeltmesi (A–D testleri geçti)
+6. **Klavye/kaydırma zinciri (2026-08-07)** — `maxHeight`, KAV'ın Android'de
+   kapatılması ve kaydırma payı; üçü de **ölçümle** belirlendi. Teşhisin tamamı
+   ve çürüyen iki hipotez yukarıda, "KAPANDI" bölümünde.
+
+Ayrıca: versionCode 4 / version 1.1.0 build'i üretildi ve arkadaşa gönderildi
+(**henüz kurulum/dönüş yok**), 4 + 1 commit push edildi, gitleaks temiz.
+
+### 🗺️ Roadmap'teki konum
+
+- **Faz 1 — TAMAMLANDI**
+- **Faz 2 — TAMAMEN TAMAMLANDI** (listeler → diary → **fotoğraflar** ✅)
+- **Faz 3 — ERKEN AŞAMA.** Ön koşul (`useAuth` Context) bitti, ilk ekran
+  (`EditProfile`) yazıldı. Kalan: `UserProfile`, `FollowersList`, takip akışı,
+  aktivite akışı, leaderboard.
+- **Faz 4 (marka)** — dokunulmadı, bilinçli olarak en sonda
+
+### ⏸️ Değerlendirilip ERTELENEN fikirler
+
+- **Mekan bazlı leaderboard** — **veri yetersiz.** Kesişim sorgusu tek satır
+  döndürdü: 1 mekanda 2 kullanıcı, 2 giriş, yani **tam beraberlik, henüz "kral"
+  yok**. Tetikleyici sorgu ve yeşil eşik (`kesisen_mekan >= 5` VE
+  `gercek_krali_olan >= 3`) Faz 3 bölümünde kayıtlı, **ayda bir çalıştırılacak**.
+- **Genel (arkadaşlar arası) sıralama** — **zaten var**: `HomeScreen`'deki
+  "En Çok Puanlayanlar" bölümü. Yeni metrik eklemek mümkün ama `diary_entries`
+  tabanlı olanlar `security definer` RPC gerektiriyor (SELECT sahiplik istiyor).
+  Az kullanıcıyla getirisi sınırlı olduğu için ertelendi.
+- **Kategori/etiket filtreleme** — **büyük iş.** Google legacy `types` mutfak
+  türü vermiyor, zincir/butik ayrımı hiçbir Google alanında yok, ve bu aramaya
+  filtre eklemek değil **ikinci bir arama sistemi** kurmak demek. Tam fizibilite
+  Faz 3 bölümünün sonunda; **Places API (New) göçüyle birlikte** değerlendirilecek.
+
+---
+
 ## Mevcut Durum
 Uygulama fiziksel Android cihazda çalışıyor; her adım cihazda doğrulandı.
 
@@ -1892,6 +2044,29 @@ ileride doğacak, bugün sorun değil.
     sayım `security definer` bir RPC'ye alınacak; ikincisi `note` alanını hiç
     sızdırmadığı için tercih edilen yol** · kendi profilinden "kralı olduğum
     mekanlar" gösterilecek mi.
+  - **⏸️ ERTELENDİ (2026-08-06) — VERİ YETERSİZ.** Arkadaş testinin birkaç
+    günü sonunda kesişim sorgusu **tek satır** döndürdü: 1 mekanda 2 kullanıcı,
+    2 giriş — yani **tam beraberlik, henüz bir "kral" bile doğmamış**. Ders:
+    birkaç kişinin AYNI mekanda buluşması sanılandan çok daha nadir; 4 kişi 30
+    farklı restorana 50 giriş yapıp kesişim sıfır üretebilir. Bu bir
+    başarısızlık değil, ölçek meselesi.
+  - **🔔 TEKRAR DEĞERLENDİRME TETİKLEYİCİSİ — ayda bir çalıştır:**
+    ```sql
+    select count(*) as kesisen_mekan,
+           count(*) filter (where lider_giris > ikinci_giris) as gercek_krali_olan
+    from (
+      select place_id,
+             max(n) as lider_giris,
+             coalesce((array_agg(n order by n desc))[2], 0) as ikinci_giris
+      from (select place_id, user_id, count(*) n from diary_entries group by 1,2) t
+      group by place_id
+      having count(*) > 1
+    ) x;
+    ```
+    **Yeşil eşik: `kesisen_mekan >= 5` VE `gercek_krali_olan >= 3`.**
+    İkinci koşul şart: bugünkü tek kesişim tam beraberlik olduğu için
+    "beraberlik nasıl bozulacak" sorusu gerçek dağılım görülmeden
+    cevaplanamaz — eşiğin amacı tam olarak o dağılımın oluşmasını beklemek.
   - **ESKİ KARAR (2026-07-31 — artık geçerli DEĞİL, kayıt için duruyor):**
     kapsam arkadaş + şehir, global YOK (büyük kullanıcı kütlesinde global sıralama
     motive edici olmaktan çıkıp caydırıcı oluyor); `follows` tablosu zaten var;
@@ -1905,12 +2080,85 @@ ileride doğacak, bugün sorun değil.
 - **Şehir değiştirici:** öneri satırındaki şehir tek tıkla değişebilmeli (Ankara → İstanbul).
   Tatil senaryosu için değerli. **Dikkat:** her şehir değişimi yeni Places sorgusu demek —
   `places` tablosunda şehir bazlı cache tutulmazsa maliyet hızla artar.
+- **Kategori/etiket bazlı filtreleme — BÜYÜK İŞ, İLERİDE** (fizibilite: 2026-08-06).
+  İstek: "burger" araması hem zincirleri hem butik yerleri getirsin, "butik burger"
+  yalnızca butikleri. Değerlendirme sonucu **ertelendi**; gerekçeler:
+  - **Google verisi YETMİYOR, iki kat.** Kullandığımız **legacy** Places API'nin
+    `types` değerleri kaba (`restaurant`/`cafe`/`bar`/`bakery`/`meal_takeaway`/
+    `food`) — **mutfak türü yok**, "burger" diye bir tür yok. **Zincir ↔ butik
+    ayrımı ise Google'ın HİÇBİR alanında yok**, türetilmesi gerekiyor.
+    `places.types` (text[], GIN indeksli, migration 002) var ama bu iş için kaba.
+  - **Places API (New)** ~100 granüler tür getiriyor (`hamburger_restaurant` vb.),
+    yani mutfak türü sorununu API göçü çözüyor — ama farklı uçlar, farklı yanıt
+    şekli, farklı faturalama ve **anahtar kısıtımız legacy'ye ayarlı**. Kendi
+    başına orta-büyük bir iş. Etiketleme gündeme geldiğinde **bu göç birlikte
+    değerlendirilmeli**.
+  - **Zincir tespiti veriden türetilebilir:** aynı ad birden çok `place_id`'de
+    tekrar ediyorsa zincirdir. Ama cache'imiz küçük, örneklem yetersiz.
+  - **Şema: `places`'e KOLON EKLENMEZ, ayrı `place_tags` tablosu.** `places` bir
+    Google cache'i ve `upsert_place` TTL dolunca satırı ÜZERİNE YAZIYOR — kullanıcı
+    verisini oraya koymak, düzenli silinen bir yere koymak demek.
+  - **⚠️ ARAMAYA "FİLTRE EKLEMEK" DEĞİL, İKİNCİ BİR ARAMA SİSTEMİ.** Bugünkü arama
+    Google autocomplete (uzak); etiketler Supabase'de ve yalnızca **daha önce
+    görülmüş** mekanlar için var. Google'ın bizim etiketlerimizden haberi yok, yani
+    filtrelemek için kendi veritabanımızda aramak gerekir — ve `places` yalnızca
+    birinin açtığı mekanları içerdiği için kapsam çok dar olur. Daha az yıkıcı orta
+    yol: aramayı olduğu gibi bırakıp **ayrı bir "Kategoriler" gezinme yüzeyi**.
+  - **Moderasyon riski fotoğraflardan KESKİN:** kötü bir etiket yalnızca kötü
+    görünmez, **arama sonuçlarını herkes için bozar**. Moderasyon mekanizması yok
+    (bkz. Genel yayın öncesi düşünülecekler).
+  - **İki bağımlılığı var:** kullanıcı kütlesi (etiketleri kim girecek) ve mekan
+    kapsamı (cache dolmadan filtre boş görünür). Sırası: sosyal katman → kapsam
+    büyüsün → etiketleme + API göçü birlikte.
 
 ### Faz 4 — Marka
 İsim ve logo. Bilinçli olarak en sona bırakıldı: ürün netleştikten sonra isim bulmak,
 boşluğa isim uydurmaktan kolay.
 
 ## Bilinen Açık İşler (teknik borç)
+- **⚠️ EXPO GO ARTEFAKTI — BU BELİRTİYİ TEKRAR KOVALAMA (2026-08-06).**
+  Belirti: form ekranında klavye açıkken uygulamayı arka plana atıp geri
+  dönünce **sekme çubuğu kayboluyor, kaydırma hiç çalışmıyor, yazılan satır
+  klavyenin altında kalıyor.** Expo Go'da **her seferinde** tekrar üretildi.
+  - **GERÇEK APK'DA HİÇ OLUŞMUYOR** — kurulu versionCode 4 üzerinde "Yeni
+    Liste" formuyla 3 kez denendi, hiçbir sorun yok. Belirti Expo Go'nun
+    penceresine özgü.
+  - **Sebep sınıfı:** Expo Go **bizim Activity'miz değil.**
+    `softwareKeyboardLayoutMode` native manifest ayarı ve Expo Go kendi
+    manifest'iyle çalışıyor, yani `app.json`'daki değer Expo Go'da **hiç
+    uygulanmıyor**. Ayrıca uygulama Expo Go'nun içinde çalıştığı için ana
+    ekrandan ikonla dönülemiyor, yalnızca görev değiştiriciden dönülüyor —
+    Android'in pencere durumunu geri kurma yolu farklı.
+  - **DERS: klavye/pencere davranışı Expo Go'da KANITLANMAZ.** Bu eksende bir
+    şey doğrulanacaksa **gerçek APK** gerekiyor. Bu tur, bir belirtiyi Expo
+    Go'da ölçüp gerçek sanmak yüzünden iki tur kaybettirdi.
+  - Bunu önlemek için yazılan `useDismissKeyboardOnResume` hook'u (dönüşte
+    `Keyboard.dismiss()`) **SİLİNDİ**: var olmayan bir hatayı önlüyordu ve
+    karşılığında her dönüşte klavyeyi kapatan gerçek bir davranış değişikliği
+    getiriyordu.
+- **Klavye/edge-to-edge katmanı — üç açık iş (2026-08-06).** Tam teşhis
+  `EditProfileScreen`'in `KeyboardAvoidingView` ve `content` yorumlarında;
+  buradaki liste yalnızca kalanı hatırlatıyor.
+  1. **`react-native-keyboard-controller`'a geçiş — BU SINIFIN DOĞRU CEVABI.**
+     IME ölçülerini `WindowInsets`'ten doğrudan okuyor; hem `KeyboardAvoidingView`'ın
+     edge-to-edge altında yanlış hesaplamasını hem arka plandan dönüş senaryosunu
+     kökten çözüyor. **Bugün YAPILMADI çünkü native bağımlılık: OTA ile gidemez,
+     yeni build + `version` yükseltme ritüeli gerektirir** ve arkadaş testinin
+     ortasındayız. **Tetikleyici: bir sonraki build gerektiğinde birlikte
+     değerlendir.** Geçilirse bugünkü üç yama da (KAV'ın `enabled={false}`'ı,
+     kaydırma payı, arka plan hook'u) yeniden değerlendirilmeli.
+  2. **`ListFormScreen`, `LoginScreen`, `RegisterScreen` hâlâ ölü
+     `KeyboardAvoidingView` taşıyor** ve arka plan hook'unu kullanmıyor — yani
+     aynı iki hata oralarda da duruyor. Bugün göze batmıyorlar (formları kısa).
+     Ayrı diff, ayrı test turu; ikisi cihazda doğrulanmış giriş yolu ekranları.
+  3. **Form ekranlarında sekme çubuğu gizlensin mi — KARAR VERİLMEDİ.**
+     `EditProfile`/`ListForm` `presentation: 'modal'` ama Android'de bu yeni
+     pencere açmıyor, yalnızca stack içi sunumu değiştiriyor → sekme çubuğu
+     görünmeye devam ediyor ve kullanıcı yarım formu bırakıp sekme değiştirebiliyor.
+     Gizlemek forma ~68px de kazandırır (ölçüldü: sekme çubuğu tam o kadar).
+     Ayarın iç içe navigatörde **tab tarafına** yazılması gerekiyor, yani kendi
+     regresyon yüzeyi var. **Tek başına kaydırma sorununu ÇÖZMÜYOR** — ölçüm:
+     +68px kaydırma payını 195'e çıkarır, gereken ~220.
 - ~~Sekme çubuğu ile sistem navigasyon çubuğu iç içe~~ — **KAPANDI (2026-08-04),
   cihazda DOĞRULANDI** (iki navigasyon türünde de kontrol edildi). Arkadaş
   testinden gelen ilk geri bildirimdi (2026-08-03). Teşhis kayıt için duruyor;
