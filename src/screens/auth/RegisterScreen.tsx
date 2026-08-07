@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator,
   ScrollView,
 } from 'react-native';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
@@ -16,7 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
 import Icon from '../../components/ui/Icon';
-import { Colors, Type, Spacing, Radius, Elevation } from '../../constants/theme';
+import TextField from '../../components/ui/TextField';
+import Button from '../../components/ui/Button';
+import { Colors, Type, Spacing, Radius } from '../../constants/theme';
 
 /** Logo dairesinin çapı — LoginScreen ile AYNI. Farklı olduğu dönemde iki
  *  ekran arası geçişte logo zıplıyordu. */
@@ -78,54 +78,37 @@ export default function RegisterScreen() {
           <View style={styles.formCard}>
             <Text style={styles.formTitle}>Hesap Oluştur</Text>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Kullanıcı Adı</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="@kullanici_adi"
-                placeholderTextColor={Colors.textMuted}
-                autoCapitalize="none"
-                value={username}
-                onChangeText={setUsername}
-              />
-            </View>
+            <TextField
+              label="Kullanıcı Adı"
+              placeholder="@kullanici_adi"
+              autoCapitalize="none"
+              value={username}
+              onChangeText={setUsername}
+            />
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>E-posta</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="ornek@eposta.com"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-            </View>
+            <TextField
+              label="E-posta"
+              placeholder="ornek@eposta.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Şifre</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="En az 6 karakter"
-                placeholderTextColor={Colors.textMuted}
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
+            <TextField
+              label="Şifre"
+              placeholder="En az 6 karakter"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
 
-            <TouchableOpacity
-              style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            <Button
+              label="Kayıt Ol"
               onPress={handleRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={Colors.textOnBrand} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Kayıt Ol</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              style={styles.primaryButton}
+            />
 
             <TouchableOpacity
               style={styles.secondaryButton}
@@ -184,38 +167,16 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: Spacing.xl,
   },
-  inputGroup: { marginBottom: Spacing.md },
-  label: {
-    ...Type.captionStrong,
-    color: Colors.textStrong,
-    marginBottom: Spacing.xs,
-  },
-  input: {
-    // DİKKAT: `...Type.body` SPREAD EDİLMİYOR — gerekçe LoginScreen'de yazılı
-    // (TextInput + lineHeight, Android'de dikey kırpma riski).
-    fontSize: Type.body.fontSize,
-    fontWeight: Type.body.fontWeight,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.canvasAlt,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  primaryButton: {
-    backgroundColor: Colors.brand,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    marginTop: Spacing.xs,
-    ...Elevation.brand,
-  },
-  buttonDisabled: { opacity: 0.7 },
-  primaryButtonText: {
-    ...Type.bodyStrong,
-    color: Colors.textOnBrand,
-  },
+  /**
+   * Butonun GÖRÜNÜMÜ artık `Button` primitive'inde (marka rengi, yarıçap,
+   * dikey padding, `Elevation.brand`, devre dışı opaklığı, yüklenirken
+   * spinner). Burada yalnızca bu ekrana özgü konumlandırma kalıyor.
+   *
+   * `inputGroup` / `label` / `input` stilleri de SİLİNDİ — üçü de `TextField`'e
+   * taşındı ve değerleri birebir aynıydı, yani bu taşıma görsel olarak nötr.
+   * İkinci bir kopya bırakmak, iki tanımın zamanla ayrışması demekti.
+   */
+  primaryButton: { marginTop: Spacing.xs },
   secondaryButton: { marginTop: Spacing.lg, alignItems: 'center' },
   secondaryButtonText: {
     ...Type.caption,
