@@ -2143,6 +2143,30 @@ ileride doğacak, bugün sorun değil.
 İsim ve logo. Bilinçli olarak en sona bırakıldı: ürün netleştikten sonra isim bulmak,
 boşluğa isim uydurmaktan kolay.
 
+#### 📌 BACKLOG — görsel kimlik için FireVibe (not: 2026-08-07, ŞU AN YAPILMIYOR)
+Kullanıcının değerlendirdiği araç: **FireVibe** (firevibe.ai) — prompttan mobil
+uygulama ekranı / marka / renk / font üretiyor, React Native'e export edebiliyor.
+Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düşüldü.
+
+- **Öncelik DEĞİL.** Mevcut işlevsellik tamamlandıktan **sonra** ele alınacak.
+- **Kod AKTARILMAYACAK — yalnızca görsel referans.** FireVibe'ın ürettiği
+  bileşenler bizim Supabase/navigasyon/state mantığımızı bilmiyor; kodu olduğu
+  gibi almak anlamsız. Alınacak şey ekran görüntüsü, renk kodları ve font
+  isimleri.
+- **Bizim avantajımız hazır:** proje zaten merkezi bir tasarım sistemi kullanıyor
+  (`Colors`/`Type`/`Spacing`/`Radius`/`Elevation`, `theme.ts`) ve paylaşılan
+  primitive'ler var (`TextField`, `Button`, `Chip`, `SectionHeader`, `RankRow`…).
+  Auth ekranları da bu primitive'lere taşındı. Bu yüzden görsel kimlik
+  değişikliği büyük ihtimalle **"her ekranı tek tek elden geçirmek" değil,
+  çoğunlukla merkezi token dosyalarını güncellemek** olacak — `Palette.green`
+  ramp'ini değiştirince beş marka token'ının birlikte dönmesi tam bu amaçla
+  kurulmuştu.
+- **Yöntem (sırası geldiğinde):** FireVibe'da önce **1-2 ekran için pilot**
+  tasarım üret → ekran görüntüsü + varsa renk kodları / font isimleri Claude
+  Code'a ver → uygula → **cihazda görsel karşılaştırma** yapıp farkı bildir →
+  birkaç turda yakınsa. **Tek seferde birebir eşleşme beklenmiyor**, iteratif
+  bir süreç.
+
 ## Bilinen Açık İşler (teknik borç)
 - **⚠️ EXPO GO ARTEFAKTI — BU BELİRTİYİ TEKRAR KOVALAMA (2026-08-06).**
   Belirti: form ekranında klavye açıkken uygulamayı arka plana atıp geri
