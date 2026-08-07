@@ -127,41 +127,54 @@ export default function EditProfileScreen() {
       </View>
 
       {/**
-        * ⚠️ ANDROID'DE DEVRE DIŞI — `enabled` süs değil, HATANIN DÜZELTMESİ.
+        * ⚠️ İKİ ÇALIŞMA ORTAMI FARKLI DAVRANIYOR — bu yorum o yüzden uzun.
         *
-        * Eskiden burada `behavior="height"` açıktı ("diğer üç form ekranıyla
-        * aynı" gerekçesiyle). Cihazda ölçüldü (2026-08-06) ve KAV'ın yer
-        * AÇMADIĞI, tam tersine yer GERİ AÇTIĞI görüldü:
+        * Belirleyici gerçek: **pencerenin klavye için küçülüp küçülmediği
+        * ortama göre değişiyor.**
         *
-        *   Klavye kapalı → görünür alan 846
-        *   Klavye açık   → görünür alan 455        (fark 391 = klavyenin boyu)
+        *   Expo Go        → KÜÇÜLÜYOR   (ölçüldü: 846 → 455 = klavyenin tam boyu)
+        *   Gerçek APK     → KÜÇÜLMÜYOR  (sekme çubuğu yukarı çıkmıyor, sayfa
+        *                                 hiç kaydırılamıyor: 754 alan > 578 içerik)
         *
-        * Yani pencere klavye için ZATEN tam olarak küçülüyor; yapılacak bir iş
-        * kalmıyor. KAV ise devreye girip forma 431px veriyordu, oysa gerçekten
-        * kalan yer 455 − 92 (şerit) = 363'tü → **68px form alanı klavyenin
-        * arkasına düşüyordu.** O 68px tam olarak alt boşluk + Kaydet butonu
-        * kadar; butonun "yeşil bir şerit" halinde görünmesinin sebebi buydu.
+        * Sebep: `softwareKeyboardLayoutMode` **native manifest ayarı**. Expo Go
+        * kendi Activity'siyle çalışıp pencereyi yeniden boyutluyor; bizim
+        * APK'mızda ise edge-to-edge açık (SDK 54'te zorunlu) ve edge-to-edge
+        * altında `adjustResize` pencereyi yeniden boyutlamıyor.
         *
-        * KAV neden 431 diyordu: formülü `klavye.screenY − kendi y`'sine
-        * yakınsıyor (523 − 92). Ama `523` RN'in bildirdiği değer ve **914
-        * birimlik tam ekran** uzayında ölçülü, uygulamanın layout uzayı ise
-        * 0–846 arası. `914 − 846 = 68` — hatanın tamamı bu koordinat kayması.
+        * ── BU YORUM BİR KEZ YANLIŞ YAZILDI ─────────────────────────────────
+        * Bir dönem burada "pencere ZATEN küçülüyor, KAV fazla yer açıyor,
+        * o yüzden Android'de kapatıldı" yazıyordu. O ölçüm **yalnızca Expo
+        * Go'ydu** ve gerçek APK'da geçerli değil. KAV kapatılınca production'da
+        * telafi eden hiçbir şey kalmadı: sayfa hiç kaydırılamaz oldu, alttaki
+        * Kaydet butonu ve ipucu klavyenin arkasında kaldı.
         *
-        * ⚠️ `paddingBottom` ile klavye boyu kadar yer açmak DENENDİ ve EKRANI
-        * BOŞALTTI: alan zaten 363'e inmişken 391 daha düşünce sıfırın altına
-        * geçiyor. Pencere işi yapıyorsa üstüne bir şey EKLENMEZ.
+        * DERS: klavye/pencere davranışı Expo Go'da KANITLANMAZ (bkz. CLAUDE.md
+        * → Bilinen Açık İşler'in ilk maddesi).
         *
-        * iOS'ta AÇIK kalıyor: orada pencere klavye için küçülmüyor, KAV gerçek
-        * bir iş yapıyor. `enabled={false}` iken bileşen düz bir `View` gibi
-        * davranıyor (`KeyboardAvoidingView.js:235` → `bottomHeight = 0`).
+        * ── ŞU ANKİ DURUM: AÇIK, ve bu bilinçli bir DENEY ────────────────────
+        * Pencere production'da küçülmediğine göre KAV'ın telafisi artık çift
+        * sayım yapmıyor — yani orada doğru işi yapıyor olması bekleniyor.
         *
-        * NOT: `ListFormScreen`, `LoginScreen` ve `RegisterScreen` hâlâ aynı
-        * açık KAV'ı taşıyor, yani aynı 68px'lik fazlalık oralarda da var.
-        * Bugün göze batmıyor (formları kısa) — AYRI diff, ayrı test turu.
+        * ⚠️ İZLENECEK KUSUR: Expo Go ölçümünde KAV kendi alt kenarını klavyenin
+        * tepesine oturtuyordu ama stack'e ayrılan alan klavyeden **68px yukarıda**
+        * bitiyor (arada SEKME ÇUBUĞU var). Aynı kayma production'da da varsa
+        * belirtisi net olur: **kaydırma çalışır ama sonuna kadar götürmez**,
+        * son ~68px klavyenin arkasında kalır. Öyleyse sıradaki adım, pencerenin
+        * ne kadarını zaten emdiğini ölçüp KALANI dolgu olarak eklemek —
+        * `max(0, klavye − (kapalıyken_yükseklik − şimdiki_yükseklik))`. O formülde
+        * çifte sayma yapısal olarak imkânsız.
+        *
+        * ⚠️ DENENDİ ve EKRANI BOŞALTTI: koşulsuz olarak klavye boyu kadar
+        * `paddingBottom` eklemek. Pencere zaten küçülmüşken alan sıfırın altına
+        * iniyor. **Pencere işi yapıyorsa üstüne bir şey EKLENMEZ** — telafi
+        * koşulsuz değil, ölçülmüş farka göre olmalı.
+        *
+        * NOT: `ListFormScreen`, `LoginScreen` ve `RegisterScreen` aynı KAV'ı
+        * taşıyor. Bu koşul production'da onlarda da var; bugün göze batmıyor
+        * çünkü formları kısa — AYRI diff, ayrı test turu.
         */}
       <KeyboardAvoidingView
-        behavior="padding"
-        enabled={Platform.OS === 'ios'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
       >
         <ScrollView

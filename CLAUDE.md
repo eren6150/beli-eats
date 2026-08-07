@@ -978,28 +978,55 @@ elle kaydırmak gerekiyor.
 **Üç ayrı sorun çıktı, üçü de ayrı ayrı düzeltildi:**
 
 1. **Girdinin yükseklik tavanı yoktu** → `maxHeight` (aşağıdaki tablo).
-2. **`KeyboardAvoidingView` Android'de FAZLA yer açıyordu** → `enabled={false}`.
-   Ölçüm: pencere klavye için **zaten tam olarak küçülüyor** (846 → 455 = 391 =
-   klavyenin boyu), KAV üstüne çıkıp forma 431px veriyordu, oysa gerçek kalan yer
-   363'tü → **68px klavyenin arkasına düşüyordu.** O 68px **sekme çubuğunun
-   boyu**: KAV kendi alt kenarını klavyenin tepesine oturtuyor ama stack'e
-   ayrılan alan klavyeden 68px yukarıda bitiyor, arada sekme çubuğu var.
+2. **`KeyboardAvoidingView` — AÇIK KALIYOR.** Bu madde bir dönem
+   *"KAV fazla yer açıyor → `enabled={false}`"* diye yazıldı ve **YANLIŞTI**;
+   düzeltmenin tam hikâyesi aşağıdaki "iki ortam" bölümünde. Kısacası: o ölçüm
+   Expo Go'ydu, gerçek APK'da geçerli değil, KAV production'da **doğru işi
+   yapıyor** (cihazda doğrulandı: sayfa kayıyor, Kaydet tam görünüyor).
 3. **Kaydırma payı yetmiyordu** → `Spacing['4xl']`. Ölçüm: paysız içerik 530,
    görünür alan 363, "Hakkında"yı tepeye almak ~220 istiyor. Pay 20 → 187
    (yetmiyor), 96 → 263 (fazla), **48 → 215** (ideale 5px).
 
-**ÇÜRÜYEN İKİ HİPOTEZ — tekrar denenmesin:**
-- *"Edge-to-edge altında pencere klavye için küçülmüyor, o yüzden yer açılmıyor"*
-  → **YANLIŞ.** Küçülüyor, hem de tam olarak. Bu varsayıma dayanarak klavye boyu
-  kadar `paddingBottom` eklemek **ekranı tamamen boşalttı** (363 − 391 < 0).
-  **Pencere işi yapıyorsa üstüne bir şey EKLENMEZ.**
-- *"Klavye açık olmasa bozuk durum oluşmaz"* → arka plandan dönüş senaryosunda
-  **YANLIŞ** çıktı; ama o belirti **Expo Go artefaktıymış** (bkz. Bilinen Açık
-  İşler'in ilk maddesi), gerçek APK'da hiç oluşmuyor.
+#### ⚠️ EN ÖNEMLİ BULGU: İKİ ORTAM ZIT DAVRANIYOR
 
-**Yöntem notu:** teşhis iki tur boyunca tahminle yürüdü ve ikisi de patladı.
-Çözen şey `onLayout` / `onContentSizeChange` / `onScrollEndDrag` ile **gerçek
-sayıları ölçmek** oldu. Bu bölgede bir daha statik okumayla hipotez kurulmamalı.
+**Pencerenin klavye için küçülüp küçülmediği çalışma ortamına göre değişiyor.**
+Bu tek gerçek, teşhisi iki tur boyunca yanlış yöne sürükledi:
+
+| | Expo Go | Gerçek APK |
+|---|---|---|
+| Pencere küçülüyor mu | **EVET** (846 → 455 = klavyenin tam boyu) | **HAYIR** |
+| Sekme çubuğu | Klavyenin üstüne çıkıyor | Klavyenin arkasında kalıyor |
+| KAV'ın işi | Gereksiz — üstüne 68px FAZLA açıyor | **Gerekli** — telafiyi o yapıyor |
+
+Sebep: `softwareKeyboardLayoutMode` **native manifest ayarı**. Expo Go kendi
+Activity'siyle çalışıp pencereyi yeniden boyutluyor; bizim APK'mızda
+edge-to-edge açık (SDK 54'te zorunlu) ve edge-to-edge altında `adjustResize`
+pencereyi yeniden boyutlamıyor.
+
+**Sonuç: KAV Android'de AÇIK kalıyor.** Bir ara Expo Go ölçümüne dayanarak
+kapatıldı; production'da telafi eden hiçbir şey kalmadığı için sayfa hiç
+kaydırılamaz oldu ve alttaki Kaydet klavyenin arkasında kaldı. Geri açıldı ve
+gerçek APK'da doğrulandı: **sayfa kayıyor, Kaydet tamamen görünüyor.**
+Beklenen 68px'lik sekme çubuğu kayması production'da **çıkmadı** — orada
+pencere küçülmediği için o çifte sayım hiç oluşmuyor.
+
+**ÜÇ ÇÜRÜYEN HİPOTEZ — tekrar denenmesin:**
+1. *"Edge-to-edge altında pencere küçülmüyor"* → Expo Go'da **yanlış**
+   (küçülüyor). Bu varsayımla koşulsuz `paddingBottom` eklemek **ekranı
+   tamamen boşalttı** (363 − 391 < 0). **Pencere işi yapıyorsa üstüne bir şey
+   EKLENMEZ** — telafi koşulsuz değil, ölçülmüş farka göre olmalı.
+2. *"Pencere ZATEN küçülüyor, KAV fazlalık"* → gerçek APK'da **yanlış**.
+   1 ve 2 birbirinin tersi ve **ikisi de doğru** — hangi ortamda olduğuna bağlı.
+3. *"Klavye açık olmasa bozuk durum oluşmaz"* → arka plandan dönüşte yanlış
+   çıktı; ama o belirti **Expo Go artefaktıydı** (bkz. Bilinen Açık İşler'in
+   ilk maddesi), gerçek APK'da hiç oluşmuyor.
+
+**Yöntem notu — iki ders:**
+- Teşhis iki tur tahminle yürüdü ve ikisi de patladı. Çözen şey `onLayout` /
+  `onContentSizeChange` / `onScrollEndDrag` ile **gerçek sayıları ölçmek** oldu.
+- Ama ölçmek de yetmedi: **yanlış ortamda ölçmek yanlış sonuç verdi.**
+  Klavye/pencere ekseninde **Expo Go'daki ölçüm kanıt değildir**; karar gerçek
+  APK'da doğrulanmalı.
 
 **Teşhis — `DiaryEntrySheet` vakasıyla AYNI AİLE ama FARKLI MEKANİZMA.**
 Bu ayrım önemli, çünkü yanlış tarafı düzeltmek zaman kaybettirirdi:
@@ -1080,9 +1107,10 @@ Hepsi cihazda doğrulandı:
 4. **`useAuth` → Context** — Faz 3'ün ön koşulu, 13 testle doğrulandı
 5. **`EditProfile` ekranı** + `TextField`/`Button` primitive'leri +
    `updateProfile` düzeltmesi (A–D testleri geçti)
-6. **Klavye/kaydırma zinciri (2026-08-07)** — `maxHeight`, KAV'ın Android'de
-   kapatılması ve kaydırma payı; üçü de **ölçümle** belirlendi. Teşhisin tamamı
-   ve çürüyen iki hipotez yukarıda, "KAPANDI" bölümünde.
+6. **Klavye/kaydırma zinciri (2026-08-07)** — `maxHeight` + kaydırma payı;
+   ikisi de **ölçümle** belirlendi ve **gerçek APK'da** doğrulandı. KAV
+   Android'de açık kalıyor. Teşhisin tamamı, iki ortamın zıt davranışı ve
+   çürüyen üç hipotez yukarıda, "KAPANDI" bölümünde.
 
 Ayrıca: versionCode 4 / version 1.1.0 build'i üretildi ve arkadaşa gönderildi
 (**henüz kurulum/dönüş yok**), 4 + 1 commit push edildi, gitleaks temiz.
@@ -2145,12 +2173,15 @@ boşluğa isim uydurmaktan kolay.
      kökten çözüyor. **Bugün YAPILMADI çünkü native bağımlılık: OTA ile gidemez,
      yeni build + `version` yükseltme ritüeli gerektirir** ve arkadaş testinin
      ortasındayız. **Tetikleyici: bir sonraki build gerektiğinde birlikte
-     değerlendir.** Geçilirse bugünkü üç yama da (KAV'ın `enabled={false}`'ı,
-     kaydırma payı, arka plan hook'u) yeniden değerlendirilmeli.
-  2. **`ListFormScreen`, `LoginScreen`, `RegisterScreen` hâlâ ölü
-     `KeyboardAvoidingView` taşıyor** ve arka plan hook'unu kullanmıyor — yani
-     aynı iki hata oralarda da duruyor. Bugün göze batmıyorlar (formları kısa).
-     Ayrı diff, ayrı test turu; ikisi cihazda doğrulanmış giriş yolu ekranları.
+     değerlendir.** Geçilirse bugünkü iki yama da (KAV'ın Android'de açık
+     bırakılması, kaydırma payı) yeniden değerlendirilmeli — o kütüphane iki
+     ortam farkını da ortadan kaldırıyor.
+  2. **`ListFormScreen`, `LoginScreen`, `RegisterScreen` kaydırma payı
+     TAŞIMIYOR.** KAV'ları açık ve doğru (production'da gereken o), ama
+     `EditProfile`'a eklenen kaydırma payı onlarda yok — yani uzun bir formda
+     son eleman klavyenin arkasında kalabilir. Bugün göze batmıyor (formları
+     kısa). ⚠️ **`LoginScreen`'de `ScrollView` HİÇ YOK**, yani orada kaçış yolu
+     da yok. Ayrı diff, ayrı test turu; ikisi giriş yolu ekranları.
   3. **Form ekranlarında sekme çubuğu gizlensin mi — KARAR VERİLMEDİ.**
      `EditProfile`/`ListForm` `presentation: 'modal'` ama Android'de bu yeni
      pencere açmıyor, yalnızca stack içi sunumu değiştiriyor → sekme çubuğu
