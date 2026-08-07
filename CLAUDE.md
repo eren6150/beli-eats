@@ -2170,6 +2170,36 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   bir süreç.
 
 ## Bilinen Açık İşler (teknik borç)
+- **Kaydırmalı sekme geçişi (swipe) — BİR SONRAKİ BUILD'E ERTELENDİ
+  (araştırma: 2026-08-07).** İstek: profil sekmeleri (Sıralamam/Günlük/
+  Listeler) ve takipçi sekmeleri arasında sağa/sola kaydırarak geçiş.
+  **`react-native-pager-view` veya benzeri (`react-native-tab-view`,
+  `react-native-collapsible-tab-view`) — bir sonraki build'de
+  `react-native-keyboard-controller` ile BİRLİKTE değerlendirilecek.**
+  Araştırma yapıldı, sıfırdan tekrarlanmasın:
+  - **`SegmentedTabs`'e EKLENEMEZ.** O bileşen yalnızca sekme ŞERİDİNİ
+    çiziyor; içeriği ebeveyn render ediyor. Kaydırma içeriği hareket ettirmek
+    demek, dolayısıyla jest içeriğin yaşadığı yerde olmak zorunda. Şeride
+    koyulsa şerit kayardı, listeler değil.
+  - **Native bağımlılık ŞART DEĞİLDİ:** `react-native-gesture-handler`
+    (2.28.0) ve `react-native-reanimated` (4.1.1) **zaten kurulu ve
+    binary'de**. Yani "kaydır → sekme değiştir" (parmağı takip etmeyen fling)
+    saf JS ile yazılabilir ve **OTA ile gidebilirdi**. **Bilinçli olarak
+    REDDEDİLDİ:** kullanıcı gerçek sayfa kaydırma hissini istiyor, fling
+    davranışı veriyor ama hissi vermiyor.
+  - **ASIL MALİYET `ProfileScreen`'in KAYAN BAŞLIĞI.** `ProfileHeader`
+    `ListHeaderComponent` olarak veriliyor, yani içerikle birlikte dikey
+    kayıyor (Instagram davranışı, bilinçli). Gerçek sayfa kaydırma için yan
+    yana üç bağımsız dikey liste gerekiyor ama hepsinin TEK başlığı
+    paylaşması lazım — bu "çöken başlık + sekme görünümü" problemi, o
+    kütüphanelerin var olma sebebi. Elle çözmenin üç yolu da bedelli: başlığı
+    sabitle (doğrulanmış kararı bozar), her sayfada başlığı tekrarla (sekme
+    değişince başlık zıplar), ya da kütüphane ekle (build).
+  - **`FollowersListScreen` UCUZ** — başlık ve sekmeler zaten sabit, altında
+    tek liste. İstenirse tek başına daha erken yapılabilir; iki ekranda iki
+    farklı his oluşacağı için önerilmedi.
+  - **Tetikleyici:** bir sonraki build. Tek bir özellik için build almak
+    yerine `keyboard-controller` ile aynı build'e binmesi bekleniyor.
 - **`user_rankings` ile `diary_entries` arayüzde HİÇ BULUŞMUYOR — iki boşluk
   (analiz: 2026-08-07).** Tetikleyici soru: *"Sıralamam satırı da Ziyaret
   detayına gitsin mi?"* Cevap **hayır** ve gerekçesi kayda değer.
