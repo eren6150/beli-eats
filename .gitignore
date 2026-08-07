@@ -19,6 +19,13 @@ web-build/
 # yakalamıyor çünkü .txt uzantısıyla alınıyorlar.
 crash*.txt
 
+# Claude Code'un MAKİNEYE ÖZEL izin listesi. Adındaki "local" bunu zaten
+# söylüyor: paylaşılan ayarlar `.claude/settings.json`, bu değil.
+# Neden takip edilmemeli: içi mutlak yollarla (C:\Users\eren6\...) ve oturuma
+# özel scratchpad UUID'leriyle dolu, her oturumda büyüyor, ve izin vermek
+# kişisel bir güvenlik kararı — depoyu klonlayan kimse bunları devralmamalı.
+.claude/settings.local.json
+
 # `expo prebuild`'in ürettiği native ağaç. Bu bir CNG projesi: android/ ve ios/
 # kaynak değil ÇIKTI, her build'de yeniden üretiliyor. Yerelde hiç yok ama
 # `npx expo prebuild` çalıştırılırsa oluşur ve kazara commit edilmemeli.
