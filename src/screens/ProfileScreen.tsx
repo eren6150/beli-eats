@@ -164,11 +164,25 @@ export default function ProfileScreen() {
       description: list.description,
     });
 
-  const handleOpenDiaryPlace = (entry: DiaryEntry) =>
-    navigation.navigate('RestaurantDetail', {
+  /**
+   * Günlük satırı ZİYARET DETAYINA gidiyor (eskiden mekan sayfasına gidiyordu).
+   *
+   * Kendi günlüğünde de aynı hedef — `UserProfile` ile TUTARLI olsun diye:
+   * aynı görünen satırın iki ekranda iki farklı yere gitmesi sürpriz olurdu.
+   * Detay ekranı ayrıca kendi girişinin kaç beğeni aldığını gösteren tek yer.
+   * Düzenleme/silme YOLU DEĞİŞMEDİ — uzun basış menüsü burada duruyor.
+   */
+  const handleOpenEntry = (entry: DiaryEntry) =>
+    navigation.navigate('DiaryEntryDetail', {
+      entryId: entry.id,
+      authorId: entry.user_id,
+      authorUsername: profile?.username ?? user?.email?.split('@')[0] ?? '',
       placeId: entry.place_id,
       placeName: entry.places?.name ?? 'Mekan',
       photoReference: entry.places?.photo_refs?.[0],
+      visitedAt: entry.visited_at,
+      rating: entry.rating,
+      note: entry.note,
     });
 
   /**
@@ -493,7 +507,7 @@ export default function ProfileScreen() {
               rating={item.rating}
               note={item.note}
               photoUrl={photoUrl(item.places?.photo_refs?.[0], THUMB_PHOTO_WIDTH)}
-              onPress={() => handleOpenDiaryPlace(item)}
+              onPress={() => handleOpenEntry(item)}
               onLongPress={() => handleLongPressEntry(item)}
             />
           ) : isListRow(item) ? (

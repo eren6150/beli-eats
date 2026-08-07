@@ -322,9 +322,78 @@ export type ListDetailStackParamList = {
   RestaurantDetail: RestaurantDetailParams;
 };
 
+/**
+ * Başka bir kullanıcının profili.
+ *
+ * `username` PARAMETREYLE taşınıyor: başlık şeridi ilk karede doğru yazsın,
+ * profil sorgusu dönene kadar "—" görünmesin. `ListDetail`'in `title`'ı ve
+ * `EditProfile`'ın alanlarıyla aynı ANLIK GÖRÜNTÜ kararı — çağıranın elinde
+ * zaten var, ikinci bir sorgu atmaya gerek yok.
+ *
+ * Bayatlama riski YOK: kullanıcı adı bu ekrandan değiştirilemiyor (kendi
+ * profilinde bile kilitli, bkz. `EditProfileScreen`).
+ */
+export type UserProfileParams = {
+  userId: string;
+  username: string;
+};
+
+/**
+ * Tek bir günlük girişinin ("ziyaret") detay ekranı — Faz 3 / Diff E.
+ *
+ * ── NEDEN ANLIK GÖRÜNTÜ, NEDEN AYRI SORGU YOK ────────────────────────────────
+ * Çağıran (günlük satırı) elinde ZATEN tam `DiaryEntry` var ve o liste az önce
+ * çekildi. Alanları parametreyle taşımak ekranı ilk karede eksiksiz çiziyor;
+ * `ListDetail` ve `EditProfile` ile aynı karar. Yalnızca BEĞENİ bilgisi
+ * sunucudan okunuyor — o gerçekten tazelenmesi gereken tek şey.
+ *
+ * ⚠️ BAYATLAMA RİSKİ VAR VE KABUL EDİLDİ: giriş sahibi tarafından
+ * düzenlenebiliyor. Ama düzenleme yolu kendi profilindeki uzun basış menüsü,
+ * yani bu ekran açıkken erişilemiyor; kullanıcı listeye döndüğünde liste
+ * yeniden çekiliyor. `ListDetail`'in `title`'ıyla aynı sınıf, aynı kabul.
+ *
+ * `DiaryEntry` nesnesinin TAMAMI geçilmiyor, alanlar tek tek: rota tipini
+ * veritabanı satırının şekline bağlamak, kolon değişince navigasyonu da
+ * kırardı.
+ */
+export type DiaryEntryDetailParams = {
+  entryId: string;
+  /** Yazar — profiline gitmek ve "kendi girişim mi" kontrolü için. */
+  authorId: string;
+  authorUsername: string;
+  /** Mekan — sayfasına gitmek ve fotoğrafları süzmek için. */
+  placeId: string;
+  placeName: string;
+  photoReference?: string;
+  /** `YYYY-MM-DD`. Bkz. src/lib/date.ts — bu alan hiçbir zaman UTC'ye çevrilmez. */
+  visitedAt: string;
+  rating: number | null;
+  note: string | null;
+};
+
 export type HomeStackParamList = {
   Home: undefined;
   RestaurantDetail: RestaurantDetailParams;
+  /**
+   * "En Çok Puanlayanlar" satırlarından açılıyor. `ProfileStack`'teki kayıtla
+   * AYNI ekran, ayrı kayıt — `RestaurantDetail`'in dört stack'teki durumuyla
+   * aynı desen ve aynı gerekçe: geri tuşu gelinen sekmede tutuyor.
+   */
+  UserProfile: UserProfileParams;
+  /**
+   * `UserProfile`'ın "Listeler" sekmesinden açılıyor — yani bu kayıt
+   * `UserProfile`'ın ZORUNLU EŞLİKÇİSİ. Olmadan liste kartına dokunmak
+   * çalışma anında patlardı; bu dosyanın en başındaki uyarının tam tersi
+   * yönde aynı tuzak (rota ilan edilmemiş ama `navigate` çağrılıyor).
+   * `ListDetail` artık ÜÇ stack'te: Profil, Harita, Ana Sayfa.
+   */
+  ListDetail: ListDetailParams;
+  /**
+   * `UserProfile`'ın "Günlük" sekmesinden açılıyor — `UserProfile`'ın ikinci
+   * zorunlu eşlikçisi (`ListDetail` gibi). Faz 3 / Diff D'de aktivite akışı da
+   * buraya gelecek.
+   */
+  DiaryEntryDetail: DiaryEntryDetailParams;
 };
 
 export type SearchStackParamList = {
@@ -408,4 +477,20 @@ export type ProfileStackParamList = {
    * Profil tarafında iki giriş noktası var: sıralama satırı ve liste öğesi.
    */
   RestaurantDetail: RestaurantDetailParams;
+  /**
+   * Başka bir kullanıcının profili. Bugün buraya `HomeStack`'ten değil, ileride
+   * `FollowersList`'ten gelinecek; `ProfileStack`'e şimdiden kaydedilmesinin
+   * sebebi profil sekmesinden açılan her yolun kendi stack'inde kalması.
+   *
+   * ⚠️ Kural hatırlatması: bu listeye YALNIZCA gerçekten yazılmış ekranlar
+   * girer. Var olmayan bir rota ilan etmek `navigate()` çağrısını DERLETİR ve
+   * çalışma anında patlatır — bu dosya bir kez tam bu yüzden budanmıştı.
+   * `FollowersList` hâlâ yok, o yüzden hâlâ burada değil.
+   */
+  UserProfile: UserProfileParams;
+  /**
+   * Tek bir ziyaretin detayı. Profil sekmesinde İKİ çağıranı var: kendi
+   * "Günlük" sekmen ve `UserProfile`'ınki.
+   */
+  DiaryEntryDetail: DiaryEntryDetailParams;
 };

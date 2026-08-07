@@ -6,6 +6,8 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import ListFormScreen from '../screens/lists/ListFormScreen';
 import ListDetailScreen from '../screens/lists/ListDetailScreen';
 import RestaurantDetailScreen from '../screens/RestaurantDetailScreen';
+import UserProfileScreen from '../screens/UserProfileScreen';
+import DiaryEntryDetailScreen from '../screens/DiaryEntryDetailScreen';
 import {
   baseStackScreenOptions,
   restaurantDetailScreenOptions,
@@ -67,6 +69,23 @@ export default function ProfileStack() {
         name="RestaurantDetail"
         component={RestaurantDetailScreen}
         options={restaurantDetailScreenOptions}
+      />
+      {/* Başka bir kullanıcının profili. Bugün buraya giriş noktası yok —
+          `FollowersList` (Diff C) gelince olacak. Şimdiden kaydedilmesinin
+          sebebi `UserProfile`'ın kendi içinden `ListDetail`/`RestaurantDetail`
+          açması: o iki ekran zaten bu stack'te, yani profil sekmesinden
+          başlayan yol kendi stack'inde kalıyor. */}
+      <Stack.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Tek bir ziyaretin detayı. Bu stack'te İKİ çağıranı var: kendi
+          "Günlük" sekmen ve `UserProfile`'ınki. */}
+      <Stack.Screen
+        name="DiaryEntryDetail"
+        component={DiaryEntryDetailScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

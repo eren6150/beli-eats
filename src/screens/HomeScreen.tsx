@@ -5,6 +5,7 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
@@ -33,6 +34,21 @@ interface ActivityFeedItem {
   profile: Profile;
 }
 
+/**
+ * "En Çok Puanlayanlar" satırının ihtiyaç duyduğu ALANLAR — tam `Profile` DEĞİL.
+ *
+ * Neden dar tip: sorgu yalnızca üç kolon çekiyor (`id, username, avatar_url`).
+ * Burayı `Profile` ilan etmek TİP YALANI olurdu — `Profile` `created_at` gibi
+ * alanları zorunlu sayıyor ve onlar hiç gelmiyor.
+ *
+ * Bu yalan bir kez pahalıya patladı: sorguda `id` HİÇ SEÇİLMEMİŞTİ, `row: any`
+ * yüzünden tsc susuyordu ve satırın `disabled={!profile.id}` koşulu sessizce
+ * her zaman true oluyordu → satır tıklanamaz ama görünüşte sağlamdı, konsolda
+ * da hiçbir iz yoktu. `Pick` ile daraltmak aynı hatayı DERLEME ZAMANINDA
+ * yakalıyor.
+ */
+type LeaderUser = Pick<Profile, 'id' | 'username' | 'avatar_url'>;
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -43,7 +59,9 @@ export default function HomeScreen() {
 
   const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([]);
   const [trendingPlaces, setTrendingPlaces] = useState<UserRanking[]>([]);
-  const [popularLists, setPopularLists] = useState<{ profile: Profile; count: number }[]>([]);
+  const [popularLists, setPopularLists] = useState<
+    { profile: LeaderUser; count: number }[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   const userId = user?.id;
@@ -97,21 +115,39 @@ export default function HomeScreen() {
     }
 
     // 3. Popular Lists
+    // `profiles(id, ...)` — `id` ŞART: satırın tıklanabilirliği ve
+    // `UserProfile` navigasyonu ona dayanıyor. Bir dönem seçilmiyordu ve satır
+    // sessizce tıklanamaz kalıyordu (gerekçe `LeaderUser` tanımında).
     const { data: listCounts, error: listsError } = await supabase
       .from('user_rankings')
-      .select('user_id, profiles(username, avatar_url)')
+      .select('user_id, profiles(id, username, avatar_url)')
       .limit(100);
 
     if (listsError) {
       console.error('[HomeScreen] popüler listeler okunamadı:', listsError);
     } else if (listCounts) {
-      const counts: Record<string, { profile: Profile; count: number }> = {};
-      listCounts.forEach((row: any) => {
+      /**
+       * Gömülü kaynak tipi: Supabase'in çıkarımı `profiles`'ı dizi sanıyor
+       * (üretilmiş tipler olmadan ilişkinin tekil olduğunu bilemiyor), çalışma
+       * anında nesne dönüyor. `useFollowList` ile aynı normalizasyon — `any`
+       * ile geçiştirmek yerine iki şekli de karşılıyoruz.
+       */
+      type CountRow = { user_id: string; profiles: LeaderUser | LeaderUser[] | null };
+      const rows = listCounts as unknown as CountRow[];
+
+      const counts: Record<string, { profile: LeaderUser; count: number }> = {};
+      rows.forEach((row) => {
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+        // Profil satırı yoksa sayacı da kurmuyoruz: adı ve id'si olmayan bir
+        // satır ne gösterilebilir ne tıklanabilir.
+        if (!profile?.id) return;
+
         if (!counts[row.user_id]) {
-          counts[row.user_id] = { profile: row.profiles, count: 0 };
+          counts[row.user_id] = { profile, count: 0 };
         }
         counts[row.user_id].count++;
       });
+
       const sorted = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 5);
       setPopularLists(sorted);
     }
@@ -133,6 +169,31 @@ export default function HomeScreen() {
       placeName: place.restaurant_name,
       photoReference: place.photo_reference ?? undefined,
     });
+
+  /**
+   * "En Çok Puanlayanlar" satırından kullanıcı profiline.
+   *
+   * KENDİ SATIRIN `MyProfile`'A GİDİYOR, `UserProfile`'a değil. Sebep en az
+   * sürpriz: kendi profilinde takip butonu, ayarlar ve düzenleme yolları
+   * beklenir — `UserProfile` salt okunur bir ekran ve hiçbirini taşımıyor.
+   * Sekme atlaması `MapSummarySheet`'in "Tümünü gör"üyle aynı desen.
+   *
+   * `UserProfile` ayrıca `isSelf` durumunu kendi içinde de karşılıyor (takip
+   * butonunu gizliyor) — burası ana yol, o savunma katmanı.
+   */
+  const handleOpenUser = (profile: LeaderUser | undefined) => {
+    if (!profile?.id) return;
+
+    if (profile.id === userId) {
+      navigation.getParent()?.navigate('ProfileTab', { screen: 'MyProfile' });
+      return;
+    }
+
+    navigation.navigate('UserProfile', {
+      userId: profile.id,
+      username: profile.username,
+    });
+  };
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -268,7 +329,17 @@ export default function HomeScreen() {
             </View>
           ) : (
             popularLists.map((item, index) => (
-              <View key={item.profile?.id ?? index} style={styles.userRow}>
+              <Pressable
+                key={item.profile?.id ?? index}
+                onPress={() => handleOpenUser(item.profile)}
+                // Profil satırı eksikse (silinmiş kullanıcı) dokunacak yer yok.
+                disabled={!item.profile?.id}
+                style={({ pressed }) => [
+                  styles.userRow,
+                  pressed && styles.userRowPressed,
+                ]}
+                accessibilityRole="button"
+              >
                 {/* Sıra numarası ProfileScreen'deki RankRow ile aynı dilde:
                     renkli daire değil, düz metin. */}
                 <Text style={styles.userRank}>{index + 1}</Text>
@@ -285,7 +356,7 @@ export default function HomeScreen() {
                   </Text>
                   <Text style={styles.userCount}>{item.count} mekan</Text>
                 </View>
-              </View>
+              </Pressable>
             ))
           )}
         </View>
@@ -362,6 +433,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderSubtle,
   },
+  // Basılı geri bildirimi zemin rengiyle — satır artık tıklanabilir.
+  userRowPressed: { backgroundColor: Colors.canvasAlt },
   userRank: {
     ...Type.body,
     width: 20,

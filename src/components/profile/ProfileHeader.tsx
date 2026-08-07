@@ -6,16 +6,20 @@ import Icon from '../ui/Icon';
 /**
  * Instagram tarzı profil başlığı: avatar + üç sayaç + isim/bio.
  *
- * SAYAÇLAR BU FAZDA TIKLANAMAZ — bilinçli. Tıklanabilir yapmak takipçi/takip
- * listesi ekranlarını gerektiriyor; ikisi de YOK ve `ProfileStackParamList`
- * artık onları ilan da etmiyor (var olmayan rota ilan etmek `navigate()`
- * çağrısını derletip çalışma anında patlatıyordu). Faz 3 sosyal katmanın işi.
- * Bu yüzden sayaçlarda basılı geri bildirimi veya chevron da YOK: tıklanabilir
- * görünüp tepki vermemek, hiç tıklanabilir görünmemekten kötü.
+ * İKİ BAĞLAMDA ÇALIŞIYOR: kendi profilin (`ProfileScreen`) ve başkasınınki
+ * (`UserProfileScreen`). Fark opsiyonel parçalarla anlatılıyor — verilmeyen
+ * parça HİÇ render edilmiyor, boş yer de tutmuyor. `RankRow`'un üç
+ * genişlemesindeki desenin aynısı:
  *
- * NOT: `ProfileScreen` artık bir stack içinde (`ProfileStack`, Faz 2'de liste
- * oluşturma modal'ı için eklendi) — sayaçları bağlamanın önündeki navigasyon
- * engeli kalktı, kalan tek eksik ekranların kendisi.
+ *   kendi profilin      → `onSettings` + `onEdit`
+ *   başkasının profili  → `onBack` + `follow` + `title`
+ *
+ * SAYAÇLAR HÂLÂ TIKLANAMAZ — bilinçli. Tıklanabilir yapmak `FollowersList`
+ * ekranını gerektiriyor ve o ekran HENÜZ YOK; `ProfileStackParamList` de onu
+ * ilan etmiyor (var olmayan rota ilan etmek `navigate()` çağrısını derletip
+ * çalışma anında patlatıyordu). Bu yüzden sayaçlarda basılı geri bildirimi ya
+ * da chevron da YOK: tıklanabilir görünüp tepki vermemek, hiç tıklanabilir
+ * görünmemekten kötü. Faz 3'ün bir sonraki diff'i.
  */
 
 export interface ProfileHeaderProps {
@@ -30,8 +34,36 @@ export interface ProfileHeaderProps {
     followers: number;
     following: number;
   };
-  /** Ayarlar ikonu — şu an yalnızca çıkış eylemini açıyor. */
-  onSettings: () => void;
+  /**
+   * Şerit başlığı. Kendi profilinde "Profil", başkasınınkinde `@kullanici`.
+   * Varsayılanı korumak `ProfileScreen`'i değiştirmeden bırakıyor.
+   */
+  title?: string;
+  /**
+   * Geri butonu — OPSİYONEL. `UserProfile` bir stack ekranı ve projede hiçbir
+   * ekran native header göstermiyor, yani geri butonunu ekranın kendisi
+   * çizmek zorunda. Kendi profilinde verilmiyor (sekmenin kökü, geri yok).
+   */
+  onBack?: () => void;
+  /**
+   * Ayarlar ikonu — ARTIK OPSİYONEL. Başkasının profilinde ayar diye bir şey
+   * yok; verilmezse ikon hiç render edilmiyor.
+   */
+  onSettings?: () => void;
+  /**
+   * Takip butonu — OPSİYONEL, yalnızca başkasının profilinde veriliyor.
+   *
+   * `onEdit` ile AYNI YUVAYI paylaşıyor ve ikisi birden verilmemeli: kendi
+   * profilinde düzenleme, başkasınınkinde takip. Aynı yuvada olmaları
+   * bilinçli — Instagram'ın profil header'ındaki yer tek ve iki bağlamda iki
+   * farklı eylem taşıyor.
+   */
+  follow?: {
+    isFollowing: boolean;
+    /** İstek sürüyor ya da durum henüz bilinmiyor → buton devre dışı. */
+    busy: boolean;
+    onToggle: () => void;
+  };
   /**
    * "Profili düzenle" butonu — OPSİYONEL, verilmezse HİÇ render edilmiyor.
    *
@@ -59,7 +91,10 @@ export default function ProfileHeader({
   bio,
   avatarUrl,
   stats,
+  title = 'Profil',
+  onBack,
   onSettings,
+  follow,
   onEdit,
 }: ProfileHeaderProps) {
   // full_name yoksa username birincil isim olur; boş satır bırakmıyoruz.
@@ -69,18 +104,40 @@ export default function ProfileHeader({
 
   return (
     <View style={styles.container}>
-      {/* Başlık şeridi — ekranın header'ı kapalı, ekran adı buradan geliyor */}
+      {/* Başlık şeridi — ekranın header'ı kapalı, ekran adı buradan geliyor.
+          Geri ve ayarlar ikonları opsiyonel; verilmeyen taraf boş bir yuva
+          bırakıyor ki başlık iki bağlamda da aynı yerde dursun. */}
       <View style={styles.titleBar}>
-        <Text style={styles.screenTitle}>Profil</Text>
-        <Pressable
-          onPress={onSettings}
-          style={({ pressed }) => [styles.settingsBtn, pressed && styles.pressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Ayarlar"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Icon name="settings" size={22} color={Colors.textStrong} />
-        </Pressable>
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Geri"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon name="back" size={22} color={Colors.textStrong} />
+          </Pressable>
+        ) : null}
+
+        {/* `flex: 1` — başlık kalan alanı doldurup SOLA dayalı kalıyor. Boş
+            yuvalarla ortalamak `ProfileScreen`'in mevcut görünümünü
+            değiştirirdi; bu ekran cihazda doğrulanmış. */}
+        <Text style={styles.screenTitle} numberOfLines={1}>
+          {title}
+        </Text>
+
+        {onSettings ? (
+          <Pressable
+            onPress={onSettings}
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Ayarlar"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon name="settings" size={22} color={Colors.textStrong} />
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Kimlik satırı: avatar + sayaçlar */}
@@ -122,6 +179,33 @@ export default function ProfileHeader({
           <Text style={styles.editBtnText}>Profili düzenle</Text>
         </Pressable>
       ) : null}
+
+      {/* Takip butonu — aynı yuva, farklı bağlam. İki durum RENKLE ayrışıyor:
+          takip etmiyorsan dolu marka rengi (eylem çağrısı), ediyorsan sakin
+          kenarlıklı hal (mevcut durumun bildirimi). `busy` iken devre dışı:
+          durum henüz bilinmiyorsa ya da istek sürüyorsa basılamıyor. */}
+      {follow ? (
+        <Pressable
+          onPress={follow.onToggle}
+          disabled={follow.busy}
+          style={({ pressed }) => [
+            styles.editBtn,
+            !follow.isFollowing && styles.followBtnActive,
+            (pressed || follow.busy) && styles.pressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: follow.busy, selected: follow.isFollowing }}
+        >
+          <Text
+            style={[
+              styles.editBtnText,
+              !follow.isFollowing && styles.followBtnActiveText,
+            ]}
+          >
+            {follow.isFollowing ? 'Takip ediliyor' : 'Takip et'}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -135,14 +219,16 @@ const styles = StyleSheet.create({
   titleBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: Spacing.xs,
+    gap: Spacing.xs,
   },
   screenTitle: {
     ...Type.title,
     color: Colors.textPrimary,
+    // Kalan alanı doldurur; ikonlar kenarlara itilir, başlık solda kalır.
+    flex: 1,
   },
-  settingsBtn: {
+  iconBtn: {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
@@ -218,4 +304,12 @@ const styles = StyleSheet.create({
     ...Type.captionStrong,
     color: Colors.textPrimary,
   },
+
+  // "Takip et" hali — dolu marka rengi. Gölge YOK: `Elevation.brand` form
+  // butonuna ayrılmış, buradaki header içi sakin bir eylem.
+  followBtnActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
+  followBtnActiveText: { color: Colors.textOnBrand },
 });

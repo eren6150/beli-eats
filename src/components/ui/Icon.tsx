@@ -52,6 +52,10 @@ const ICONS = {
   trash: 'trash-outline',
   settings: 'settings-outline',
   share: 'share-outline',
+  /** Ziyaret beğenisi — boş hal. Dolu/boş ayrımı sekme ikonlarıyla aynı
+   *  desen (`home`/`homeActive`): aktiflik dolu glif + renkle anlatılıyor. */
+  heart: 'heart-outline',
+  heartActive: 'heart',
 
   // Durum
   alert: 'alert-circle-outline',
