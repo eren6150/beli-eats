@@ -443,6 +443,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     minHeight: 88,
+    /**
+     * ⚠️ `maxHeight` — `TextField` primitive'inde bulunan hatanın buradaki
+     * karşılığı (2026-08-06). Sınırsız bir `multiline` TextInput metin uzadıkça
+     * büyüyor ve imleç aşağı kayıyor; RN girdiyi görünür alana yalnızca
+     * ODAKLANDIĞI anda kaydırdığı için yazılan satır klavyenin altında
+     * kalabiliyor. Sheet'in `maxHeight: '85%'`'i büyümeyi dolaylı sınırladığı
+     * için burada daha geç fark ediliyordu, ama mekanizma aynı.
+     * Sınırlı kutu kendi içinde kayıyor ve imleci görünür tutuyor.
+     */
+    maxHeight: 160,
   },
 
   scroll: {
