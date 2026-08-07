@@ -2170,6 +2170,40 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   bir süreç.
 
 ## Bilinen Açık İşler (teknik borç)
+- **`user_rankings` ile `diary_entries` arayüzde HİÇ BULUŞMUYOR — iki boşluk
+  (analiz: 2026-08-07).** Tetikleyici soru: *"Sıralamam satırı da Ziyaret
+  detayına gitsin mi?"* Cevap **hayır** ve gerekçesi kayda değer.
+  - **İKİSİ AYRI KAVRAM, EŞLEŞME YOK.** `user_rankings` mekan başına TEK satır
+    (`unique(user_id, place_id)`), `diary_entries` sınırsız. Aralarında **bağ
+    kolonu yok** ve `upsert_user_ranking` `diary_entries`'e hiç dokunmuyor.
+  - **Belirleyici nokta:** sıralama kaydı **günlük girişi olmadan**
+    oluşabiliyor — mekan sayfasındaki "Puanı Kaydet" yalnızca `user_rankings`
+    yazıyor. Yani bir sıralama satırının karşılığı **0, 1 veya N** giriş.
+    "En yenisine git" keyfi olurdu; bu proje aynı belirsizliği bir kez
+    reddetti (migration 011, *"bazen günceller bazen güncellemez —
+    kullanıcıya açıklanamaz"*).
+  - **Mevcut hal DOĞRU:** `RestaurantDetailScreen` sıralama kaydını zaten
+    yüklüyor, puanı ve `review_text`'i forma dolduruyor. Yani sıralamanın
+    doğal detay sayfası **zaten mekan sayfası**. Günlük girişi ayrı ekran
+    gerektirdi çünkü onun yaşadığı yer hiçbir ekranda yoktu.
+  - **BOŞLUK 1 — `review_text`'in okuma görünümü yok.** Yazılan yorum yalnızca
+    satırdaki kırpılmış halde ve düzenleme formunun içinde görünüyor; tam
+    metni okumak için forma girmek gerekiyor. Başkasının profilinde de aynı.
+  - **BOŞLUK 2 — mekan sayfası kullanıcının O MEKANA ait ziyaretlerini
+    göstermiyor.** "Bu mekana 3 kez gitmişsin" bilgisi hiçbir yerde yok; iki
+    kavram veritabanında `place_id` ile bağlı ama arayüzde hiç buluşmuyor.
+  - **İkisini birden kapatan doğal iş:** mekan sayfasına **"Senin
+    ziyaretlerin"** bölümü — o mekana ait günlük girişleri, her biri
+    `DiaryEntryDetail`'e tıklanabilir. "0/1/N hangisi" sorusunu **hepsini
+    göstererek** çözüyor; Beli'nin ve Letterboxd'un mekan/film sayfasında
+    yaptığının aynısı. **Yeni tablo/migration GEREKMİYOR**, `DiaryEntryDetail`
+    zaten hazır. Faz 3'ün sosyal döngüsü kapandıktan sonra.
+- **İSİMLENDİRME GERİLİMİ: iki ayrı "yorum" alanı var** —
+  `user_rankings.review_text` ve `diary_entries.note`. Letterboxd'da bu ikilik
+  **yok**: orada inceleme metni doğrudan günlük girişine bağlı, ayrı bir
+  "sıralama yorumu" kavramı bulunmuyor. Bugün somut bir hata üretmiyor ama
+  *"yorumumu nereye yazmıştım"* karışıklığına açık. Ürün oturduğunda ele
+  alınmalı; birleştirme kararı veri migration'ı gerektireceği için ucuz değil.
 - **⚠️ EXPO GO ARTEFAKTI — BU BELİRTİYİ TEKRAR KOVALAMA (2026-08-06).**
   Belirti: form ekranında klavye açıkken uygulamayı arka plana atıp geri
   dönünce **sekme çubuğu kayboluyor, kaydırma hiç çalışmıyor, yazılan satır
@@ -2349,8 +2383,11 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   Stil aynı token'lara bağlı, yapı ayrı. Geçiş kartın sol sütun / sağ yuva düzeninin
   yeniden kurulmasını gerektiriyor — sağ yuvayı spinner ve "N puanlanan" sayacı da
   paylaşıyor. Ayrı bir diff olmalı.
-- ~~Auth ekranlarındaki stil tekrarı~~ — **KAPANDI (2026-08-07), cihazda
-  DOĞRULANDI.** Tetikleyici (üçüncü form ekranı = `EditProfile`) gerçekleşti;
+- ~~Auth ekranlarındaki stil tekrarı~~ — **KAPANDI (2026-08-07), önce Expo
+  Go'da sonra GERÇEK APK'da (OTA sonrası) DOĞRULANDI.** İkisinin ayrı ayrı
+  yazılması bilinçli: bu oturumun en pahalı dersi "hangi ortamda doğrulandığı"
+  ayrımıydı. Giriş yolu ekranları olduğu için uçtan uca giriş, hata yolları ve
+  klavye açıkken form kullanılabilirliği production'da tek tek kontrol edildi. Tetikleyici (üçüncü form ekranı = `EditProfile`) gerçekleşti;
   `TextField` + `Button` çıkarıldı, önce `EditProfile`'da oturdu, sonra
   **Register → Login sırasıyla** taşındı. `inputGroup`/`label`/`input`/
   `buttonDisabled`/`primaryButtonText` iki dosyadan da silindi; ikisinde
