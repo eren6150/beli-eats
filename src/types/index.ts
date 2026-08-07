@@ -339,6 +339,26 @@ export type UserProfileParams = {
 };
 
 /**
+ * Takipçi / takip edilen listesi — Faz 3 / Diff C.
+ *
+ * TEK EKRAN, İKİ SEKME (`ListFormScreen`'in "tek ekran iki mod" kararıyla aynı
+ * aile). `initialType` hangi sekmeyle açılacağını söylüyor: kullanıcı
+ * "Takipçi" sayacına bastıysa takipçiler, "Takip"e bastıysa takip edilenler.
+ *
+ * ⚠️ `ProfileScreen`'in `tab` parametresinden FARKLI: orası sekmenin KÖKÜ
+ * olduğu için parametre bir kerelik istek ve uygulandıktan sonra
+ * `setParams({ tab: undefined })` ile TEMİZLENMEK ZORUNDA. Burası her seferinde
+ * push edilip geri dönüşte unmount olduğundan öyle bir sorun doğmuyor —
+ * temizlemeye gerek yok.
+ */
+export type FollowersListParams = {
+  userId: string;
+  /** Başlıkta gösteriliyor: kimin listesine bakıyoruz. */
+  username: string;
+  initialType: 'followers' | 'following';
+};
+
+/**
  * Tek bir günlük girişinin ("ziyaret") detay ekranı — Faz 3 / Diff E.
  *
  * ── NEDEN ANLIK GÖRÜNTÜ, NEDEN AYRI SORGU YOK ────────────────────────────────
@@ -394,6 +414,8 @@ export type HomeStackParamList = {
    * buraya gelecek.
    */
   DiaryEntryDetail: DiaryEntryDetailParams;
+  /** `UserProfile`'ın takipçi/takip sayaçlarından açılıyor. */
+  FollowersList: FollowersListParams;
 };
 
 export type SearchStackParamList = {
@@ -493,4 +515,13 @@ export type ProfileStackParamList = {
    * "Günlük" sekmen ve `UserProfile`'ınki.
    */
   DiaryEntryDetail: DiaryEntryDetailParams;
+  /**
+   * Takipçi / takip edilen listesi. Burada da İKİ çağıranı var: kendi profil
+   * başlığındaki sayaçlar ve `UserProfile`'ınkiler.
+   *
+   * ⚠️ Bu rota bir dönem "var olmayan ekranı ilan etme" örneği olarak bu
+   * dosyadan SİLİNMİŞTİ. Artık ekranıyla birlikte geri geldi — kural aynı:
+   * yalnızca gerçekten yazılmış ekranlar burada durur.
+   */
+  FollowersList: FollowersListParams;
 };

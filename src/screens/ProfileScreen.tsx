@@ -330,6 +330,29 @@ export default function ProfileScreen() {
           following: profile?.followingCount ?? 0,
         }}
         onSettings={handleSettings}
+        // Sayaçlar Faz 3 / Diff C'de tıklanabilir oldu. `user` ve `profile`
+        // henüz gelmediyse verilmiyor: parametresiz açılan bir liste yanlış
+        // kullanıcının takipçilerini gösterirdi.
+        onPressFollowers={
+          user && profile
+            ? () =>
+                navigation.navigate('FollowersList', {
+                  userId: user.id,
+                  username: profile.username,
+                  initialType: 'followers',
+                })
+            : undefined
+        }
+        onPressFollowing={
+          user && profile
+            ? () =>
+                navigation.navigate('FollowersList', {
+                  userId: user.id,
+                  username: profile.username,
+                  initialType: 'following',
+                })
+            : undefined
+        }
         // Profil henüz gelmediyse buton gösterilmiyor: parametresiz açılan bir
         // düzenleme ekranı alanları boş doldurup kullanıcının adını silmesine
         // yol açabilirdi.

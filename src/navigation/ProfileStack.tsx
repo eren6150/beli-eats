@@ -8,6 +8,7 @@ import ListDetailScreen from '../screens/lists/ListDetailScreen';
 import RestaurantDetailScreen from '../screens/RestaurantDetailScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import DiaryEntryDetailScreen from '../screens/DiaryEntryDetailScreen';
+import FollowersListScreen from '../screens/FollowersListScreen';
 import {
   baseStackScreenOptions,
   restaurantDetailScreenOptions,
@@ -85,6 +86,13 @@ export default function ProfileStack() {
       <Stack.Screen
         name="DiaryEntryDetail"
         component={DiaryEntryDetailScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Takipçi/takip listesi. İki çağıranı var: kendi profil başlığındaki
+          sayaçlar ve `UserProfile`'ınkiler. */}
+      <Stack.Screen
+        name="FollowersList"
+        component={FollowersListScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

@@ -197,6 +197,20 @@ export default function UserProfileScreen() {
         }}
         title={`@${profile?.username ?? username}`}
         onBack={() => navigation.goBack()}
+        onPressFollowers={() =>
+          navigation.navigate('FollowersList', {
+            userId,
+            username: profile?.username ?? username,
+            initialType: 'followers',
+          })
+        }
+        onPressFollowing={() =>
+          navigation.navigate('FollowersList', {
+            userId,
+            username: profile?.username ?? username,
+            initialType: 'following',
+          })
+        }
         // Ayarlar YOK: başkasının profilinde ayarlanacak bir şey yok.
         // Takip butonu yalnızca başkasının profilinde.
         follow={

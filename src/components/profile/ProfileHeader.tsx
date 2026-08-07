@@ -14,12 +14,12 @@ import Icon from '../ui/Icon';
  *   kendi profilin      → `onSettings` + `onEdit`
  *   başkasının profili  → `onBack` + `follow` + `title`
  *
- * SAYAÇLAR HÂLÂ TIKLANAMAZ — bilinçli. Tıklanabilir yapmak `FollowersList`
- * ekranını gerektiriyor ve o ekran HENÜZ YOK; `ProfileStackParamList` de onu
- * ilan etmiyor (var olmayan rota ilan etmek `navigate()` çağrısını derletip
- * çalışma anında patlatıyordu). Bu yüzden sayaçlarda basılı geri bildirimi ya
- * da chevron da YOK: tıklanabilir görünüp tepki vermemek, hiç tıklanabilir
- * görünmemekten kötü. Faz 3'ün bir sonraki diff'i.
+ * SAYAÇLAR ARTIK TIKLANABİLİR (Faz 3 / Diff C) — ama yalnızca "Takipçi" ve
+ * "Takip". Uzun süre üçü de tıklanamazdı çünkü `FollowersList` ekranı yoktu;
+ * kural buydu: tıklanabilir görünüp tepki vermemek, hiç tıklanabilir
+ * görünmemekten kötü. Ekran yazılınca kural kendiliğinden karşılandı.
+ * "Mekan" sayacı hâlâ düz metin: açacağı bir ekran yok, sıralama zaten hemen
+ * altındaki sekmede duruyor.
  */
 
 export interface ProfileHeaderProps {
@@ -65,6 +65,19 @@ export interface ProfileHeaderProps {
     onToggle: () => void;
   };
   /**
+   * Takipçi / takip sayaçları — OPSİYONEL, verilmezse sayaç düz metin kalıyor.
+   *
+   * Uzun süre bilinçli olarak tıklanamazlardı: `FollowersList` ekranı yoktu ve
+   * "tıklanabilir görünüp tepki vermemek, hiç tıklanabilir görünmemekten
+   * kötü". Ekran yazıldı, sayaçlar da o zaman açıldı.
+   *
+   * "Mekan" sayacı HÂLÂ tıklanamaz: onun açacağı bir ekran yok (sıralama zaten
+   * hemen altındaki sekmede). Üçünü birden tıklanabilir yapmak, ikisi bir yere
+   * gidip biri gitmeyen bir satır üretirdi.
+   */
+  onPressFollowers?: () => void;
+  onPressFollowing?: () => void;
+  /**
    * "Profili düzenle" butonu — OPSİYONEL, verilmezse HİÇ render edilmiyor.
    *
    * Bu buton bir dönem bilinçli olarak yoktu: `EditProfile` ekranı olmadığı
@@ -76,12 +89,39 @@ export interface ProfileHeaderProps {
   onEdit?: () => void;
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <View style={styles.stat}>
+/**
+ * Sayaç. `onPress` verilirse dokunulabilir olur ve basılı geri bildirimi
+ * kazanır; verilmezse düz `View` render edilir — `disabled` bir `Pressable`
+ * bırakmak "tıklanabilir görünüp tepki vermeme" olurdu (`RankRow`'un aynı
+ * kararı).
+ */
+function Stat({
+  value,
+  label,
+  onPress,
+}: {
+  value: number;
+  label: string;
+  onPress?: () => void;
+}) {
+  const content = (
+    <>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </>
+  );
+
+  if (!onPress) return <View style={styles.stat}>{content}</View>;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.stat, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`${value} ${label}`}
+    >
+      {content}
+    </Pressable>
   );
 }
 
@@ -96,6 +136,8 @@ export default function ProfileHeader({
   onSettings,
   follow,
   onEdit,
+  onPressFollowers,
+  onPressFollowing,
 }: ProfileHeaderProps) {
   // full_name yoksa username birincil isim olur; boş satır bırakmıyoruz.
   const primaryName = fullName?.trim() || username;
@@ -152,8 +194,16 @@ export default function ProfileHeader({
 
         <View style={styles.statsRow}>
           <Stat value={stats.rankings} label="Mekan" />
-          <Stat value={stats.followers} label="Takipçi" />
-          <Stat value={stats.following} label="Takip" />
+          <Stat
+            value={stats.followers}
+            label="Takipçi"
+            onPress={onPressFollowers}
+          />
+          <Stat
+            value={stats.following}
+            label="Takip"
+            onPress={onPressFollowing}
+          />
         </View>
       </View>
 

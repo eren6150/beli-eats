@@ -6,6 +6,7 @@ import RestaurantDetailScreen from '../screens/RestaurantDetailScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import ListDetailScreen from '../screens/lists/ListDetailScreen';
 import DiaryEntryDetailScreen from '../screens/DiaryEntryDetailScreen';
+import FollowersListScreen from '../screens/FollowersListScreen';
 import {
   baseStackScreenOptions,
   restaurantDetailScreenOptions,
@@ -45,6 +46,13 @@ export default function HomeStack() {
       <Stack.Screen
         name="DiaryEntryDetail"
         component={DiaryEntryDetailScreen}
+        options={{ headerShown: false }}
+      />
+      {/* `UserProfile`'ın üçüncü zorunlu eşlikçisi: sayaçlardan buraya
+          geliniyor. */}
+      <Stack.Screen
+        name="FollowersList"
+        component={FollowersListScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
