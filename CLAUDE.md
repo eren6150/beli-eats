@@ -1081,17 +1081,17 @@ uydurmak bilerek bozuk bir ara durumu tarihe gömmek olurdu. Ölçüm gerekçesi
 **Sırada:** push → OTA (`--environment preview` ŞART) → **gerçek APK'da
 doğrulama** (Expo Go bu eksende kanıt değil, bkz. Bilinen Açık İşler).
 
-### ➡️ Sonraki iş: auth ekranlarını primitive'e taşımak
+### ➡️ Sonraki iş: Faz 3'ün kalan ekranları
 
-`LoginScreen` ve `RegisterScreen` hâlâ kendi `formCard`/`inputGroup`/`label`/
-`input`/`primaryButton` bloklarını taşıyor. `TextField` + `Button` primitive'leri
-bu ekranlardan çıkarıldı ama **bilinçli olarak onlara BAĞLANMADI**.
+Auth ekranlarının primitive'e taşınması **BİTTİ** (2026-08-07) — detay
+Bilinen Açık İşler'de. Sırada Faz 3'ün kalanı var: `UserProfile`,
+`FollowersList`, takip akışı, aktivite akışı. `useAuth` Context'e çevrildi ve
+`EditProfile` yazıldı, yani ön koşullar hazır.
 
-**Neden ayrı diff:** auth ekranları cihazda doğrulanmış ve **giriş yolunda**.
-Yeni bir primitive'i ilk kez yazarken aynı anda çalışan iki ekranı da ona
-bağlamak, bir şey ters gittiğinde giriş akışını riske atardı. Primitive önce
-yeni ve düşük riskli bir ekranda (`EditProfile`) oturdu; taşıma **ayrı diff,
-ayrı test turu**.
+**Önce yapılması gereken:** biriken commit'ler push edilmeli ve son iki
+refactor (Register + Login) **OTA ile sahaya çıkmalı**. Şu an yalnızca Expo
+Go'da doğrulandılar; gerçek APK'daki kullanıcı hâlâ eski auth ekranlarını
+görüyor.
 
 ### ✅ Bu oturumda tamamlananlar (2026-08-06)
 
@@ -1894,10 +1894,12 @@ Adım 7–8'de alınan kararlar:
 - **Tab bar gölgesi kaldırıldı**, ayrım `borderTopWidth: 1`'den geliyor. `Elevation` setinde
   bu kullanımın karşılığı yoktu (`sheet` çok güçlü); doğru cevap yeni token eklemek değil,
   Midas kararını uygulamaktı.
-- **Auth ekranlarına `AuthLayout`/`Button`/`TextField` primitive'i ÇIKARILMADI.** İki ekran
-  neredeyse aynı stil bloğunu taşıyor ve bu tekrar bilinçli olarak duruyor: adım 7'nin
-  hedefi token geçişiydi, primitive çıkarmak ayrı bir iş. Faz 2'de üçüncü bir form ekranı
-  (`EditProfile`) gelirse o zaman gerçek bir gerekçe oluşur.
+- **Auth ekranlarına `Button`/`TextField` primitive'i ÇIKARILMADI** (adım 7'de).
+  Gerekçe: adım 7'nin hedefi token geçişiydi, primitive çıkarmak ayrı bir iş; tetikleyici
+  **üçüncü bir form ekranı** olarak belirlenmişti. **O tetikleyici 2026-08-06'da
+  gerçekleşti** (`EditProfile`) ve taşıma 08-07'de tamamlandı — bkz. Bilinen Açık İşler.
+  `AuthLayout` ise hâlâ çıkarılmadı: `formCard` + logo lockup'ı iki ekranda tekrar ediyor
+  ama ikisi de küçük ve tek kullanımlık; bugün gerçek bir gerekçe yok.
 - **`MapScreen`'in overlay kartı `ErrorBanner`'a GEÇMEDİ — ertelendi, açık iş.** Butonun
   **stili** primitive'inkiyle aynı token'lara bağlandı (görsel drift yok) ama **yapı** ayrı
   kaldı: o kartta hata metni sol sütunda, buton sağ yuvada ve aynı yuvayı spinner ile
@@ -2200,12 +2202,24 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
      değerlendir.** Geçilirse bugünkü iki yama da (KAV'ın Android'de açık
      bırakılması, kaydırma payı) yeniden değerlendirilmeli — o kütüphane iki
      ortam farkını da ortadan kaldırıyor.
-  2. **`ListFormScreen`, `LoginScreen`, `RegisterScreen` kaydırma payı
-     TAŞIMIYOR.** KAV'ları açık ve doğru (production'da gereken o), ama
-     `EditProfile`'a eklenen kaydırma payı onlarda yok — yani uzun bir formda
-     son eleman klavyenin arkasında kalabilir. Bugün göze batmıyor (formları
-     kısa). ⚠️ **`LoginScreen`'de `ScrollView` HİÇ YOK**, yani orada kaçış yolu
-     da yok. Ayrı diff, ayrı test turu; ikisi giriş yolu ekranları.
+  2. ~~`ListFormScreen`, `LoginScreen`, `RegisterScreen` kaydırma payı
+     istiyor~~ — **KAPANDI (2026-08-07): gerek OLMADIĞI doğrulandı, kod
+     değişmedi.** Planlanmış bir "Diff 3" vardı, **iptal edildi**:
+     - `RegisterScreen` zaten `paddingVertical: Spacing['3xl']` taşıyor, yani
+       altta 40px pay var (`EditProfile`'ın 48'inin pratik eşdeğeri) + `ScrollView`'ı var.
+     - `ListFormScreen` kısa (başlık + açıklama + anahtar); klavye açıkken
+       içerik görünür alandan kısa kalıyor, kaydırma gerekmiyor.
+     - `LoginScreen`'de **`ScrollView` yok** ve tek gerçek risk buydu →
+       **gerçek APK'da kontrol edildi**: klavye açıkken iki alan da ve "Giriş
+       Yap" butonu **tam görünüyor**. Yalnızca logonun en üstü hafif kırpılıyor,
+       kullanımı etkilemiyor.
+     - **Auth ekranlarında sekme çubuğu YOK** (auth stack tab navigator'ın
+       dışında), yani `EditProfile`'daki 68px'lik mesele orada hiç doğmuyor.
+     **Karar yöntemi kayda değer:** ölçüm aleti eklemek yerine **gerçek APK'da
+     gözle kontrol** edildi — production'daki giriş ekranı yeni haliyle görsel
+     olarak birebir aynıydı (stiller byte-byte aynı), yani kontrol geçerliydi.
+     Ölçülmüş bir sorun yokken dolgu eklemek, bu turda bir kez ekranı tamamen
+     boşaltan hatanın aynısı olurdu.
   3. **Form ekranlarında sekme çubuğu gizlensin mi — KARAR VERİLMEDİ.**
      `EditProfile`/`ListForm` `presentation: 'modal'` ama Android'de bu yeni
      pencere açmıyor, yalnızca stack içi sunumu değiştiriyor → sekme çubuğu
@@ -2335,9 +2349,22 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   Stil aynı token'lara bağlı, yapı ayrı. Geçiş kartın sol sütun / sağ yuva düzeninin
   yeniden kurulmasını gerektiriyor — sağ yuvayı spinner ve "N puanlanan" sayacı da
   paylaşıyor. Ayrı bir diff olmalı.
-- **Auth ekranlarındaki stil tekrarı duruyor** (`formCard` / `input` / `primaryButton`
-  blokları iki dosyada neredeyse birebir). Bilinçli: üçüncü bir form ekranı gelmeden
-  primitive çıkarmak erken soyutlama olur. Tetikleyici: Faz 2'nin `EditProfile` ekranı.
+- ~~Auth ekranlarındaki stil tekrarı~~ — **KAPANDI (2026-08-07), cihazda
+  DOĞRULANDI.** Tetikleyici (üçüncü form ekranı = `EditProfile`) gerçekleşti;
+  `TextField` + `Button` çıkarıldı, önce `EditProfile`'da oturdu, sonra
+  **Register → Login sırasıyla** taşındı. `inputGroup`/`label`/`input`/
+  `buttonDisabled`/`primaryButtonText` iki dosyadan da silindi; ikisinde
+  `primaryButton` yalnızca `marginTop: Spacing.xs`. Toplam 124 satır eksildi.
+  - **Görsel olarak NÖTR** çünkü silinen stiller primitive'lerdekilerle birebir
+    aynı değerleri taşıyordu — primitive'ler zaten bu ekranlardan çıkarılmıştı.
+  - **Tek bilinen fark:** basılı geri bildirimi. `TouchableOpacity`'nin
+    varsayılan opaklığı yerine `Pressable` + `0.7` — uygulamanın geri kalanıyla
+    tutarlı hale geldi, cihazda kontrol edildi.
+  - **Sıra bilinçliydi:** Register önce (bozulursa yalnızca yeni kayıtlar
+    etkilenir), Login sonra (bozulursa **kimse giremez**).
+  - **Taşınmayan parça:** "Hesabın yok mu? Kayıt Ol" / "Zaten hesabın var mı?
+    Giriş Yap" satırları — satır içi renkli metin içeriyorlar, `Button`'ın
+    `label`'ı düz string alıyor.
 - **TEK SEFERLİK gözlem, TEKRARLANMADI (2026-08-01):** Profil → Günlük → bir girişe
   dokun → mekan detayı → geri → **Günlük yerine aynı mekan detayına dönüldü** (döngü
   gibi). İkinci denemede sorun çıkmadı, peşine düşülmedi. Tekrarlarsa yakalanacaklar:
