@@ -6,15 +6,23 @@ import { DiaryEntry } from '../types';
 /**
  * Kullanıcının ziyaret günlüğü (migration 009 + 010).
  *
- * KAPSAM: kullanıcının KENDİ girişleri. `diary_entries`'in SELECT politikası
- * `auth.uid() = user_id` — şemadaki diğer tabloların aksine okuma da sahiplik
- * istiyor (not alanı kişisel; gerekçe migration 009'da yazılı). Yani buradaki
- * `user_id` filtresi RLS ile ikinci bir kapı, tek koruma değil.
+ * KAPSAM: `userId` ile verilen kullanıcının girişleri — kendi profilinde
+ * oturum sahibi, `UserProfile`'da başkası.
  *
- * SÖZLEŞME — `userId` yoksa `fetchEntries` hiçbir şey yapmaz. `useAuth` bir
- * Context DEĞİL (bkz. CLAUDE.md → Bilinen Açık İşler): mount anında `user`
- * henüz null olabiliyor. Çağıran ekran bu yüzden
- * `useFocusEffect(useCallback(..., [fetchEntries]))` kalıbıyla tetiklemeli.
+ * ⚠️ `user_id` FİLTRESİ ARTIK TEK KAPI (migration 015). Eskiden SELECT
+ * politikası da sahiplik istiyordu (`auth.uid() = user_id`) ve bu filtre
+ * "ikinci bir kapı"ydı. Günlük herkese açıldığı için artık öyle değil:
+ * filtreyi kaldırmak ya da unutmak, kullanıcının kendi günlük sekmesine
+ * HERKESİN girişlerini düşürür. `MapScreen`'in bir dönem filtresiz olup
+ * herkesin puanladığı mekanları çizmesiyle aynı hata sınıfı.
+ *
+ * Yazma yolları etkilenmedi: INSERT/UPDATE/DELETE politikaları hâlâ sahiplik
+ * istiyor, yani başkasının girişi görülebiliyor ama değiştirilemiyor.
+ *
+ * SÖZLEŞME — `userId` yoksa `fetchEntries` hiçbir şey yapmaz. Çağıran ekran
+ * `useFocusEffect(useCallback(..., [fetchEntries]))` kalıbıyla tetikler; bu
+ * kalıp `useAuth` Context'e çevrildikten sonra da duruyor çünkü ikinci bir iş
+ * görüyor: ekrana her dönüşte veriyi tazelemek.
  */
 
 type MutationError = PostgrestError | Error;

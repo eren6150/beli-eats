@@ -1,0 +1,120 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MIGRATION 015 — GÜNLÜK HERKESE AÇILIYOR
+--
+-- Supabase SQL Editor'da elle çalıştırılır. Migration 009'un SELECT
+-- politikasını değiştirir; başka hiçbir şeye dokunmaz.
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- ── NEDEN ────────────────────────────────────────────────────────────────────
+-- Migration 009'da `diary_entries` şemadaki TEK tablo olarak okumada da
+-- sahiplik istiyordu (`auth.uid() = user_id`), diğer her tabloda okuma
+-- `using (true)`. Gerekçesi şuydu: `note` bugüne kadarki en kişisel veri, ve
+-- "sızmış bir notu geri almak mümkün değil".
+--
+-- O karar ÜRÜN KARARIYLA değişti (2026-08-07). Bu ürünün temel fikri
+-- "Letterboxd'un filmler için yaptığını restoranlar için yapmak" ve
+-- Letterboxd'da diary HERKESE AÇIK — başkasının nereye gittiğini, ne
+-- düşündüğünü görebilmek konseptin can alıcı kısmı. Kapalı bir günlük Faz 3'ün
+-- sosyal katmanını da anlamsızlaştırıyordu: `UserProfile` ekranında
+-- gösterilecek en değerli şey tam olarak bu.
+--
+-- ── İLERİDE GİZLİLİK EKLEMEK KOLAY, KAPI AÇIK BIRAKILDI ──────────────────────
+-- Bugün kullanıcı başına gizlilik ayarı YOK ve BİLİNÇLİ OLARAK eklenmiyor
+-- (projenin kuralı: bugün kullanılanı inşa et, geleceği spec'e yaz). Ama
+-- eklemek istendiğinde iş şu kadar — VERİ MIGRATION'I GEREKMİYOR:
+--
+--   alter table diary_entries
+--     add column is_private boolean not null default false;
+--
+--   drop policy "Diary entries are viewable by everyone" on diary_entries;
+--   create policy "Diary entries are viewable unless private"
+--     on diary_entries for select
+--     using (not is_private or auth.uid() = user_id);
+--
+-- `default false` sayesinde mevcut satırların hepsi açık kalır, yani davranış
+-- değişmez; yalnızca yeni bir seçenek doğar. Politika tek satır, kolon tek
+-- `alter`. Bu yüzden bugün bir şey inşa etmeye gerek yok.
+--
+-- ── YAZMA YOLLARI DEĞİŞMİYOR ─────────────────────────────────────────────────
+-- INSERT / UPDATE / DELETE politikaları OLDUĞU GİBİ kalıyor: üçü de hâlâ
+-- `auth.uid() = user_id` istiyor. Yani başkasının günlüğü GÖRÜLEBİLİR ama
+-- DEĞİŞTİRİLEMEZ / SİLİNEMEZ.
+--
+-- ⚠️ BU DENETLENDİ, VARSAYILMADI. SELECT kapalıyken başkasının giriş id'sini
+-- ÖĞRENMEK mümkün değildi; açılınca mümkün oluyor. O yüzden yazma yollarının
+-- sahipliği gerçekten kontrol edip etmediği tek tek bakıldı:
+--
+--   • `update_diary_entry()` (migration 011) `security definer` DEĞİL. İçindeki
+--     `select ... into` artık başkasının satırını da bulabilir, AMA asıl koruma
+--     orada değil: `:92-106`'daki UPDATE, UPDATE politikası tarafından
+--     eleniyor, `row_count` 0 çıkıyor ve fonksiyon `raise exception` ile
+--     düşüyor. Yani yazma açığı YOK.
+--     ⚠️ Migration 011'in `:76-77` yorumu ("SELECT politikası ... yani
+--     başkasının satırı burada zaten görünmez") bu migration'dan sonra
+--     YANLIŞ; hata da artık "bulunamadı" dalından değil satır sayısı
+--     dalından geliyor. Davranış doğru, yalnızca o yorum bayat.
+--
+--   • `log_diary_entry()` (migration 010) `security definer` DEĞİL ve satırı
+--     her zaman `auth.uid()` ile yazıyor — başkası adına giriş yazılamıyor.
+--
+--   • İstemcideki `removeEntry` id ile siliyor ve DELETE politikasına
+--     güveniyor. Politika değişmediği için başkasının girişi silinemiyor.
+--
+-- ── İSTEMCİ TARAFI: `user_id` FİLTRESİ ARTIK TEK KAPI ────────────────────────
+-- `useDiary.fetchEntries` zaten `.eq('user_id', userId)` yazıyor, yani kendi
+-- günlük sekmesine başkasının girişleri DÜŞMEYECEK. Bu kontrol edildi —
+-- `MapScreen`'in bir dönem filtresiz olup herkesin puanladığı mekanları
+-- çizmesiyle aynı hata sınıfı, bu sefer baştan kapalı.
+-- Fark şu: o filtre eskiden "RLS ile ikinci bir kapı"ydı, bu migration'dan
+-- sonra TEK kapı. Hook'un yorumu buna göre güncellendi.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- ── 1. Eski politikayı kaldır ───────────────────────────────────────────────
+-- `create policy` aynı isimle iki kez çalıştırılamıyor ve `if not exists`
+-- desteği yok; o yüzden önce drop. `if exists` sayesinde migration tekrar
+-- çalıştırılabilir.
+drop policy if exists "Users can view own diary entries" on diary_entries;
+
+-- ── 2. Yeni politika ────────────────────────────────────────────────────────
+-- `using (true)` — profiles / user_rankings / lists / list_items / follows ile
+-- aynı hizaya geliyor. `diary_entries` artık şemada aykırı duran tablo değil.
+drop policy if exists "Diary entries are viewable by everyone" on diary_entries;
+
+create policy "Diary entries are viewable by everyone"
+  on diary_entries for select using (true);
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- DOĞRULAMA — aşağıdakileri ayrı ayrı çalıştır
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- 1) Politikalar doğru mu? SELECT'in qual'i `true`, diğer üçü `auth.uid()`
+--    kontrolü içermeli:
+--
+--   select policyname, cmd, qual, with_check
+--     from pg_policies
+--    where tablename = 'diary_entries'
+--    order by cmd;
+--
+--   Beklenen dört satır:
+--     DELETE  → qual: (auth.uid() = user_id)
+--     INSERT  → with_check: (auth.uid() = user_id)
+--     SELECT  → qual: true                          ← DEĞİŞEN SATIR
+--     UPDATE  → qual + with_check: (auth.uid() = user_id)
+--
+-- 2) Okuma gerçekten açıldı mı? SQL Editor'da `auth.uid()` null döner, yani
+--    orada RLS'e takılmadan zaten her şey görünür — bu sorgu politikayı DEĞİL
+--    yalnızca verinin varlığını gösterir:
+--
+--   select count(*) as toplam_giris, count(distinct user_id) as kullanici
+--     from diary_entries;
+--
+-- 3) ⚠️ ASIL TEST UYGULAMADAN YAPILIR, SQL EDITOR'DAN DEĞİL. İki gerçek hesap
+--    gerekiyor (bu kısıt migration 006/007/008'de de yazılıydı):
+--      • A hesabıyla bir ziyaret + not kaydet
+--      • B hesabıyla A'nın profiline git → günlük sekmesinde o giriş GÖRÜNMELİ
+--      • B hesabından A'nın girişi DÜZENLENEMEMELİ / SİLİNEMEMELİ
+--        (arayüzde zaten yolu yok; asıl koruma yazma politikaları)
+--      • B'nin kendi "Günlük" sekmesinde A'nın girişleri GÖRÜNMEMELİ
+--        (`useDiary`'nin `user_id` filtresi)
+-- ════════════════════════════════════════════════════════════════════════════
