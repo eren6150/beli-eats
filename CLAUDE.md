@@ -843,6 +843,33 @@ Letterboxd'un liste sayfasındaki açıklama vurgusu (2026-08-01).
   `ListDetailStackParamList`'e taşındı (`RestaurantDetail`'in dört stack'teki
   durumuyla aynı desen).
 
+### Puanlama ile günlük arasındaki İŞ BÖLÜMÜ (ürün kararı, 2026-08-07)
+İki kavramın neden ayrı olduğu ve **ayrı kalması gerektiği**. Bu karar Diff D
+sırasında netleşti ve birkaç yerdeki gerilimi aynı anda çözüyor.
+
+| | **Mekan sayfası** | **Günlük / "Ziyaret Ekle"** |
+|---|---|---|
+| Asıl işi | **Puanlama** — kanonik ev | **Deneyim/anı kaydı** — ne zaman gittim, ne düşündüm |
+| Puan | Birincil eylem | **Opsiyonel yan bilgi** |
+| Metin alanı | `user_rankings.review_text` | `diary_entries.note` |
+| Akışta görünür mü | **Hayır** | **Evet** |
+
+- **Kullanıcı bir mekana puan vermek istiyorsa asıl yol mekan sayfası.**
+  Günlük puanlamayı birincil amaç edinmiyor; orada da puan verilebiliyor ama
+  ekranın işi bu değil.
+- **"SESSİZ PUANLAMA" BİR EKSİKLİK DEĞİL.** Mekan sayfasından puan verip
+  ziyaret kaydetmeyen biri aktivite akışında görünmüyor — ve bu **doğru**,
+  çünkü **akışın konusu puanlama değil, deneyim.** Diff D'de bu bilinçli
+  olarak kabul edildi; iki kaynağı birleştirmek ayrıca çift kayıt üretirdi
+  (puanlı ziyaret hem giriş hem sıralama yazıyor).
+- **"İKİ YORUM ALANI" GERİLİMİNİ KISMEN ÇÖZÜYOR.** Açık işler listesinde
+  `review_text` ↔ `note` ikiliği bir belirsizlik olarak duruyordu. Bu iş
+  bölümüyle ikisi **kasıtlı olarak farklı amaçlara** hizmet ediyor:
+  `review_text` = "bu mekan hakkında genel görüşüm" (kalıcı, mekana ait),
+  `note` = "bu ziyarette olanlar" (ana, o güne ait). **Birleştirilmeleri
+  gerekmiyor.** Kalan tek soru arayüzün bu ayrımı yeterince anlatıp
+  anlatmadığı — bugün somut bir hata üretmiyor.
+
 ### Günlük (diary) — Faz 2'nin ikinci ayağı
 Letterboxd'un diary'si: "ne zaman gittim, ne düşündüm". Migration 009 (tablo),
 010 (`log_diary_entry` + `upsert_user_ranking`), 011 (`update_diary_entry`).
@@ -1131,9 +1158,14 @@ Ayrıca: versionCode 4 / version 1.1.0 build'i üretildi ve arkadaşa gönderild
   yok**. Tetikleyici sorgu ve yeşil eşik (`kesisen_mekan >= 5` VE
   `gercek_krali_olan >= 3`) Faz 3 bölümünde kayıtlı, **ayda bir çalıştırılacak**.
 - **Genel (arkadaşlar arası) sıralama** — **zaten var**: `HomeScreen`'deki
-  "En Çok Puanlayanlar" bölümü. Yeni metrik eklemek mümkün ama `diary_entries`
-  tabanlı olanlar `security definer` RPC gerektiriyor (SELECT sahiplik istiyor).
-  Az kullanıcıyla getirisi sınırlı olduğu için ertelendi.
+  "En Çok Puanlayanlar" bölümü. Az kullanıcıyla yeni metrik eklemenin getirisi
+  sınırlı olduğu için ertelendi.
+  - ⚠️ **ESKİ GEREKÇE ARTIK GEÇERSİZ:** burada bir dönem *"`diary_entries`
+    tabanlı olanlar `security definer` RPC gerektiriyor (SELECT sahiplik
+    istiyor)"* yazıyordu. **Migration 015 günlüğü herkese açtı**, yani
+    `diary_entries` üzerinden sosyal sorgu yazmak artık düz bir `select`.
+    Aktivite akışı (Diff D) tam olarak bunu yapıyor, RPC'siz. Aynı düzeltme
+    mekan bazlı leaderboard için de geçerli.
 - **Kategori/etiket filtreleme** — **büyük iş.** Google legacy `types` mutfak
   türü vermiyor, zincir/butik ayrımı hiçbir Google alanında yok, ve bu aramaya
   filtre eklemek değil **ikinci bir arama sistemi** kurmak demek. Tam fizibilite
@@ -2228,12 +2260,14 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
     göstererek** çözüyor; Beli'nin ve Letterboxd'un mekan/film sayfasında
     yaptığının aynısı. **Yeni tablo/migration GEREKMİYOR**, `DiaryEntryDetail`
     zaten hazır. Faz 3'ün sosyal döngüsü kapandıktan sonra.
-- **İSİMLENDİRME GERİLİMİ: iki ayrı "yorum" alanı var** —
-  `user_rankings.review_text` ve `diary_entries.note`. Letterboxd'da bu ikilik
-  **yok**: orada inceleme metni doğrudan günlük girişine bağlı, ayrı bir
-  "sıralama yorumu" kavramı bulunmuyor. Bugün somut bir hata üretmiyor ama
-  *"yorumumu nereye yazmıştım"* karışıklığına açık. Ürün oturduğunda ele
-  alınmalı; birleştirme kararı veri migration'ı gerektireceği için ucuz değil.
+- ~~İSİMLENDİRME GERİLİMİ: iki ayrı "yorum" alanı var~~ — **BÜYÜK ÖLÇÜDE
+  ÇÖZÜLDÜ (2026-08-07).** `user_rankings.review_text` ve `diary_entries.note`
+  ikiliği bir belirsizlik sanılıyordu; ürün kararıyla **kasıtlı bir iş
+  bölümü** olduğu netleşti (bkz. Mimari Notlar → "Puanlama ile günlük
+  arasındaki İŞ BÖLÜMÜ"): `review_text` = mekan hakkındaki genel görüş,
+  `note` = o ziyarette olanlar. **Birleştirilmeleri gerekmiyor**, yani veri
+  migration'ı da gerekmiyor. Kalan tek soru arayüzün bu ayrımı yeterince
+  anlatıp anlatmadığı — bugün somut bir hata üretmiyor.
 - **⚠️ EXPO GO ARTEFAKTI — BU BELİRTİYİ TEKRAR KOVALAMA (2026-08-06).**
   Belirti: form ekranında klavye açıkken uygulamayı arka plana atıp geri
   dönünce **sekme çubuğu kayboluyor, kaydırma hiç çalışmıyor, yazılan satır

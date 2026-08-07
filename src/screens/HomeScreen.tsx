@@ -18,10 +18,12 @@ import { useAuth } from '../hooks/useAuth';
 import { UserRanking, Profile, HomeStackParamList } from '../types';
 import { photoUrl } from '../lib/places';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
-import { SkeletonActivityCard, SkeletonCard } from '../components/ui/SkeletonLoader';
-import RestaurantCard, { RestaurantCompactCard } from '../components/ui/RestaurantCard';
+import { SkeletonCard, SkeletonListItem } from '../components/ui/SkeletonLoader';
+import RestaurantCard from '../components/ui/RestaurantCard';
 import EmptyState from '../components/ui/EmptyState';
 import SectionHeader from '../components/ui/SectionHeader';
+import ActivityRow from '../components/home/ActivityRow';
+import { useActivityFeed, ActivityItem } from '../hooks/useActivityFeed';
 
 /** Kart görselleri için istenen genişlik — Places Photo endpoint'ine gider. */
 const CARD_PHOTO_WIDTH = 600;
@@ -29,10 +31,15 @@ const CARD_PHOTO_WIDTH = 600;
 /** İki sütunlu ızgarada kenarlar + aradaki boşluk. */
 const GRID_INSET = 52;
 
-interface ActivityFeedItem {
-  ranking: UserRanking;
-  profile: Profile;
-}
+/**
+ * ⚠️ `ActivityFeedItem` (ranking + profile) SİLİNDİ — Faz 3 / Diff D.
+ *
+ * Akış artık `user_rankings` yerine `diary_entries` üzerinden geliyor
+ * (`useActivityFeed`). Sıralama bir DURUM, akış ise OLAY listesi; sıralama
+ * satırının tarihi ve notu yok. Eski akış `updated_at`'e göre sıralıyordu ve
+ * o alan yan etkiyle değişiyordu (puanlı ziyaret `upsert_user_ranking`'i
+ * tetikliyor), yani "aktivite" bilgisi kazara doğruydu.
+ */
 
 /**
  * "En Çok Puanlayanlar" satırının ihtiyaç duyduğu ALANLAR — tam `Profile` DEĞİL.
@@ -57,7 +64,6 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const { user } = useAuth();
 
-  const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([]);
   const [trendingPlaces, setTrendingPlaces] = useState<UserRanking[]>([]);
   const [popularLists, setPopularLists] = useState<
     { profile: LeaderUser; count: number }[]
@@ -66,42 +72,22 @@ export default function HomeScreen() {
 
   const userId = user?.id;
 
+  /**
+   * Akış kendi hook'unda: takip listesi + girişler + beğeni sayısı tek yerde,
+   * "kimseyi takip etmiyorum" ile "girişleri yok" ayrımı da orada.
+   */
+  const {
+    items: activityFeed,
+    loading: feedLoading,
+    error: feedError,
+    followsAnyone,
+    fetchFeed,
+  } = useActivityFeed(userId);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    // 1. Friend Activity Feed
-    // userId yoksa bu sorguyu HİÇ atma: follower_id uuid kolonu ve boş string
-    // Postgres'te 22P02 ("invalid input syntax for type uuid") ile 400 döner.
-    if (userId) {
-      const { data: follows, error: followsError } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', userId);
-
-      if (followsError) {
-        console.error('[HomeScreen] takip listesi okunamadı:', followsError);
-      } else if (follows && follows.length > 0) {
-        const followingIds = follows.map((f: any) => f.following_id);
-        const { data: recentRankings, error: feedError } = await supabase
-          .from('user_rankings')
-          .select('*, profiles(*)')
-          .in('user_id', followingIds)
-          .order('updated_at', { ascending: false })
-          .limit(10);
-
-        if (feedError) {
-          console.error('[HomeScreen] aktivite akışı okunamadı:', feedError);
-        } else if (recentRankings) {
-          setActivityFeed(
-            recentRankings.map((r: any) => ({ ranking: r, profile: r.profiles }))
-          );
-        }
-      } else {
-        setActivityFeed([]);
-      }
-    }
-
-    // 2. Trending Places
+    // 1. Trending Places
     const { data: trending, error: trendingError } = await supabase
       .from('user_rankings')
       .select('*')
@@ -114,7 +100,7 @@ export default function HomeScreen() {
       setTrendingPlaces(trending);
     }
 
-    // 3. Popular Lists
+    // 2. Popular Lists
     // `profiles(id, ...)` — `id` ŞART: satırın tıklanabilirliği ve
     // `UserProfile` navigasyonu ona dayanıyor. Bir dönem seçilmiyordu ve satır
     // sessizce tıklanamaz kalıyordu (gerekçe `LeaderUser` tanımında).
@@ -160,7 +146,10 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [fetchData])
+      // Akış ayrı bir hook'ta ama tazelenme kuralı aynı: sekmeye her dönüşte
+      // yeniden okunuyor (biri takip edilmiş ya da yeni giriş yazılmış olabilir).
+      fetchFeed();
+    }, [fetchData, fetchFeed])
   );
 
   const goToDetail = (place: UserRanking) =>
@@ -181,6 +170,25 @@ export default function HomeScreen() {
    * `UserProfile` ayrıca `isSelf` durumunu kendi içinde de karşılıyor (takip
    * butonunu gizliyor) — burası ana yol, o savunma katmanı.
    */
+  /**
+   * Akış satırından ziyaret detayına. Mekan sayfasına DEĞİL — eski akış
+   * oraya gidiyordu ve bu, günlük satırlarında az önce kapattığımız boşluğun
+   * aynısıydı: kullanıcı arkadaşının ne yazdığını okumak isterken kanonik
+   * mekan sayfasına düşüyordu.
+   */
+  const goToEntry = (item: ActivityItem) =>
+    navigation.navigate('DiaryEntryDetail', {
+      entryId: item.entry.id,
+      authorId: item.author.id,
+      authorUsername: item.author.username,
+      placeId: item.entry.place_id,
+      placeName: item.entry.places?.name ?? 'Mekan',
+      photoReference: item.entry.places?.photo_refs?.[0],
+      visitedAt: item.entry.visited_at,
+      rating: item.entry.rating,
+      note: item.entry.note,
+    });
+
   const handleOpenUser = (profile: LeaderUser | undefined) => {
     if (!profile?.id) return;
 
@@ -214,15 +222,12 @@ export default function HomeScreen() {
         >
           <View style={styles.section}>
             <SectionHeader title="Arkadaş Aktiviteleri" style={styles.sectionHeader} />
-            <FlatList
-              horizontal
-              data={[1, 2, 3]}
-              keyExtractor={(i) => String(i)}
-              contentContainerStyle={styles.horizontalList}
-              showsHorizontalScrollIndicator={false}
-              scrollEnabled={false}
-              renderItem={() => <SkeletonActivityCard />}
-            />
+            {/* Akış artık dikey satırlar — iskelet de öyle. */}
+            <View style={styles.feedSkeletonWrap}>
+              {[1, 2, 3].map((i) => (
+                <SkeletonListItem key={i} style={styles.feedSkeletonItem} />
+              ))}
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -238,53 +243,100 @@ export default function HomeScreen() {
     );
   }
 
+  // ── Akışın boş / hata durumları ────────────────────────────────────────────
+  //
+  // ÜÇ AYRI DURUM, üç ayrı metin. Hepsini tek bir "boş" mesajıyla karşılamak
+  // "kimseyi takip etmiyorsun" ile "sorgu patladı"yı aynı şeye indirgerdi —
+  // projede birden çok yerde bilerek ayrılan aynı ayrım.
+  const renderFeedEmpty = () => {
+    if (feedLoading) {
+      return (
+        <View style={styles.feedSkeletonWrap}>
+          {[1, 2, 3].map((i) => (
+            <SkeletonListItem key={i} style={styles.feedSkeletonItem} />
+          ))}
+        </View>
+      );
+    }
+
+    if (feedError) {
+      return (
+        <View style={styles.emptyWrap}>
+          <EmptyState
+            icon="alert"
+            title="Akış yüklenemedi"
+            subtitle={feedError}
+            actionLabel="Tekrar dene"
+            onAction={fetchFeed}
+          />
+        </View>
+      );
+    }
+
+    if (!followsAnyone) {
+      return (
+        <View style={styles.emptyWrap}>
+          <EmptyState
+            icon="person"
+            title="Henüz kimseyi takip etmiyorsun"
+            subtitle="Aşağıdaki “En Çok Puanlayanlar” listesinden birine dokunup profilinden takip edebilirsin."
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyWrap}>
+        <EmptyState
+          icon="diary"
+          title="Henüz paylaşım yok"
+          subtitle="Takip ettiklerin bir ziyaret kaydettiğinde burada görünecek."
+        />
+      </View>
+    );
+  };
+
   // ── Ana render ─────────────────────────────────────────────────────────────
+  //
+  // ⚠️ KABUK `ScrollView` DEĞİL `FlatList` (Faz 3 / Diff D). Akış artık ekranın
+  // ANA İÇERİĞİ, yan şeritteki 10 kart değil. Dikey bir `FlatList`'i
+  // `ScrollView` içine koymak iç içe sanallaştırma uyarısı üretirdi; standart
+  // çözüm dış kabuğu listeye çevirip diğer bölümleri header/footer'a taşımak.
+  //
+  // Selamlama şeridi `FlatList`'in DIŞINDA: kaydırmayla kaybolmuyor. Profilde
+  // başlığın kayması bilinçliydi (Instagram), burada değil — burası bir akış,
+  // üstündeki tek satır ekranın kimliği.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {renderHeader()}
 
-      <ScrollView
+      <FlatList
+        data={activityFeed}
+        keyExtractor={(item) => item.entry.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-      >
-        {/* ── 1: Arkadaş aktiviteleri ── */}
-        <View style={styles.section}>
-          <SectionHeader
-            title="Arkadaş Aktiviteleri"
-            badge={activityFeed.length > 0 ? `${activityFeed.length} yeni` : undefined}
-            style={styles.sectionHeader}
+        ListHeaderComponent={
+          <SectionHeader title="Arkadaş Aktiviteleri" style={styles.sectionHeader} />
+        }
+        ListEmptyComponent={renderFeedEmpty}
+        renderItem={({ item }: { item: ActivityItem }) => (
+          <ActivityRow
+            authorUsername={item.author.username}
+            authorAvatarUrl={item.author.avatar_url}
+            placeName={item.entry.places?.name ?? 'Bilinmeyen mekan'}
+            placePhotoUrl={photoUrl(item.entry.places?.photo_refs?.[0], CARD_PHOTO_WIDTH)}
+            visitedAt={item.entry.visited_at}
+            rating={item.entry.rating}
+            note={item.entry.note}
+            likeCount={item.likeCount}
+            onPress={() => goToEntry(item)}
+            onPressAuthor={() => handleOpenUser(item.author)}
           />
-
-          {activityFeed.length === 0 ? (
-            <View style={styles.emptyWrap}>
-              <EmptyState
-                icon="person"
-                title="Henüz kimseyi takip etmiyorsun"
-                subtitle="Takip ettiğin kişilerin puanlamaları burada görünecek."
-              />
-            </View>
-          ) : (
-            <FlatList
-              horizontal
-              data={activityFeed}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalList}
-              keyExtractor={(item) => item.ranking.id}
-              renderItem={({ item }) => (
-                <RestaurantCompactCard
-                  name={item.ranking.restaurant_name}
-                  rating={item.ranking.rating}
-                  photoUrl={photoUrl(item.ranking.photo_reference, CARD_PHOTO_WIDTH)}
-                  onPress={() => goToDetail(item.ranking)}
-                  style={styles.horizontalCard}
-                />
-              )}
-            />
-          )}
-        </View>
-
-        {/* ── 2: Trend mekanlar ── */}
-        <View style={styles.section}>
+        )}
+        ListFooterComponent={
+          <>
+            {/* ── Trend mekanlar ── */}
+            <View style={styles.section}>
           <SectionHeader title="Trend Mekanlar" style={styles.sectionHeader} />
 
           {trendingPlaces.length === 0 ? (
@@ -359,8 +411,10 @@ export default function HomeScreen() {
               </Pressable>
             ))
           )}
-        </View>
-      </ScrollView>
+            </View>
+          </>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -401,12 +455,13 @@ const styles = StyleSheet.create({
   sectionHeader: {
     paddingHorizontal: Spacing.lg,
   },
-  horizontalList: {
-    paddingLeft: Spacing.lg,
-    paddingRight: Spacing.xxs,
+  // Akış iskeleti — satır tabanlı, eski yatay kart şeridinin yerine.
+  feedSkeletonWrap: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
   },
-  horizontalCard: {
-    marginRight: Spacing.sm,
+  feedSkeletonItem: {
+    marginBottom: Spacing.xs,
   },
   grid: {
     flexDirection: 'row',
