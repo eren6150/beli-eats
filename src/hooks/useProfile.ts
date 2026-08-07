@@ -80,27 +80,55 @@ export function useProfile(userId: string | undefined) {
     setLoading(false);
   }, [userId]);
 
+  /**
+   * Profil alanlarını günceller.
+   *
+   * ── `updated_at` GÖNDERİLMİYOR (düzeltildi) ──────────────────────────────
+   * Eskiden `updated_at: new Date().toISOString()` yazılıyordu. Ama migration
+   * 004 `profiles`'a `set_updated_at` trigger'ı ekledi — sunucu zaten yazıyor.
+   * İstemcinin saatine güvenmek gereksiz ve saat kayarsa yanlış. `useLists`
+   * ve `useListItems` bu satırı zaten göndermiyor; `updateProfile` aykırıydı.
+   *
+   * ── BOŞ PATCH'TE ERKEN DÖNÜŞ (eklendi) ───────────────────────────────────
+   * `ListFormScreen`'in deseni: değişen alan yoksa ağa hiç çıkma. Onsuz
+   * "hiçbir şeyi değiştirmeden Kaydet" her seferinde bir UPDATE atıyor ve
+   * trigger `updated_at`'i boşuna ilerletiyordu.
+   *
+   * ── `null` KABUL EDİLİYOR ────────────────────────────────────────────────
+   * `full_name`/`bio` nullable ve kullanıcı alanı BOŞALTABİLMELİ. Tip `string`
+   * olsaydı temizleme ifade edilemez, boş string yazılırdı — "adı yok" ile
+   * "adı boş string" ayrımını DB'ye taşımak sonradan pişmanlık olurdu.
+   */
   const updateProfile = async (updates: {
     username?: string;
-    full_name?: string;
-    bio?: string;
-    avatar_url?: string;
+    full_name?: string | null;
+    bio?: string | null;
+    avatar_url?: string | null;
   }) => {
     if (!userId) return { error: new Error('Not authenticated') };
 
+    // `undefined` alanlar "dokunma" demek; onları ayıklıyoruz ki
+    // Supabase'e gereksiz kolon göndermeyelim.
+    const patch = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined)
+    );
+
+    if (Object.keys(patch).length === 0) return { error: null };
+
     const { error } = await supabase
       .from('profiles')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq('id', userId);
 
-    if (!error) {
-      // Optimistic local update
-      setProfile((prev) =>
-        prev ? { ...prev, ...updates } : prev
-      );
+    if (error) {
+      console.error('[useProfile] profil güncellenemedi:', error);
+      return { error };
     }
 
-    return { error };
+    // İyimser yerel güncelleme — ekran anında doğru görünsün.
+    setProfile((prev) => (prev ? { ...prev, ...patch } : prev));
+
+    return { error: null };
   };
 
   return { profile, loading, error, fetchProfile, updateProfile };
