@@ -316,6 +316,19 @@ export default function ProfileScreen() {
           following: profile?.followingCount ?? 0,
         }}
         onSettings={handleSettings}
+        // Profil henüz gelmediyse buton gösterilmiyor: parametresiz açılan bir
+        // düzenleme ekranı alanları boş doldurup kullanıcının adını silmesine
+        // yol açabilirdi.
+        onEdit={
+          profile
+            ? () =>
+                navigation.navigate('EditProfile', {
+                  username: profile.username,
+                  fullName: profile.full_name ?? null,
+                  bio: profile.bio ?? null,
+                })
+            : undefined
+        }
       />
 
       {profileError && (

@@ -32,6 +32,16 @@ export interface ProfileHeaderProps {
   };
   /** Ayarlar ikonu — şu an yalnızca çıkış eylemini açıyor. */
   onSettings: () => void;
+  /**
+   * "Profili düzenle" butonu — OPSİYONEL, verilmezse HİÇ render edilmiyor.
+   *
+   * Bu buton bir dönem bilinçli olarak yoktu: `EditProfile` ekranı olmadığı
+   * için "hiçbir şey yapmayan buton dead UI'dır" kuralına takılıyordu. Ekran
+   * 2026-08-06'da yazıldı, buton da o zaman geldi. Opsiyonel bırakılması
+   * `RankRow`'un üç genişlemesindeki desenin aynısı — parça verilmezse
+   * render edilmiyor, boş yer de tutmuyor.
+   */
+  onEdit?: () => void;
 }
 
 function Stat({ value, label }: { value: number; label: string }) {
@@ -50,6 +60,7 @@ export default function ProfileHeader({
   avatarUrl,
   stats,
   onSettings,
+  onEdit,
 }: ProfileHeaderProps) {
   // full_name yoksa username birincil isim olur; boş satır bırakmıyoruz.
   const primaryName = fullName?.trim() || username;
@@ -96,6 +107,20 @@ export default function ProfileHeader({
         <Text style={styles.bio} numberOfLines={3}>
           {bio.trim()}
         </Text>
+      ) : null}
+
+      {/* Tam genişlik ikincil buton — Instagram'ın profil header'ındaki yer.
+          `Button` primitive'i KULLANILMIYOR: o form butonu (dikey padding
+          Spacing.md, gölgeli birincil hal). Buradaki daha ince ve sakin bir
+          eylem; ölçüleri zorlamak primitive'i iki işe birden yamamak olurdu. */}
+      {onEdit ? (
+        <Pressable
+          onPress={onEdit}
+          style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.editBtnText}>Profili düzenle</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -177,5 +202,20 @@ const styles = StyleSheet.create({
     ...Type.body,
     color: Colors.textStrong,
     marginTop: Spacing.xs,
+  },
+
+  // Gölge YOK — Midas kararı: ayrım ince kenarlıktan geliyor.
+  editBtn: {
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    backgroundColor: Colors.surface,
+  },
+  editBtnText: {
+    ...Type.captionStrong,
+    color: Colors.textPrimary,
   },
 });

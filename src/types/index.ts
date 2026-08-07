@@ -364,6 +364,22 @@ export type ProfileStackParamList = {
    */
   MyProfile: { tab?: ProfileTabKey } | undefined;
   /**
+   * Profil düzenleme — modal.
+   *
+   * Mevcut değerler PARAMETREYLE taşınıyor (`ListForm` ile aynı karar):
+   * çağıran `ProfileScreen`'in elinde zaten tam profil satırı var, ekranın
+   * ayrı sorgu atmasına gerek yok ve alanlar ilk karede dolu geliyor.
+   *
+   * `username` düzenlenebilir DEĞİL — yalnızca kilitli olarak gösteriliyor;
+   * gerekçesi `EditProfileScreen`'in başında (unique kısıt + migration 012'nin
+   * sonek mantığı yalnızca kayıt anında çalışıyor).
+   */
+  EditProfile: {
+    username: string;
+    fullName: string | null;
+    bio: string | null;
+  };
+  /**
    * Liste formu — modal. TEK ekran iki iş yapıyor:
    *   parametresiz  → yeni liste
    *   `listId` ile  → o listeyi düzenle (alanlar dolu gelir)
