@@ -30,6 +30,7 @@ import SectionHeader from '../components/ui/SectionHeader';
 import SegmentedTabs, { SegmentedTab } from '../components/ui/SegmentedTabs';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import RankRow from '../components/profile/RankRow';
+import RankingReviewSheet from '../components/profile/RankingReviewSheet';
 import ListCard from '../components/lists/ListCard';
 import DiaryRow from '../components/diary/DiaryRow';
 import DiaryEntrySheet from '../components/diary/DiaryEntrySheet';
@@ -107,6 +108,9 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<ProfileTabKey>(
     requestedTab ?? 'rankings'
   );
+
+  /** Yorumu okunacak sıralama kaydı — `null` ise sheet kapalı. */
+  const [reviewRanking, setReviewRanking] = useState<UserRanking | null>(null);
 
   /**
    * Düzenlenen günlük girişi. Sheet ROTA DEĞİL BİLEŞEN olduğu için burada
@@ -237,14 +241,30 @@ export default function ProfileScreen() {
     );
   };
 
-  // Sıralama satırı da mekan detayına gidiyor. İki sekmeden birinin tıklanabilir
-  // olup diğerinin olmaması aynı ekran içinde tutarsızlık olurdu.
-  const handleOpenRanking = (ranking: UserRanking) =>
+  /**
+   * Sıralama satırı artık MEKAN SAYFASINA DEĞİL, yorumun okuma görünümüne
+   * gidiyor (CLAUDE.md → BOŞLUK 1).
+   *
+   * ⚠️ DAVRANIŞ `UserProfileScreen` İLE BİLİNÇLİ OLARAK AYNI. Asıl ihtiyaç
+   * başkasının profilindeydi (orada mekan sayfası oturum sahibinin kaydını
+   * gösteriyor, yani o kişinin yorumuna ulaşan yol yoktu) — ama görsel olarak
+   * ÖZDEŞ satırların iki ekranda farklı davranması, bu projede dört kez
+   * pahalıya patlamış isim/davranış uyumsuzluğunun kardeşi olurdu.
+   *
+   * Mekan sayfası kaybolmadı: sheet'in içindeki satırdan bir dokunuş uzakta ve
+   * düzenleme hâlâ orada (sheet salt okunur).
+   */
+  const handleOpenRanking = (ranking: UserRanking) => setReviewRanking(ranking);
+
+  const handleOpenPlaceFromReview = (ranking: UserRanking) => {
+    // Sheet ÖNCE kapanıyor: açık bir RN `Modal` hedef ekranın önünde kalır.
+    setReviewRanking(null);
     navigation.navigate('RestaurantDetail', {
       placeId: ranking.place_id,
       placeName: ranking.restaurant_name,
       photoReference: ranking.photo_reference ?? undefined,
     });
+  };
 
   const handleSettings = () => {
     // Şu an tek ayar çıkış. EditProfile ekranı geldiğinde buraya eklenecek.
@@ -571,6 +591,12 @@ export default function ProfileScreen() {
         entry={editingEntry}
         onClose={() => setEditingEntry(null)}
         onSaved={handleEntrySaved}
+      />
+
+      <RankingReviewSheet
+        ranking={reviewRanking}
+        onClose={() => setReviewRanking(null)}
+        onPressPlace={handleOpenPlaceFromReview}
       />
     </SafeAreaView>
   );

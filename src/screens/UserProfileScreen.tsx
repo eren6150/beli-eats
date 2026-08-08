@@ -30,6 +30,7 @@ import ErrorBanner from '../components/ui/ErrorBanner';
 import SegmentedTabs, { SegmentedTab } from '../components/ui/SegmentedTabs';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import RankRow from '../components/profile/RankRow';
+import RankingReviewSheet from '../components/profile/RankingReviewSheet';
 import ListCard from '../components/lists/ListCard';
 import DiaryRow from '../components/diary/DiaryRow';
 
@@ -119,6 +120,8 @@ export default function UserProfileScreen() {
   } = useFollow(user?.id, userId);
 
   const [activeTab, setActiveTab] = useState<ProfileTabKey>('rankings');
+  /** Yorumu okunacak sıralama kaydı — `null` ise sheet kapalı. */
+  const [reviewRanking, setReviewRanking] = useState<UserRanking | null>(null);
 
   /**
    * `ProfileScreen` ile aynı kalıp: `fetchX`'ler `userId`'ye bağlı
@@ -144,12 +147,31 @@ export default function UserProfileScreen() {
     if (!toggleError) fetchProfile();
   };
 
-  const handleOpenRanking = (ranking: UserRanking) =>
+  /**
+   * Sıralama satırı artık MEKAN SAYFASINA DEĞİL, o kişinin yorumunu gösteren
+   * sheet'e gidiyor.
+   *
+   * Eskiden mekan sayfası açılıyordu ve bu yanlıştı — günlük satırlarında bir
+   * kez düzeltilen hatanın aynısı: kullanıcı **o kişinin ne düşündüğünü** görmek
+   * istiyor, ama mekan sayfası HER ZAMAN OTURUM SAHİBİNİN kaydını yüklüyor
+   * (`useRankings(user?.id)`). Yani o kişinin yorumunun tam metnine ulaşan
+   * hiçbir yol yoktu (CLAUDE.md → BOŞLUK 1).
+   *
+   * Mekan sayfası kaybolmadı, sheet'in içindeki satırdan bir dokunuş uzakta.
+   */
+  const handleOpenRanking = (ranking: UserRanking) => setReviewRanking(ranking);
+
+  const handleOpenPlaceFromReview = (ranking: UserRanking) => {
+    // Sheet ÖNCE kapanıyor: RN `Modal` uygulamanın görünüm hiyerarşisinin
+    // üstünde ayrı bir katman, açık kalırsa hedef ekran onun ARKASINDA kalır
+    // (`MapSummarySheet`'in aynı kararı).
+    setReviewRanking(null);
     navigation.navigate('RestaurantDetail', {
       placeId: ranking.place_id,
       placeName: ranking.restaurant_name,
       photoReference: ranking.photo_reference ?? undefined,
     });
+  };
 
   /**
    * Günlük satırı artık ZİYARET DETAYINA gidiyor, mekan sayfasına değil.
@@ -356,6 +378,12 @@ export default function UserProfileScreen() {
             />
           )
         }
+      />
+
+      <RankingReviewSheet
+        ranking={reviewRanking}
+        onClose={() => setReviewRanking(null)}
+        onPressPlace={handleOpenPlaceFromReview}
       />
     </SafeAreaView>
   );
