@@ -10,12 +10,18 @@ push + OTA + gerçek APK'da doğrulandı, arkadaşla çapraz hesap testi de geç
 takip et → profil → günlük → ziyaret detayı → beğeni → takipçi listesi →
 **aktivite akışı** (Ana Sayfa)
 
-Üç migration da panelde çalıştırıldı ve doğrulandı: **015** (günlük herkese
-açıldı) · **016** (`entry_likes`) — 014'e kadar olanlar zaten yerindeydi.
+Migration'lar panelde çalıştırıldı ve doğrulandı: **015** (günlük herkese
+açıldı) · **016** (`entry_likes`) · **017** (sıralama güncellemesi kullanıcı
+onaylı).
+
+Sosyal döngüden sonra üç iş daha yapıldı ve cihazda doğrulandı:
+**"Senin Ziyaretlerin"** (mekan sayfası) · **"Sıralamamı da güncelle"
+anahtarı** · **yıldızların büyük yazı tipinde kırpılma düzeltmesi**.
 
 **Engelleyici açık iş yok.** Sıradakiler için üç yere bak: Yol Haritası →
 **Faz 3'ün ertelenen dört maddesi** (üçü ölçek/veri koşulu bekliyor) ·
-**Bilinen Açık İşler** (bir sonraki build'in paketi orada, en üstte) ·
+**Bilinen Açık İşler** (bir sonraki build'in paketi orada, en üstte; ayrıca
+**BOŞLUK 1** — başkasının `review_text`'ini okuma görünümü) ·
 **Faz 4 — Marka**.
 
 ## Ürün Vizyonu
@@ -77,7 +83,8 @@ takip ettiği kişilerin aktivite akışı olacak.
   `005_lists` → `006_reorder_list_items` → `007_move_list_items` →
   `008_move_list_items_copy` → `009_diary_entries` → `010_log_diary_entry` →
   `011_update_diary_entry` → `012_username_conflict` → `013_place_photos` →
-  `014_place_photos_storage`.
+  `014_place_photos_storage` → `015_public_diary` → `016_entry_likes` →
+  `017_optional_ranking_update`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -1004,6 +1011,96 @@ alanlardan kurularak yapılıyor.
   `npx expo install` dinamik config'e yazamıyor — plugin kaydı `app.json`'a
   **elle** eklendi, dinamik config (`app.config.js`) onu taban alıyor.
 
+### "Senin Ziyaretlerin" — mekan sayfası (2026-08-08, cihazda DOĞRULANDI)
+`user_rankings` ile `diary_entries` arayüzde **ilk kez buluşuyor**: ikisi
+veritabanında `place_id` ile bağlıydı ama "bu mekana kaç kez gittin" bilgisi
+hiçbir ekranda yoktu (Bilinen Açık İşler'deki **BOŞLUK 2**).
+
+- **Yeri: üç butonun ALTINDA**, ekranın son bölümü. Butonlar tutarlı bir eylem
+  bloğu, arasına bölüm sokmak onu bölerdi; ayrıca "Ziyaret Ekle"nin hemen
+  altında olması kaydedilen ziyaretin listeye düştüğünü **aynı karede**
+  gösteriyor (`handleDiarySaved` bölümü de tazeliyor).
+- **`usePlaceVisits(userId, placeId)` AYRI hook, `useDiary` DEĞİL:** o hook
+  günlüğün tamamını çekiyor, 1-3 satır için bütün günlüğü indirip istemcide
+  süzmek olurdu. `addPlaceToList`'in `useListItems` yanında ayrı durmasıyla
+  aynı gerekçe.
+- **`places(*)` gömülmüyor** (mekan zaten ekranın konusu), ama
+  **`profiles!diary_entries_user_id_fkey(username)` gömülüyor**:
+  `DiaryEntryDetail` rotası `authorUsername` istiyor ve ekranın elinde yalnızca
+  `useAuth` var. FK adı ŞART — gerekçe aşağıdaki PGRST201 bölümünde.
+- **`DiaryRow`'un İLK GENİŞLEMESİ: `name` opsiyonel.** Verilmezse **mekan
+  kimliği bloğunun tamamı** (küçük görsel + ad) render edilmiyor; ikisi birlikte
+  gidiyor çünkü tek bir kavramın parçaları. Burada mekan zaten sayfanın konusu,
+  her satırda aynı adı ve aynı jenerik ikonu tekrarlamak gürültü olurdu.
+  `RankRow`'un üç genişlemesindeki desenin aynısı.
+- **SALT OKUNUR — uzun basış yok.** Satır `DiaryEntryDetail`'e götürüyor;
+  düzenleme/silme profil sekmesindeki menüde kalıyor. Bu ekran mekanın evi,
+  günlüğün değil.
+- **Boşsa HİÇ render edilmiyor**, `EmptyState` kullanılmadı (72px rozet ekranın
+  dibinde orantısız). Yükleme durumunda da bir şey çizilmiyor — iskelet burada
+  yalnızca layout zıplaması üretirdi.
+- **Sayı sınırı ve "Tümünü gör" YOK:** bu ölçekte mekan başına 1-3 ziyaret
+  bekleniyor, sınır koymak filtreli bir "tümü" ekranı gerektirirdi.
+- **`(user_id, place_id)` indeksi HÂLÂ YOK ve gerekmedi.** Migration 009 onu
+  "bu ekran v1'de yapılmıyor" diyerek atlamıştı; ekran geldi ama mevcut
+  `idx_diary_entries_user_visited`'ın **ilk kolonu `user_id`**, sorgu onu
+  kullanıp kalan birkaç satırda `place_id`'yi süzüyor. Eşik: kullanıcı başına
+  giriş sayısının büyümesi.
+
+#### ⚠️ ROTA TUZAĞI — `RestaurantDetail` DÖRT stack'te, hedefi de öyle olmalı
+Bölüm `DiaryEntryDetail`'e gidiyor ama o rota yalnızca `HomeStack` ve
+`ProfileStack`'te kayıtlıydı. **Ara ve Harita sekmelerinden gelen kullanıcıda
+dokunma çalışma anında patlardı** — bu dosyanın birden çok yerde uyardığı tuzak
+("tipte var olmayan bir rota `navigate()` çağrısını DERLETİR").
+
+- Rota `SearchStack` + `MapStack`'e (hem `.tsx` hem param tipi) eklendi.
+- **`RestaurantDetailStackParamList`'e de eklendi** ve ekranın navigasyon tipi
+  `NativeStackNavigationProp<any>` yerine **o listeye bağlandı**. Böylece bir
+  stack'te kayıt eksik kalırsa hata çalışma anında değil **derleme anında**
+  çıkıyor. `any` bırakmak, bu diff'in varlık sebebi olan tuzağı açık tutmak
+  olurdu.
+- **Kural:** `RestaurantDetail`'e yeni bir `navigate` hedefi eklenirse o hedef
+  **dört stack'in dördünde birden** kayıtlı olmalı.
+
+### Sıralama güncellemesi artık KULLANICI ONAYLI (migration 017, 2026-08-08)
+"Ziyaret Ekle"/"Ziyareti düzenle" formunda puan seçilince beliren anahtar:
+**"Sıralamamı da güncelle"** (varsayılan AÇIK), altında *"Kapatırsan bu puan
+yalnızca günlüğünde kalır."*
+
+- **Neden doğdu:** kullanıcı fark etti ki mekan sayfasından puanı değiştirmek
+  günlükteki puanı değiştirmiyor. Bu **kasıtlı** (aşağıda), ama tersi yön
+  (günlük → sıralama) **sessizce** çalışıyordu ve kullanıcının sözü yoktu.
+- **`MoveToListSheet`'in "Kaynak listeden de kaldır" anahtarıyla AYNI DESEN**:
+  aynı token'lar, aynı varsayılan kuralı (migration 008) — *parametreyi
+  göndermeyen çağrı bugünkü davranışı korur*.
+- **Düzenleme modunda da var** ve orada CLAUDE.md'nin "kabul edilen tuzak" diye
+  yazdığı davranışı kullanıcının kontrolüne veriyor: eski bir girişin puanını
+  değiştirmek kanonik puanı EZİYORDU ve durdurmanın yolu yoktu.
+- **Puan seçilmemişken anahtar RENDER EDİLMİYOR.** İki sebep: puansız log zaten
+  sıralamaya girmiyor (olmayan bir kararı sormak olurdu) ve bu sheet'in
+  yerleşimi yazı tipi ölçeğine duyarlı — satırı koşullu tutmak en sık kullanılan
+  "puansız hızlı log" akışının yüksekliğini hiç değiştirmiyor.
+- **Anahtar HER AÇILIŞTA varsayılana dönüyor**: kapatmak tek seferlik bir karar,
+  kalıcı bir tercih değil.
+- **İpucu metni anahtara bağlı**: kapalıyken "— sıralamana işlenecek" demek
+  düpedüz yalan olurdu (isim/davranış uyumsuzluğu bu projede dört kez pahalıya
+  patladı).
+- **DOĞAN YENİ DURUM:** puanı olan ama sıralamada yeri olmayan bir ziyaret artık
+  mümkün. İlk kez gidilen bir mekana anahtar kapalı puan verilirse o mekanın
+  `user_rankings` satırı **hiç oluşmuyor**, yani "Sıralamam"da görünmüyor.
+  Doğru davranış (kullanıcı açıkça istedi) ama sürpriz olabilir.
+- **TERS YÖN (sıralama → günlük) YOK ve OLMAYACAK.** Mekan sayfasından puan
+  değiştirmek geçmiş ziyaretlere dokunmuyor: `diary_entries.rating` = "o
+  ziyarette ne verdim" (geçmiş bir olay), `user_rankings.rating` = "şu anki
+  kanonik görüşüm" (bir durum). Bugünkü görüşü değiştirmek geçmişi yeniden
+  yazmamalı; Letterboxd da böyle çalışıyor. Otomatik ters yayılım ayrıca "hangi
+  ziyaret güncellenecek" sorusunu doğururdu — migration 011'in zaten reddettiği
+  cevapsız soru. **Buradaki çözüm otomatik DEĞİL:** karar kayıt anında, TEK bir
+  giriş için, kullanıcıdan açıkça alınıyor. Ayrım bu.
+- **Dağıtım sırası:** migration ÖNCE, OTA SONRA. `default true` sayesinde
+  migration çalıştıktan sonra sahadaki APK (parametreyi göndermiyor) bozulmuyor;
+  ters sıra kırardı.
+
 ### Aktivite akışı (`useActivityFeed`) — Faz 3 / Diff D (2026-08-08, sahada)
 Ana Sayfa'nın ana içeriği: takip edilenlerin ziyaretleri, en yeni üstte.
 
@@ -1301,6 +1398,14 @@ Uygulama fiziksel Android cihazda çalışıyor; her adım cihazda doğrulandı.
   dokununca profili açılıyor. "Trend Mekanlar" ve "En Çok Puanlayanlar"
   akışın altında duruyor.
 - **Profil düzenlenebiliyor** (`EditProfile`): ad, kullanıcı adı, hakkında.
+- **Mekan sayfasında "Senin Ziyaretlerin" bölümü var**: o mekana yaptığın
+  ziyaretler tarih + puan + notla listeleniyor, her satır ziyaret detayına
+  gidiyor. Dört sekmeden de çalışıyor. Ziyaret yoksa bölüm hiç görünmüyor.
+- **Ziyaret kaydederken puan verilirse "Sıralamamı da güncelle" anahtarı
+  çıkıyor** (varsayılan açık): kapatılırsa puan yalnızca günlükte kalıyor,
+  kanonik sıralamaya dokunulmuyor. Ekleme ve düzenleme modunda da var.
+- **Yıldızlar büyük sistem yazı tipinde doğru çiziliyor** (2.0 ölçekte
+  doğrulandı); önceden alt yarıları kırpılıyordu.
 - **"Ziyaret Ekle" sheet'inde Kaydet butonu sabit footer'da**: form ne kadar
   uzarsa uzasın ve klavye açıkken de her zaman görünür.
 - **Arama ekranı durum ayrımı yapıyor**: bir sonuca dokunup geri dönünce yazılan
@@ -1766,9 +1871,9 @@ eder — ikincisi çökme yüzünden **hiç test edilemedi**, hâlâ açık bir 
      butonlu navigasyonda iç içe duruyor → **teşhis edildi ve düzeltildi
      (2026-08-04), iki navigasyon türünde de doğrulandı.** ⚠️ Arkadaştaki APK'da
      hâlâ BOZUK — düzeltme ona ancak yeni build'le ulaşır.
-   - **⚠️ DERS — "cihaz YAPILANDIRMASINA bağlı bug sınıfı". İki kez ısırdı,
-     ikisi de arkadaş testinden geldi, ikisi de geliştirme cihazında HİÇ
-     görülmedi.**
+   - **⚠️ DERS — "cihaz YAPILANDIRMASINA bağlı bug sınıfı". ÜÇ KEZ ısırdı;
+     ilk ikisi arkadaş testinden geldi, üçüncüsü artık bu ders sayesinde
+     düzenli test edildiği için KENDİ cihazımızda yakalandı.**
      1. **Sekme çubuğu ↔ sistem navigasyon çubuğu** (2026-08-03 bildirildi,
         08-04 kapandı). Değişken: **navigasyon türü**. Jest navigasyonunda
         `insets.bottom`'ın büyük kısmı boş, üç butonluda tamamı buton →
@@ -1777,14 +1882,40 @@ eder — ikincisi çökme yüzünden **hiç test edilemedi**, hâlâ açık bir 
      2. **`DiaryEntrySheet`'in Kaydet butonu** (2026-08-05). Değişken: **ekran
         yüksekliği + sistem yazı tipi ölçeği**. Buton ScrollView'ın içindeydi;
         `maxHeight: '85%'` yetmediğinde kırpılan ilk şey oydu.
+     3. **`StarRating`'in yıldızları** (2026-08-08). Değişken: **sistem yazı
+        tipi ölçeği** (ölçüldü: Samsung'un en üst kademesi = **2.00**).
+        Yıldızların **alt yarısı görünmüyordu**. Kutu `size × 1.3` ile
+        hesaplanan SABİT bir sayı (44px, ölçümde de 44x44 çıktı) ama içindeki
+        `★` bir `Text` ve RN'de metin varsayılan olarak ölçekle büyüyor:
+        `fontSize: 32` fiilen 64px oluyor. 64px glif 44px kutuya sığmıyor.
+        - **Düzeltme: `allowFontScaling={false}`** — yıldız bir İKON, okunacak
+          metin değil. Dokunma hedefi `MIN_TOUCH_SIZE` (44) ile zaten korunuyor
+          ve ölçeklemeden bağımsız. Yanındaki sayı (`showValue`) **bilinçli
+          olarak ölçeklenmeye devam ediyor**: o gerçek metin.
+        - **Kutuyu büyütmek REDDEDİLDİ, ölçüyle:** 5 yıldız bugün 220px,
+          2.0 ölçekte 440px eder ve telefon genişliğini aşar.
+        - Bu, `StarRating`'in kendi yorumunda anlatılan hata sınıfının
+          **üçüncü yüzü**: kutu ile glif arasındaki oran bozulunca yıldız
+          kırpılıyor. Öncekilerde oranı bozan satır yüksekliğiydi, burada
+          sistem ölçeği.
      - **Ortak imza:** geliştiricinin cihazında %100 çalışıyor, kullanıcının
        cihazında bozuk; kodda görünür bir hata yok çünkü **formül belirli bir
        yapılandırma için doğru**. Kök neden hep aynı: koda gömülü, yazıldığı
        gün doğru olan ama artık evrensel olmayan bir varsayım.
      - **Çıkarım — düzeltme "ölçüp o değere göre ayarlamak" DEĞİL, formülü
        yapılandırmadan BAĞIMSIZ kılmak olmalı.** Nav bar'da `max()` → toplama;
-       diary'de sabit yükseklik varsayımı → `flexShrink` + sabit footer.
-       İkisinde de doğru çözüm, ölçülen değeri bilmeye ihtiyaç duymuyor.
+       diary'de sabit yükseklik varsayımı → `flexShrink` + sabit footer;
+       yıldızda ölçeğe tabi glif → ölçekten muaf glif. **Üçünde de doğru çözüm,
+       ölçülen değeri bilmeye ihtiyaç duymuyor** — ölçüm yalnızca teşhis için
+       gerekti, düzeltmenin içine girmedi.
+     - **YÖNTEM NOTU (2026-08-08):** bu turda iki iddia geldi, biri gerçek biri
+       değil. "Kaydırma çalışmıyor" **ölçümle çürütüldü**: içerik görünür alana
+       tam oturuyordu (fark 0), yani kaydıracak bir şey yoktu; puan seçilip
+       içerik büyüyünce (fark +76) kaydırma çalıştı. **Sabit footer zinciri
+       2.0 ölçekte sağlam.** Ölçüm yapılmasaydı sağlam bir zincir "düzeltilmeye"
+       çalışılacaktı. Dürüst not: ölçüm aletinin bir kısmı da işe yaramadı —
+       glifin `onLayout`'u ebeveyn tarafından KISITLANMIŞ kutuyu ölçüyor,
+       glifin gerçek boyutunu değil; taşmayı gösteremezdi.
      - **Gelen her görsel geri bildirimde sorulacaklar:** navigasyon türü ·
        Android sürümü · ekran oranı/boyutu · **sistem yazı tipi ölçeği** ·
        görüntü boyutu (display size) ayarı.
@@ -2387,16 +2518,20 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   - **BOŞLUK 2 — mekan sayfası kullanıcının O MEKANA ait ziyaretlerini
     göstermiyor.** "Bu mekana 3 kez gitmişsin" bilgisi hiçbir yerde yok; iki
     kavram veritabanında `place_id` ile bağlı ama arayüzde hiç buluşmuyor.
-  - **İkisini birden kapatan doğal iş:** mekan sayfasına **"Senin
-    ziyaretlerin"** bölümü — o mekana ait günlük girişleri, her biri
-    `DiaryEntryDetail`'e tıklanabilir. "0/1/N hangisi" sorusunu **hepsini
-    göstererek** çözüyor; Beli'nin ve Letterboxd'un mekan/film sayfasında
-    yaptığının aynısı. **Yeni tablo/migration GEREKMİYOR**, `DiaryEntryDetail`
-    zaten hazır.
-  - **🔔 TETİKLEYİCİ GERÇEKLEŞTİ (2026-08-08):** koşul "Faz 3'ün sosyal
-    döngüsü kapandıktan sonra" idi ve döngü kapandı. **Saf JS, migration yok,
-    build yok — OTA ile gidebilir.** Ertelenen dört Faz 3 maddesinin aksine
-    veri/ölçek koşulu beklemiyor, yani sıradaki iş için en olgun aday bu.
+  - ✅ **BOŞLUK 2 KAPANDI (2026-08-08, cihazda doğrulandı):** mekan sayfasına
+    **"Senin Ziyaretlerin"** bölümü eklendi. Detay: Mimari Notlar → aynı adlı
+    bölüm.
+  - ⚠️ **BOŞLUK 1 AÇIK KALIYOR — buradaki eski "ikisini birden kapatır"
+    notu FAZLA İYİMSERDİ.** Kontrol edildi ve çürütüldü: yeni bölüm
+    `diary_entries.note`'u gösteriyor, BOŞLUK 1 ise `user_rankings.review_text`
+    hakkında. İki farklı kolon, iki farklı iş (bkz. "Puanlama ile günlük
+    arasındaki İŞ BÖLÜMÜ").
+    - Kendi mekan sayfanda `review_text` zaten forma **dolu geliyor**, yani
+      okunabiliyor. Asıl eksik **BAŞKASININ** yorumunu okuyabilmek: bugün
+      yalnızca satırdaki kırpılmış halde görünüyor ve tam metne ulaşan bir
+      yol yok.
+    - Dolayısıyla doğal yeri mekan sayfası değil **`UserProfile`** tarafı —
+      ayrı ve daha küçük bir iş. Somut bir hata üretmiyor, sırası gelince.
 - ~~İSİMLENDİRME GERİLİMİ: iki ayrı "yorum" alanı var~~ — **BÜYÜK ÖLÇÜDE
   ÇÖZÜLDÜ (2026-08-07).** `user_rankings.review_text` ve `diary_entries.note`
   ikiliği bir belirsizlik sanılıyordu; ürün kararıyla **kasıtlı bir iş
