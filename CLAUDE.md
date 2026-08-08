@@ -2,84 +2,21 @@
 
 # Beli-Eats
 
-## ⏸️ OTURUM DEVRİ — 2026-08-07 (BURADAN DEVAM ET)
+## 📍 Nerede kaldık — 2026-08-08
 
-> Bu bölüm bir sonraki oturumun **ilk okuyacağı yer**. İş bitince silinip
-> normal bölümlere dağıtılmalı.
+**Faz 3'ün sosyal katmanı KAPANDI ve tamamen sahada.** Döngünün tamamı
+push + OTA + gerçek APK'da doğrulandı, arkadaşla çapraz hesap testi de geçti:
 
-### 🔴 İLK İŞ: Diff D'nin (aktivite akışı) hatasını teşhis et ve düzelt
+takip et → profil → günlük → ziyaret detayı → beğeni → takipçi listesi →
+**aktivite akışı** (Ana Sayfa)
 
-**Kod yazıldı ve commit'lendi (`9a0ba02`), AMA cihaz testinde BAŞARISIZ oldu.
-Push/OTA EDİLMEDİ. Teşhis HENÜZ YAPILMADI.**
+Üç migration da panelde çalıştırıldı ve doğrulandı: **015** (günlük herkese
+açıldı) · **016** (`entry_likes`) — 014'e kadar olanlar zaten yerindeydi.
 
-Ana Sayfa'daki akış sorgusu patlıyor. Cihazdan alınan tam hata:
-
-```
-[useActivityFeed] akış okunamadı:
-{"code":"PGRST201","details":[{"cardinality":"many-to-one","embedding":
-"diary_entries with profiles","relationship":"diary_entries_user_id_fkey
-using diary_entries(user_id) and profiles(id)"},{"cardinality":"many-to-many",
-"embedding":"diary_entries with profiles","r"...
-```
-*(Expo Go hata ekranında kesildi, tam detay görülemedi.)*
-**Call Stack:** `fetchFeed` → `useActivityFeed.ts`
-
-**Muhtemel sebep — KANITLANMADI, yalnızca hata mesajından çıkarım:**
-`diary_entries` ile `profiles` arasında Supabase'in seçebileceği **birden
-fazla ilişki yolu** var. Hata iki tanesini sayıyor: doğrudan yabancı anahtar
-(`diary_entries_user_id_fkey`) ve bir **many-to-many** yol — muhtemelen
-`entry_likes` üzerinden dolaylı olarak kuruluyor (migration 016 ile geldi,
-`entry_likes` hem `diary_entries`'e hem `profiles`'a FK taşıyor). Sorgu
-hangisini kullanacağını **belirtmemiş** olabilir.
-
-`useActivityFeed.ts`'teki ilgili select:
-```ts
-.select('*, places(*), profiles(id, username, avatar_url), entry_likes(count)')
-```
-
-⚠️ **Bu bir hipotez.** Doğrulanmadan düzeltme yazılmamalı — bu projede
-korelasyonu nedensellik sanmak birden çok kez tur kaybettirdi. Çözüm
-muhtemelen `profiles` gömülü kaynağının FK adıyla ayrıştırılması olacak
-(`useFollowList` iki yön için tam olarak bunu yapıyor:
-`profiles!follows_follower_id_fkey(...)`) — ama önce hatanın tam metni
-görülmeli. Tam metni almak için: sorguyu `console.log`'a çıkarıp
-`JSON.stringify(error, null, 2)` ile yazdır, ya da aynı select'i Supabase
-SQL Editor yerine **PostgREST üzerinden** dene.
-
-**Diff D'nin geri kalanı sağlam sayılmamalı** — akış hiç yüklenemediği için
-5 maddelik test listesinin tamamı doğrulanmadan kaldı (dikey düzen, ziyaret
-detayına gitme, Trend/En Çok Puanlayanlar bölümlerinin `FlatList` kabuğunda
-bozulmaması, beğeni sayacı, boş durumlar).
-
-### ✅ Faz 3 — sosyal döngü SAHADA (Diff D hariç)
-
-Sırayla inşa edildi, hepsi **push + OTA + gerçek APK'da doğrulandı**, ayrıca
-arkadaşla **çapraz hesap testi** de geçti (günlük görünürlüğü, beğeni,
-salt-okunurluk):
-
-`EditProfile` → `UserProfile` → **ziyaret detayı + beğeni** → `FollowersList`
-
-İki migration da panelde çalıştırıldı ve doğrulandı:
-- **015** — günlük herkese açıldı (`diary_entries` SELECT `using (true)`)
-- **016** — `entry_likes` tablosu
-
-Yani **kullanıcının elindeki APK'da sosyal döngü çalışıyor**: takip et →
-profil → günlük → ziyaret detayı → beğeni → takipçi listesi → profil.
-Eksik olan tek halka **akış** (Diff D).
-
-### 📌 Değişmeyenler
-
-Aşağıdakiler bu oturumda **değişmedi**, olduğu gibi geçerli:
-- **Faz 3'ün ertelenen dört maddesi** (mekan bazlı leaderboard · kişiselleşmiş
-  öneriler · şehir değiştirici · kategori/etiket filtreleme) — üçü ölçek/veri
-  koşulu beklediği için ertelendi, detay Yol Haritası → Faz 3'te.
-- **Faz 4 (marka)** kapsamı: isim + logo, FireVibe backlog notu dahil.
-- **Kademe çerçevesi** ("kullanılabilir hale getirmek"): Kademe 1 arkadaş
-  testi (bugün çalışıyor) · Kademe 2 davetli çevre (e-posta onayı (a)–(d) +
-  fotoğraf moderasyonu) · Kademe 3 genel yayın (Faz 4 + Edge Function + AAB).
-- **Bir sonraki build'in paketi:** `react-native-keyboard-controller` ·
-  kaydırmalı sekmeler (`pager-view`/`collapsible-tab-view`) · `expo` yama
-  farkı (54.0.35 → ~54.0.36) · `fingerprint` `runtimeVersion`'a dönüş.
+**Engelleyici açık iş yok.** Sıradakiler için üç yere bak: Yol Haritası →
+**Faz 3'ün ertelenen dört maddesi** (üçü ölçek/veri koşulu bekliyor) ·
+**Bilinen Açık İşler** (bir sonraki build'in paketi orada, en üstte) ·
+**Faz 4 — Marka**.
 
 ## Ürün Vizyonu
 Konum tabanlı restoran keşif ve sosyal puanlama uygulaması. Kullanıcı çevresindeki
@@ -1067,9 +1004,89 @@ alanlardan kurularak yapılıyor.
   `npx expo install` dinamik config'e yazamıyor — plugin kaydı `app.json`'a
   **elle** eklendi, dinamik config (`app.config.js`) onu taban alıyor.
 
+### Aktivite akışı (`useActivityFeed`) — Faz 3 / Diff D (2026-08-08, sahada)
+Ana Sayfa'nın ana içeriği: takip edilenlerin ziyaretleri, en yeni üstte.
+
+- **Öğeler `diary_entries`'ten, `user_rankings`'ten DEĞİL.** Sıralama bir
+  DURUM ("bu mekan hakkında ne düşünüyorum"), akış ise OLAY listesi. Bir
+  sıralama satırının tarihi ve notu yok, anlatacak hikâyesi de yok.
+- **`created_at`'e göre sıralı, `visited_at`'e göre DEĞİL**: akış "ne zaman
+  paylaşıldı" sorusunu cevaplıyor. Üç ay önceki bir ziyareti bugün kaydeden
+  kişi en üstte çıkmalı. Letterboxd de böyle.
+- **Sessiz puanlama akışa DÜŞMÜYOR** — eksiklik değil, ürün kararı; gerekçe
+  "Puanlama ile günlük arasındaki İŞ BÖLÜMÜ" bölümünde.
+- **RPC YOK.** Migration 015 günlüğü herkese açtığı için akış düz `select`
+  atıyor. Dosyada bir dönem duran *"`diary_entries` tabanlı sosyal sorgular
+  `security definer` RPC gerektirir"* notu bu yüzden geçersiz.
+- **Beğeni SAYACI var, BUTON yok:** buton "ben beğendim mi" bilgisini
+  gerektirir, yani satır başına bir sorgu daha (20 öğe = 20 istek). Sayaç
+  gömülü sayımla (`entry_likes(count)`) geliyor, N+1 yok. Dokununca ziyaret
+  detayına gidiliyor, buton orada.
+- **Kabuk `ScrollView` → `FlatList`**: dikey bir `FlatList`'i `ScrollView`
+  içine koymak iç içe sanallaştırma uyarısı üretirdi. "Trend Mekanlar" ve
+  "En Çok Puanlayanlar" header/footer'a taşındı, davranışları değişmedi.
+- **`ActivityRow` AYRI bileşen, `DiaryRow` genişletilmedi**: `DiaryRow`'un
+  kimlik sütunu TARİH, akışta kimlik YAZAR. Eksen değişiyor — `DiaryRow`'un
+  `RankRow`'dan ayrılma gerekçesinin aynısı.
+- Üç ayrı boş durum: kimseyi takip etmiyorsun / takip ediyorsun ama paylaşım
+  yok / sorgu patladı. Tek mesajla karşılamak üçünü birden yanlış anlatırdı.
+
+#### ⚠️ PGRST201 — ARA TABLO EKLEMEK MEVCUT SORGULARI BOZAR (kalıcı ders)
+Diff D ilk cihaz testinde hiç yüklenmedi. Kök neden teşhis edildi ve
+**doğrulandı**; bu bir hata sınıfı, tekrar edecek.
+
+**Neydi:** `diary_entries` ile `profiles` arasında PostgREST'in seçebileceği
+**iki yol** vardı ve sorgu hangisini istediğini söylemiyordu → reddedildi.
+1. Doğrudan FK → `diary_entries_user_id_fkey` (many-to-one, istediğimiz)
+2. `entry_likes` üzerinden dolaylı (many-to-many)
+
+**İkinci yol migration 016 ile DOĞDU ve kimse fark etmedi.** `entry_likes`'ın
+birincil anahtarı `(entry_id, user_id)` ve ikisi de FK — yani PostgREST'in
+**ara tablo (junction)** tanımına birebir uyuyor, ilişkiyi kendiliğinden ilan
+ediyor. 016'dan önce tek yol vardı; akış sorgusu o tarihte henüz yazılmamıştı,
+ilk çalıştırıldığı anda patladı.
+
+**GENELLEŞTİRME — yeni tablo eklerken sorulacak soru:** *bu tablo mevcut iki
+tablo arasında ara tablo mu?* (İki FK + bunlardan oluşan PK.) Öyleyse o iki
+tablo arasındaki **her gömülü sorgu belirsizleşir** — yenisi de, çalışan
+eskisi de. `follows` da aynı şekilde bir ara tablo; `useFollow` FK adıyla
+ayrıştırmayı zaten bu yüzden yapıyor.
+
+**Düzeltme** tek satır — gömülü kaynağı FK adıyla ayrıştır:
+```ts
+profiles(id, username, avatar_url)
+→ profiles!diary_entries_user_id_fkey(id, username, avatar_url)
+```
+`places(*)` ve `entry_likes(count)` ayrıştırma İSTEMİYOR: o ikisine giden tek
+yol var. Kırılan tek gömülü kaynak `profiles`'tı. Ayrıştırınca PostgREST
+tekil nesne döndürüyor — mevcut "nesne ya da dizi" normalizasyonu doğruydu,
+değişmedi. Migration gerekmedi, saf JS, OTA ile gitti.
+
+**⚠️ Sorgudaki FK adı SADELEŞTİRİLMEMELİ.** Gerekçesi kodun kendi yorumunda
+da yazılı (`useActivityFeed.ts`), çünkü uzun görünüp kısaltılması hatayı
+aynen geri getirir.
+
+#### 📐 YÖNTEM DERSİ — LogBox uzun hatayı KIRPIYOR, alan alan logla
+Hatanın tam metni ilk turda **görülemedi**: tek bir `console.error(error)`
+çağrısı Expo Go'nun kırmızı ekranında kesiliyor ve kesilen kısım tam olarak
+teşhis için gereken kısımdı.
+
+- **Çözüm:** hatayı tek parça yerine **alan alan, her biri ayrı satırda**
+  bas (`code` · `message` · `hint` · `details` dizisiyse her aday ayrı satır).
+  LogBox ayrı satırları kırpmıyor. `npx expo start` terminali ise hiç
+  kırpmıyor — **kırmızı ekrana değil terminale bakılmalı.**
+- **`hint` alanı altın değerinde:** PostgREST belirsiz gömülü kaynak
+  hatalarında çözümü kelimesi kelimesine oraya yazıyor. Bu vakada birebir
+  şunu verdi ve hipotezi tek turda kesinleştirdi:
+  > `Try changing 'profiles' to one of the following:`
+  > `'profiles!diary_entries_user_id_fkey', 'profiles!entry_likes'`
+- Teşhis yardımcısı **geçiciydi ve düzeltmeyle birlikte geri çekildi**; dosya
+  tek `console.error` satırına döndü. Tekrar gerekirse deseni bu bölümden kur.
+
 ## 📓 OTURUM KAYDI — klavye/edge-to-edge teşhisi (2026-08-06/07)
 
-> **Bu artık "oturum devri" DEĞİL** — devir notu dosyanın en başında.
+> **Bu bir "oturum devri" DEĞİL, tarihsel kayıt** — güncel durum dosyanın
+> başındaki "📍 Nerede kaldık" bölümünde.
 > Burası, o teşhisin tek tam kaydı olduğu için korunuyor: iki ortamın zıt
 > davranışı ve çürüyen üç hipotez başka hiçbir yerde bu ayrıntıda yazılı
 > değil. Silinirse aynı yollara tekrar girilir.
@@ -1211,17 +1228,17 @@ Hepsi cihazda doğrulandı:
 Ayrıca: versionCode 4 / version 1.1.0 build'i üretildi ve arkadaşa gönderildi
 (**henüz kurulum/dönüş yok**), 4 + 1 commit push edildi, gitleaks temiz.
 
-### 🗺️ Roadmap'teki konum — ⚠️ BAYAT, güncel hali dosyanın başındaki devir notunda
+### 🗺️ Roadmap'teki konum — ⚠️ BAYAT (2026-08-06 fotoğrafı)
 
-Aşağısı 2026-08-06'nın fotoğrafı; o gün Faz 3 daha yeni başlıyordu. **Güncel
-durum:** Faz 3'ün sosyal döngüsü tamamlandı ve sahada, yalnızca aktivite akışı
-(Diff D) açık. Ayrıntı dosyanın en başındaki **OTURUM DEVRİ** bölümünde.
+Güncel hali dosyanın başındaki **"📍 Nerede kaldık"** bölümünde: Faz 3'ün
+sosyal katmanı aktivite akışı dahil **kapandı**. Aşağısı o gün Faz 3 daha
+yeni başlarken yazılmıştı, tarihsel kayıt olarak duruyor.
 
 - **Faz 1 — TAMAMLANDI**
 - **Faz 2 — TAMAMEN TAMAMLANDI** (listeler → diary → **fotoğraflar** ✅)
 - ~~**Faz 3 — ERKEN AŞAMA.**~~ Ön koşul (`useAuth` Context) bitti, ilk ekran
   (`EditProfile`) yazıldı. Kalan: `UserProfile`, `FollowersList`, takip akışı,
-  aktivite akışı, leaderboard.
+  aktivite akışı, leaderboard. → **hepsi bitti; leaderboard ertelendi.**
 - **Faz 4 (marka)** — dokunulmadı, bilinçli olarak en sonda
 
 ### ⏸️ Değerlendirilip ERTELENEN fikirler
@@ -1275,6 +1292,15 @@ Uygulama fiziksel Android cihazda çalışıyor; her adım cihazda doğrulandı.
   ("Kaynak listeden de kaldır" anahtarı); ekleme/taşıma/kopyalama seçicisi
   paylaşılan `ListPicker`.
 - Ana Sayfa sekmesinin adı **"Ana Sayfa"** (eskiden "Keşfet").
+- **Sosyal döngü uçtan uca çalışıyor** (Faz 3): başka bir kullanıcıyı bul →
+  profilini gör → takip et → günlüğünü oku → ziyaret detayına gir → beğen →
+  takipçi/takip listesinden başka profillere geç. Arkadaşla **çapraz hesap
+  testi** de geçti (görünürlük, beğeni, salt-okunurluk).
+- **Ana Sayfa'nın ana içeriği aktivite akışı**: takip edilenlerin ziyaretleri,
+  en yeni üstte, beğeni sayacıyla; satıra dokununca ziyaret detayı, yazara
+  dokununca profili açılıyor. "Trend Mekanlar" ve "En Çok Puanlayanlar"
+  akışın altında duruyor.
+- **Profil düzenlenebiliyor** (`EditProfile`): ad, kullanıcı adı, hakkında.
 - **"Ziyaret Ekle" sheet'inde Kaydet butonu sabit footer'da**: form ne kadar
   uzarsa uzasın ve klavye açıkken de her zaman görünür.
 - **Arama ekranı durum ayrımı yapıyor**: bir sonuca dokunup geri dönünce yazılan
@@ -2149,6 +2175,23 @@ menü fotoğrafları; mekan sayfasında ayrı "Menü" sekmesi gösterilebilsin. 
 ileride doğacak, bugün sorun değil.
 
 ### Faz 3 — Sosyal katman
+
+**✅ ÇEKİRDEK DÖNGÜ TAMAMLANDI (2026-08-08).** Sırayla inşa edildi, her adım
+push + OTA + **gerçek APK'da** doğrulandı, ayrıca arkadaşla **çapraz hesap
+testi** geçti:
+
+`EditProfile` → `UserProfile` (+ takip et/bırak) → **ziyaret detayı + beğeni**
+→ `FollowersList` → **aktivite akışı** (Ana Sayfa)
+
+Ön koşulu `useAuth`'un Context'e çevrilmesiydi (2026-08-06) — üç yeni ekranın
+her birinin aynı yamayı gerektirmemesi için. Veri tarafında iki migration:
+**015** (günlük herkese açıldı, sosyal sorguları RPC'siz mümkün kıldı) ve
+**016** (`entry_likes`). Akışın mimari kararları ve onu bir kez patlatan
+PGRST201 dersi: Mimari Notlar → **Aktivite akışı**.
+
+**Aşağıdaki dört madde ERTELENDİ** — üçü ölçek/veri koşulu bekliyor, biri
+(kategori/etiket) kendi başına büyük bir iş. Hiçbiri engelleyici değil.
+
 - **Leaderboard: MEKAN BAZLI ("mekanın kralı") — YÖN DEĞİŞTİ (2026-08-04).**
   Kapsam artık kullanıcı ekseninde (arkadaş/şehir) değil **mekan ekseninde**: her
   mekanın kendi detay sayfasında **"bu mekana en çok gelenler"** sıralaması.
@@ -2275,6 +2318,23 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   bir süreç.
 
 ## Bilinen Açık İşler (teknik borç)
+
+> ### 📦 BİR SONRAKİ BUILD'İN PAKETİ
+> Aşağıdaki dördü **build gerektirdiği için** biriktiriliyor; tek bir özellik
+> uğruna 20-25 dakikalık build + arkadaşa yeniden kurulum maliyeti kabul
+> edilmiyor. Build alınacağı gün hepsi birlikte değerlendirilmeli.
+> 1. **`react-native-keyboard-controller`** — klavye/edge-to-edge sınıfının
+>    doğru cevabı (detay bu listede, "Klavye/edge-to-edge katmanı" maddesi).
+> 2. **Kaydırmalı sekmeler** (`pager-view` / `collapsible-tab-view`) — bir
+>    sonraki madde.
+> 3. **`expo` yama farkı** 54.0.35 → `~54.0.36` (Dağıtım §8'de ertelendi).
+> 4. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9; `.fingerprintignore`
+>    hazır ve kanıtlı, kalan iş Fark 2'nin bir build ile teşhisi).
+>
+> ⚠️ Build alınırken **§2'deki sürüm yükseltme ritüeli** ihmal edilmemeli:
+> `versionCode` +1 her zaman, `version` +1 native değişiklik varsa — ve
+> bu paketin 1., 2. ve 4. maddesi native değişiklik.
+
 - **Kaydırmalı sekme geçişi (swipe) — BİR SONRAKİ BUILD'E ERTELENDİ
   (araştırma: 2026-08-07).** İstek: profil sekmeleri (Sıralamam/Günlük/
   Listeler) ve takipçi sekmeleri arasında sağa/sola kaydırarak geçiş.
@@ -2332,7 +2392,11 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
     `DiaryEntryDetail`'e tıklanabilir. "0/1/N hangisi" sorusunu **hepsini
     göstererek** çözüyor; Beli'nin ve Letterboxd'un mekan/film sayfasında
     yaptığının aynısı. **Yeni tablo/migration GEREKMİYOR**, `DiaryEntryDetail`
-    zaten hazır. Faz 3'ün sosyal döngüsü kapandıktan sonra.
+    zaten hazır.
+  - **🔔 TETİKLEYİCİ GERÇEKLEŞTİ (2026-08-08):** koşul "Faz 3'ün sosyal
+    döngüsü kapandıktan sonra" idi ve döngü kapandı. **Saf JS, migration yok,
+    build yok — OTA ile gidebilir.** Ertelenen dört Faz 3 maddesinin aksine
+    veri/ölçek koşulu beklemiyor, yani sıradaki iş için en olgun aday bu.
 - ~~İSİMLENDİRME GERİLİMİ: iki ayrı "yorum" alanı var~~ — **BÜYÜK ÖLÇÜDE
   ÇÖZÜLDÜ (2026-08-07).** `user_rankings.review_text` ve `diary_entries.note`
   ikiliği bir belirsizlik sanılıyordu; ürün kararıyla **kasıtlı bir iş
@@ -2568,6 +2632,22 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > Arkadaş testi ölçeğinde **engelleyici değil**, ama uygulama tanımadığın
 > kişilere açılmadan önce çözülmesi gereken şeyler. Bugün bilinçli olarak
 > ertelendiler; buradaki amaç "unutulmasın" demek.
+
+### 🪜 KADEME ÇERÇEVESİ — "uygulamayı kullanılabilir hale getirmek" ne demek
+Soru birden çok kez soruldu ve cevabı hedef kitleye göre değişiyor. Üç kademe,
+her biri bir öncekinin üstüne biniyor:
+
+| Kademe | Kim kullanıyor | Ne gerekiyor |
+|---|---|---|
+| **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
+| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | E-posta onayı **(a)–(d)** + **fotoğraf moderasyonu** |
+| **3 — genel yayın** | Herkes | Faz 4 (marka) + Google çağrıları **Edge Function** arkasına + Play Store için **AAB** |
+
+- **Kademe 2'nin iki koşulu da bu dosyada tam analizli duruyor:** (a)–(d)
+  Mimari Notlar → "Auth / kayıt akışı", moderasyon ise bu bölümün ilk maddesi.
+- **Kademe 3'ün Edge Function maddesi çift işe yarıyor:** hem Places anahtarını
+  istemciden tamamen kaldırıyor (Dağıtım §6/2'nin kökten çözümü) hem `places`
+  yazma yolunu sunucuya taşıyor.
 
 - **Fotoğraflarda moderasyon / şikayet mekanizması YOK (2026-08-05, migration 013).**
   `place_photos` SELECT politikası `using (true)` — fotoğraflar **herkese açık
