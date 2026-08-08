@@ -25,7 +25,22 @@ const DATE_COLUMN_WIDTH = 34;
 export interface DiaryRowProps {
   /** `YYYY-MM-DD` — `diary_entries.visited_at`. */
   visitedAt: string;
-  name: string;
+  /**
+   * Mekan adı — OPSİYONEL, ilk genişleme (2026-08-08).
+   *
+   * Verilmezse **mekan kimliği bloğunun tamamı** (küçük görsel + ad) hiç
+   * render edilmiyor; geriye tarih sütunu + puan + not kalıyor. İkisi birlikte
+   * gidiyor çünkü tek bir kavramın parçaları: "bu satır hangi mekan".
+   *
+   * Tek çağıranı `RestaurantDetailScreen`'in "Senin Ziyaretlerin" bölümü:
+   * orada mekan zaten ekranın konusu, her satırda aynı adı ve aynı jenerik
+   * ikonu tekrarlamak bilgi değil gürültü olurdu.
+   *
+   * `RankRow`'un üç genişlemesindeki desenin aynısı — verilmeyen parça yer
+   * tutmuyor. Profil ve `UserProfile` `name` göndermeye devam ediyor, yani
+   * onların görünümü değişmedi.
+   */
+  name?: string;
   /** Puansız giriş olabilir; yoksa yıldızlar çizilmiyor. */
   rating?: number | null;
   note?: string | null;
@@ -53,18 +68,24 @@ export default function DiaryRow({
         <Text style={styles.month}>{month}</Text>
       </View>
 
-      {photoUrl ? (
-        <Image source={{ uri: photoUrl }} style={styles.thumb} />
-      ) : (
-        <View style={[styles.thumb, styles.thumbFallback]}>
-          <Icon name="restaurant" size={20} color={Colors.textMuted} />
-        </View>
-      )}
+      {/* Mekan kimliği bloğu — `name` yoksa görsel de çizilmiyor (bkz. prop'un
+          yorumu). Aksi halde her satırda aynı jenerik ikon tekrarlanırdı. */}
+      {name !== undefined ? (
+        photoUrl ? (
+          <Image source={{ uri: photoUrl }} style={styles.thumb} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbFallback]}>
+            <Icon name="restaurant" size={20} color={Colors.textMuted} />
+          </View>
+        )
+      ) : null}
 
       <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>
-          {name}
-        </Text>
+        {name !== undefined ? (
+          <Text style={styles.name} numberOfLines={1}>
+            {name}
+          </Text>
+        ) : null}
 
         {/* `typeof` kontrolü: rating 0 olsaydı `rating &&` ekrana "0" basardı
             (RestaurantDetail'de aynı tuzağa düşülmüştü). */}
@@ -96,7 +117,11 @@ export default function DiaryRow({
       onLongPress={onLongPress}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       accessibilityRole="button"
-      accessibilityLabel={`${name}, ${day} ${month}`}
+      // Mekan adı yoksa etiket de onu uydurmuyor — ekran okuyucu satırı
+      // tarihiyle anıyor, ki o bağlamda mekan zaten başlıkta yazılı.
+      accessibilityLabel={
+        name !== undefined ? `${name}, ${day} ${month}` : `${day} ${month}`
+      }
     >
       {content}
     </Pressable>

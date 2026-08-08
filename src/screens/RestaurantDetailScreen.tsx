@@ -19,6 +19,7 @@ import {
   useFocusEffect,
   RouteProp,
 } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Place,
@@ -38,14 +39,24 @@ import Chip from '../components/ui/Chip';
 import Icon from '../components/ui/Icon';
 import AddToListSheet from '../components/lists/AddToListSheet';
 import DiaryEntrySheet from '../components/diary/DiaryEntrySheet';
+import DiaryRow from '../components/diary/DiaryRow';
 import SegmentedTabs from '../components/ui/SegmentedTabs';
 import PhotoGrid from '../components/photos/PhotoGrid';
 import { usePlacePhotos } from '../hooks/usePlacePhotos';
+import { usePlaceVisits } from '../hooks/usePlaceVisits';
 import { makePhotoRenditions, uploadPlacePhoto } from '../lib/placePhotos';
 
 // Ekran üç stack'te birden kayıtlı; route tipi bu yüzden tek bir stack'in
 // param listesine değil, paylaşılan tipe bağlı.
 type RouteType = RouteProp<RestaurantDetailStackParamList, 'RestaurantDetail'>;
+
+/**
+ * Navigasyon tipi de aynı paylaşılan listeye bağlı. `any` DEĞİL — bu ekranın
+ * tek `navigate` hedefi `DiaryEntryDetail` ve o rota dört stack'in dördünde de
+ * kayıtlı olmak ZORUNDA. Tipi gerçek listeye bağlamak, eksik bir kayıt
+ * durumunda hatayı çalışma anı yerine derleme anında yakalıyor.
+ */
+type NavigationType = NativeStackNavigationProp<RestaurantDetailStackParamList>;
 
 /** Hero görselinin yüksekliği. */
 const HERO_HEIGHT = 280;
@@ -104,7 +115,7 @@ const PHOTO_EMPTY_LABEL: Record<PlacePhotoKind, string> = {
 
 export default function RestaurantDetailScreen() {
   const route = useRoute<RouteType>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationType>();
   // Modül seviyesinde okunan Dimensions rotasyonda güncellenmiyordu.
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -156,6 +167,9 @@ export default function RestaurantDetailScreen() {
     removePhoto,
     error: photoFetchError,
   } = usePlacePhotos(placeId);
+
+  /** "Senin Ziyaretlerin" — bu kullanıcının BU mekana ait günlük girişleri. */
+  const { visits, fetchVisits } = usePlaceVisits(user?.id, placeId);
 
   const existingRanking = rankings.find((r) => r.place_id === placeId);
 
@@ -220,7 +234,10 @@ export default function RestaurantDetailScreen() {
       // Fotoğraflar da odakta tazeleniyor: başka bir cihazdan/kullanıcıdan
       // eklenen kareler geri dönüşte görünsün.
       fetchPhotos();
-    }, [fetchRankings, fetchPhotos])
+      // Ziyaretler de: kullanıcı bir satırdan detaya gidip orada bir şey
+      // değiştirdiyse (ya da profilinden sildiyse) geri dönüşte bayat kalmasın.
+      fetchVisits();
+    }, [fetchRankings, fetchPhotos, fetchVisits])
   );
 
   useEffect(() => {
@@ -441,10 +458,15 @@ export default function RestaurantDetailScreen() {
    * Kayıt sonrası sıralamayı tazeliyoruz: puanlı bir giriş `user_rankings`'i
    * de güncelledi (migration 010'daki RPC), ekrandaki "Puanını Güncelle"
    * kartı bayat kalmasın.
+   *
+   * Ziyaret listesi de tazeleniyor — yeni giriş "Senin Ziyaretlerin"
+   * bölümünde hemen görünsün. Bölüm butonların hemen altında olduğu için
+   * kullanıcı kaydettiği ziyaretin listeye düştüğünü aynı ekranda görüyor.
    */
   const handleDiarySaved = () => {
     setDiarySheetVisible(false);
     fetchRankings();
+    fetchVisits();
     Alert.alert('Kaydedildi', 'Ziyaretin günlüğüne eklendi.');
   };
 
@@ -605,9 +627,17 @@ export default function RestaurantDetailScreen() {
             />
           </View>
 
-          {/* ── Yorum ── */}
+          {/* ── Yorum ──
+              Altyazı "İsteğe bağlı" DEĞİL, ne olduğunu söylüyor: aynı ekranda
+              artık iki metin alanı görünüyor (`user_rankings.review_text` ile
+              `diary_entries.note`) ve ikisi KASITLI olarak farklı işler
+              yapıyor. Bkz. CLAUDE.md → "Puanlama ile günlük arasındaki iş
+              bölümü". Opsiyonelliği zaten boş bırakılabilmesi anlatıyor. */}
           <View style={styles.reviewSection}>
-            <SectionHeader title="Yorumun" subtitle="İsteğe bağlı" />
+            <SectionHeader
+              title="Yorumun"
+              subtitle="Mekan hakkındaki genel görüşün"
+            />
             <TextInput
               style={styles.reviewInput}
               placeholder="Bu mekan hakkında ne düşünüyorsun?"
@@ -688,6 +718,58 @@ export default function RestaurantDetailScreen() {
               </>
             )}
           </Pressable>
+
+          {/* ── Senin Ziyaretlerin ──
+              `user_rankings` ile `diary_entries` arayüzde İLK KEZ buluşuyor:
+              ikisi veritabanında `place_id` ile bağlıydı ama "bu mekana kaç kez
+              gittin" bilgisi hiçbir ekranda yoktu.
+
+              YERİ BİLİNÇLİ — üç butonun ALTINDA. Butonlar tutarlı bir eylem
+              bloğu, arasına bölüm sokmak onu bölerdi; ayrıca "Ziyaret Ekle"nin
+              hemen altında olması kaydedilen ziyaretin listeye düştüğünü aynı
+              karede gösteriyor.
+
+              SALT OKUNUR: uzun basış yok. Satır `DiaryEntryDetail`'e götürüyor,
+              düzenleme/silme profil sekmesindeki menüde kalıyor — bu ekran
+              mekanın evi, günlüğün değil.
+
+              BOŞSA HİÇ RENDER EDİLMİYOR. `EmptyState` kullanılmadı: 72px rozet
+              ekranın dibinde orantısız olurdu ve keşif zaten hemen üstteki
+              "Ziyaret Ekle" butonundan sağlanıyor (liste açıklamasının boşken
+              hiç çizilmemesiyle aynı karar). Yükleme durumunda da bir şey
+              çizilmiyor — iskelet burada yalnızca layout zıplaması üretirdi. */}
+          {visits.length > 0 ? (
+            <View style={styles.visitsSection}>
+              <SectionHeader
+                title="Senin Ziyaretlerin"
+                subtitle="Bu mekana yaptığın ziyaretler"
+                badge={`${visits.length} ziyaret`}
+              />
+              {visits.map((visit) => (
+                <DiaryRow
+                  key={visit.id}
+                  visitedAt={visit.visited_at}
+                  // `name` ve görsel BİLİNÇLİ OLARAK verilmiyor: mekan zaten bu
+                  // ekranın konusu, her satırda tekrarlamak gürültü olurdu.
+                  rating={visit.rating}
+                  note={visit.note}
+                  onPress={() =>
+                    navigation.navigate('DiaryEntryDetail', {
+                      entryId: visit.id,
+                      authorId: visit.user_id,
+                      authorUsername: visit.authorUsername,
+                      placeId,
+                      placeName: place?.name ?? placeName,
+                      photoReference: place?.photo_refs?.[0] ?? photoReference,
+                      visitedAt: visit.visited_at,
+                      rating: visit.rating,
+                      note: visit.note,
+                    })
+                  }
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -837,8 +919,15 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     marginBottom: Spacing.sm,
   },
-  /** Son butonun altında sekme çubuğuna kadar nefes payı. */
+  /**
+   * Son butonun altında nefes payı. Ziyaret bölümü varsa bu boşluk eylem
+   * bloğunu kayıt bölümünden ayırıyor; yoksa sekme çubuğuna kadar olan paya
+   * dönüşüyor. Tek değer iki işi de doğru görüyor.
+   */
   lastButton: { marginBottom: Spacing['2xl'] },
+
+  /** Ziyaret bölümü ekranın son parçası — altında sekme çubuğu payı. */
+  visitsSection: { marginBottom: Spacing['2xl'] },
   listButtonPressed: { backgroundColor: Colors.brandSubtle },
   listButtonText: {
     ...Type.bodyStrong,

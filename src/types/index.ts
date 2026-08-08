@@ -281,9 +281,16 @@ export type RestaurantDetailParams = {
 /**
  * RestaurantDetailScreen'in route tipi — hangi stack'ten açıldığından bağımsız.
  * Ekranı tek bir stack'in param listesine bağlamamak için ayrı tutuluyor.
+ *
+ * `DiaryEntryDetail` BURADA çünkü ekranın "Senin Ziyaretlerin" bölümü oraya
+ * gidiyor. Ekran DÖRT stack'te kayıtlı olduğu için hedefin de dördünde birden
+ * kayıtlı olması ZORUNLU — eksik kalan stack'te dokunma çalışma anında patlar.
+ * Tam olarak bu yüzden `Search` ve `Map` param listelerine de eklendi
+ * (2026-08-08); öncesinde rota yalnızca `Home` ve `Profile`'daydı.
  */
 export type RestaurantDetailStackParamList = {
   RestaurantDetail: RestaurantDetailParams;
+  DiaryEntryDetail: DiaryEntryDetailParams;
 };
 
 /**
@@ -421,6 +428,14 @@ export type HomeStackParamList = {
 export type SearchStackParamList = {
   Search: undefined;
   RestaurantDetail: RestaurantDetailParams;
+  /**
+   * `RestaurantDetail`'in ZORUNLU EŞLİKÇİSİ (2026-08-08): mekan sayfasındaki
+   * "Senin Ziyaretlerin" satırları buraya gidiyor ve o ekran bu stack'te de
+   * kayıtlı. Rota eklenmeseydi Ara sekmesinden gelen kullanıcıda dokunma
+   * çalışma anında patlardı — `UserProfile`'ın `ListDetail`/`DiaryEntryDetail`
+   * eşlikçilerindeki tuzağın aynısı.
+   */
+  DiaryEntryDetail: DiaryEntryDetailParams;
 };
 
 export type MapStackParamList = {
@@ -433,6 +448,11 @@ export type MapStackParamList = {
    * (`RestaurantDetail`'in dört stack'teki durumuyla aynı desen).
    */
   ListDetail: ListDetailParams;
+  /**
+   * `RestaurantDetail`'in ZORUNLU EŞLİKÇİSİ (2026-08-08) — gerekçesi
+   * `SearchStackParamList`'teki kayıtla birebir aynı.
+   */
+  DiaryEntryDetail: DiaryEntryDetailParams;
 };
 
 /**

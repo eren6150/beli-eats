@@ -4,6 +4,7 @@ import { MapStackParamList } from '../types';
 import MapScreen from '../screens/MapScreen';
 import RestaurantDetailScreen from '../screens/RestaurantDetailScreen';
 import ListDetailScreen from '../screens/lists/ListDetailScreen';
+import DiaryEntryDetailScreen from '../screens/DiaryEntryDetailScreen';
 import {
   baseStackScreenOptions,
   restaurantDetailScreenOptions,
@@ -33,6 +34,13 @@ export default function MapStack() {
         name="ListDetail"
         component={ListDetailScreen}
         // Ekran kendi geri butonunu ve başlık şeridini çiziyor.
+        options={{ headerShown: false }}
+      />
+      {/* `RestaurantDetail`'in zorunlu eşlikçisi: mekan sayfasındaki "Senin
+          Ziyaretlerin" satırları buraya gidiyor. */}
+      <Stack.Screen
+        name="DiaryEntryDetail"
+        component={DiaryEntryDetailScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
