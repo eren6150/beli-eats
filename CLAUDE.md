@@ -2,6 +2,85 @@
 
 # Beli-Eats
 
+## ⏸️ OTURUM DEVRİ — 2026-08-07 (BURADAN DEVAM ET)
+
+> Bu bölüm bir sonraki oturumun **ilk okuyacağı yer**. İş bitince silinip
+> normal bölümlere dağıtılmalı.
+
+### 🔴 İLK İŞ: Diff D'nin (aktivite akışı) hatasını teşhis et ve düzelt
+
+**Kod yazıldı ve commit'lendi (`9a0ba02`), AMA cihaz testinde BAŞARISIZ oldu.
+Push/OTA EDİLMEDİ. Teşhis HENÜZ YAPILMADI.**
+
+Ana Sayfa'daki akış sorgusu patlıyor. Cihazdan alınan tam hata:
+
+```
+[useActivityFeed] akış okunamadı:
+{"code":"PGRST201","details":[{"cardinality":"many-to-one","embedding":
+"diary_entries with profiles","relationship":"diary_entries_user_id_fkey
+using diary_entries(user_id) and profiles(id)"},{"cardinality":"many-to-many",
+"embedding":"diary_entries with profiles","r"...
+```
+*(Expo Go hata ekranında kesildi, tam detay görülemedi.)*
+**Call Stack:** `fetchFeed` → `useActivityFeed.ts`
+
+**Muhtemel sebep — KANITLANMADI, yalnızca hata mesajından çıkarım:**
+`diary_entries` ile `profiles` arasında Supabase'in seçebileceği **birden
+fazla ilişki yolu** var. Hata iki tanesini sayıyor: doğrudan yabancı anahtar
+(`diary_entries_user_id_fkey`) ve bir **many-to-many** yol — muhtemelen
+`entry_likes` üzerinden dolaylı olarak kuruluyor (migration 016 ile geldi,
+`entry_likes` hem `diary_entries`'e hem `profiles`'a FK taşıyor). Sorgu
+hangisini kullanacağını **belirtmemiş** olabilir.
+
+`useActivityFeed.ts`'teki ilgili select:
+```ts
+.select('*, places(*), profiles(id, username, avatar_url), entry_likes(count)')
+```
+
+⚠️ **Bu bir hipotez.** Doğrulanmadan düzeltme yazılmamalı — bu projede
+korelasyonu nedensellik sanmak birden çok kez tur kaybettirdi. Çözüm
+muhtemelen `profiles` gömülü kaynağının FK adıyla ayrıştırılması olacak
+(`useFollowList` iki yön için tam olarak bunu yapıyor:
+`profiles!follows_follower_id_fkey(...)`) — ama önce hatanın tam metni
+görülmeli. Tam metni almak için: sorguyu `console.log`'a çıkarıp
+`JSON.stringify(error, null, 2)` ile yazdır, ya da aynı select'i Supabase
+SQL Editor yerine **PostgREST üzerinden** dene.
+
+**Diff D'nin geri kalanı sağlam sayılmamalı** — akış hiç yüklenemediği için
+5 maddelik test listesinin tamamı doğrulanmadan kaldı (dikey düzen, ziyaret
+detayına gitme, Trend/En Çok Puanlayanlar bölümlerinin `FlatList` kabuğunda
+bozulmaması, beğeni sayacı, boş durumlar).
+
+### ✅ Faz 3 — sosyal döngü SAHADA (Diff D hariç)
+
+Sırayla inşa edildi, hepsi **push + OTA + gerçek APK'da doğrulandı**, ayrıca
+arkadaşla **çapraz hesap testi** de geçti (günlük görünürlüğü, beğeni,
+salt-okunurluk):
+
+`EditProfile` → `UserProfile` → **ziyaret detayı + beğeni** → `FollowersList`
+
+İki migration da panelde çalıştırıldı ve doğrulandı:
+- **015** — günlük herkese açıldı (`diary_entries` SELECT `using (true)`)
+- **016** — `entry_likes` tablosu
+
+Yani **kullanıcının elindeki APK'da sosyal döngü çalışıyor**: takip et →
+profil → günlük → ziyaret detayı → beğeni → takipçi listesi → profil.
+Eksik olan tek halka **akış** (Diff D).
+
+### 📌 Değişmeyenler
+
+Aşağıdakiler bu oturumda **değişmedi**, olduğu gibi geçerli:
+- **Faz 3'ün ertelenen dört maddesi** (mekan bazlı leaderboard · kişiselleşmiş
+  öneriler · şehir değiştirici · kategori/etiket filtreleme) — üçü ölçek/veri
+  koşulu beklediği için ertelendi, detay Yol Haritası → Faz 3'te.
+- **Faz 4 (marka)** kapsamı: isim + logo, FireVibe backlog notu dahil.
+- **Kademe çerçevesi** ("kullanılabilir hale getirmek"): Kademe 1 arkadaş
+  testi (bugün çalışıyor) · Kademe 2 davetli çevre (e-posta onayı (a)–(d) +
+  fotoğraf moderasyonu) · Kademe 3 genel yayın (Faz 4 + Edge Function + AAB).
+- **Bir sonraki build'in paketi:** `react-native-keyboard-controller` ·
+  kaydırmalı sekmeler (`pager-view`/`collapsible-tab-view`) · `expo` yama
+  farkı (54.0.35 → ~54.0.36) · `fingerprint` `runtimeVersion`'a dönüş.
+
 ## Ürün Vizyonu
 Konum tabanlı restoran keşif ve sosyal puanlama uygulaması. Kullanıcı çevresindeki
 restoranları harita üzerinden keşfeder, puanlar, listeler ve takip ettiği kişilerle paylaşır.
@@ -988,10 +1067,12 @@ alanlardan kurularak yapılıyor.
   `npx expo install` dinamik config'e yazamıyor — plugin kaydı `app.json`'a
   **elle** eklendi, dinamik config (`app.config.js`) onu taban alıyor.
 
-## ⏸️ OTURUM DEVRİ — 2026-08-06 (buradan devam edilecek)
+## 📓 OTURUM KAYDI — klavye/edge-to-edge teşhisi (2026-08-06/07)
 
-> Oturum burada kapandı. Bu bölüm bir sonraki oturumun ilk okuyacağı yer;
-> iş bitince silinip normal bölümlere dağıtılmalı.
+> **Bu artık "oturum devri" DEĞİL** — devir notu dosyanın en başında.
+> Burası, o teşhisin tek tam kaydı olduğu için korunuyor: iki ortamın zıt
+> davranışı ve çürüyen üç hipotez başka hiçbir yerde bu ayrıntıda yazılı
+> değil. Silinirse aynı yollara tekrar girilir.
 
 ### ✅ KAPANDI: klavye/kaydırma zinciri (2026-08-07, cihazda DOĞRULANDI)
 
@@ -1105,22 +1186,10 @@ edilmemiş yeni bir dosyaydı, yani "önceki hali" yok. Ayrı bir fix commit'i
 uydurmak bilerek bozuk bir ara durumu tarihe gömmek olurdu. Ölçüm gerekçesi
 5'in gövdesinde ve kodun yorumlarında.
 
-**Sırada:** push → OTA (`--environment preview` ŞART) → **gerçek APK'da
-doğrulama** (Expo Go bu eksende kanıt değil, bkz. Bilinen Açık İşler).
+✅ **Bu altı commit push edildi ve OTA ile sahaya çıktı** (2026-08-07).
+Tablo tarihsel kayıt olarak duruyor.
 
-### ➡️ Sonraki iş: Faz 3'ün kalan ekranları
-
-Auth ekranlarının primitive'e taşınması **BİTTİ** (2026-08-07) — detay
-Bilinen Açık İşler'de. Sırada Faz 3'ün kalanı var: `UserProfile`,
-`FollowersList`, takip akışı, aktivite akışı. `useAuth` Context'e çevrildi ve
-`EditProfile` yazıldı, yani ön koşullar hazır.
-
-**Önce yapılması gereken:** biriken commit'ler push edilmeli ve son iki
-refactor (Register + Login) **OTA ile sahaya çıkmalı**. Şu an yalnızca Expo
-Go'da doğrulandılar; gerçek APK'daki kullanıcı hâlâ eski auth ekranlarını
-görüyor.
-
-### ✅ Bu oturumda tamamlananlar (2026-08-06)
+### ✅ O oturumda tamamlananlar (2026-08-06)
 
 Hepsi cihazda doğrulandı:
 
@@ -1142,11 +1211,15 @@ Hepsi cihazda doğrulandı:
 Ayrıca: versionCode 4 / version 1.1.0 build'i üretildi ve arkadaşa gönderildi
 (**henüz kurulum/dönüş yok**), 4 + 1 commit push edildi, gitleaks temiz.
 
-### 🗺️ Roadmap'teki konum
+### 🗺️ Roadmap'teki konum — ⚠️ BAYAT, güncel hali dosyanın başındaki devir notunda
+
+Aşağısı 2026-08-06'nın fotoğrafı; o gün Faz 3 daha yeni başlıyordu. **Güncel
+durum:** Faz 3'ün sosyal döngüsü tamamlandı ve sahada, yalnızca aktivite akışı
+(Diff D) açık. Ayrıntı dosyanın en başındaki **OTURUM DEVRİ** bölümünde.
 
 - **Faz 1 — TAMAMLANDI**
 - **Faz 2 — TAMAMEN TAMAMLANDI** (listeler → diary → **fotoğraflar** ✅)
-- **Faz 3 — ERKEN AŞAMA.** Ön koşul (`useAuth` Context) bitti, ilk ekran
+- ~~**Faz 3 — ERKEN AŞAMA.**~~ Ön koşul (`useAuth` Context) bitti, ilk ekran
   (`EditProfile`) yazıldı. Kalan: `UserProfile`, `FollowersList`, takip akışı,
   aktivite akışı, leaderboard.
 - **Faz 4 (marka)** — dokunulmadı, bilinçli olarak en sonda
