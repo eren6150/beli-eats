@@ -60,6 +60,30 @@ export default function StarRating({
     textAlignVertical: 'center' as const,
   };
 
+  /**
+   * ⚠️ `allowFontScaling={false}` — SİSTEM YAZI TİPİ ÖLÇEĞİ BU GLİFİ BÜYÜTMEMELİ.
+   *
+   * Neden: kutu (`touchSize`) `size`'dan türetilen SABİT bir sayı, glif ise bir
+   * `Text` ve RN'de metin varsayılan olarak sistem ölçeğiyle büyüyor. Ölçek
+   * 2.0'a çıkınca `fontSize: 32` fiilen 64px, `lineHeight: 41.6` fiilen 83px
+   * oluyor ama kutu 44px'te kalıyor → glifin alt kısmı kutunun dışında kalıyor.
+   * Cihazda ölçüldü (2026-08-08, `yaziOlcegi=2.00`): yıldızların alt yarısı
+   * görünmüyordu.
+   *
+   * Bu, dosyanın en başında anlatılan hata sınıfının (2) ÜÇÜNCÜ yüzü: kutu ile
+   * glif arasındaki oran bozulunca yıldız kırpılıyor. Öncekilerde oranı bozan
+   * satır yüksekliğiydi, burada sistem ölçeği.
+   *
+   * KUTUYU BÜYÜTMEK ÇÖZÜM DEĞİL — ölçüldü: 5 yıldız bugün 220px, 2.0 ölçekte
+   * 440px eder ve telefon genişliğini aşar.
+   *
+   * Erişilebilirlik kaybı yok: yıldız bir İKON, okunacak metin değil; dokunma
+   * hedefi zaten `MIN_TOUCH_SIZE` (44) ile alt sınırda tutuluyor ve o
+   * ölçeklemeden bağımsız. Aşağıdaki `valueText` ise GERÇEK metin, o yüzden
+   * ölçeklenmeye devam ediyor — sayıyı büyütmek isteyen kullanıcı onu büyütüyor.
+   */
+  const glyphProps = { allowFontScaling: false } as const;
+
   return (
     <View style={[styles.row, style]}>
       {[0, 1, 2, 3, 4].map((i) => {
@@ -72,7 +96,9 @@ export default function StarRating({
             style={[styles.starBox, { width: touchSize, height: touchSize }]}
           >
             {/* Boş yıldız — taban katman */}
-            <Text style={[glyphStyle, { color: Colors.ratingTrack }]}>★</Text>
+            <Text {...glyphProps} style={[glyphStyle, { color: Colors.ratingTrack }]}>
+              ★
+            </Text>
 
             {/* Dolu yıldız — genişliği fill oranında kırpılmış kopya */}
             {fill > 0 && (
@@ -89,7 +115,7 @@ export default function StarRating({
                     { width: touchSize, height: touchSize },
                   ]}
                 >
-                  <Text style={[glyphStyle, { color: Colors.rating }]}>
+                  <Text {...glyphProps} style={[glyphStyle, { color: Colors.rating }]}>
                     ★
                   </Text>
                 </View>
