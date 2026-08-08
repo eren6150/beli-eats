@@ -14,15 +14,18 @@ Migration'lar panelde çalıştırıldı ve doğrulandı: **015** (günlük herk
 açıldı) · **016** (`entry_likes`) · **017** (sıralama güncellemesi kullanıcı
 onaylı).
 
-Sosyal döngüden sonra üç iş daha yapıldı ve cihazda doğrulandı:
+Sosyal döngüden sonra dört iş daha yapıldı ve hepsi cihazda doğrulandı:
 **"Senin Ziyaretlerin"** (mekan sayfası) · **"Sıralamamı da güncelle"
-anahtarı** · **yıldızların büyük yazı tipinde kırpılma düzeltmesi**.
+anahtarı** · **yıldızların büyük yazı tipinde kırpılma düzeltmesi** ·
+**`RankingReviewSheet`** (yorumun okuma görünümü).
+
+Böylece `user_rankings` ↔ `diary_entries` arasındaki **iki boşluk da kapandı**.
 
 **Engelleyici açık iş yok.** Sıradakiler için üç yere bak: Yol Haritası →
 **Faz 3'ün ertelenen dört maddesi** (üçü ölçek/veri koşulu bekliyor) ·
-**Bilinen Açık İşler** (bir sonraki build'in paketi orada, en üstte; ayrıca
-**BOŞLUK 1** — başkasının `review_text`'ini okuma görünümü) ·
-**Faz 4 — Marka**.
+**Bilinen Açık İşler** (bir sonraki build'in paketi orada, en üstte — Faz 4'ün
+native tarafı da o listede) · **Faz 4 — Marka** (neyin OTA neyin build
+istediği çıkarıldı, tablo build paketinin altında).
 
 ## Ürün Vizyonu
 Konum tabanlı restoran keşif ve sosyal puanlama uygulaması. Kullanıcı çevresindeki
@@ -1011,6 +1014,48 @@ alanlardan kurularak yapılıyor.
   `npx expo install` dinamik config'e yazamıyor — plugin kaydı `app.json`'a
   **elle** eklendi, dinamik config (`app.config.js`) onu taban alıyor.
 
+### `RankingReviewSheet` — yorumun okuma görünümü (2026-08-08, DOĞRULANDI)
+Bir sıralama kaydının puanı + **tam yorum metni**. Bilinen Açık İşler'deki
+**BOŞLUK 1**'i kapatıyor.
+
+- **Neydi:** sıralama satırına dokununca mekan sayfası açılıyordu ve o ekran
+  **her zaman oturum sahibinin** kaydını yüklüyor. Yani başkasının profilinde
+  kullanıcı "onun yorumunu okuyorum" sanırken **kendi yorumunu** görüyordu; o
+  kişinin yorumunun tam metnine ulaşan **hiçbir yol yoktu** (tek görüntüsü
+  satırdaki `numberOfLines={1}` kırpması).
+- **Günlük tarafında bir kez düzeltilen hatanın ikizi**, gerekçe birebir aynı:
+  *"kullanıcı o kişinin ne düşündüğünü görmek istiyordu"*. Orası
+  `DiaryEntryDetail` ile düzeltilmişti, sıralama tarafı atlanmıştı.
+- **ROTA DEĞİL BİLEŞEN.** Sıralama satırları iki ekranda (`ProfileScreen`,
+  `UserProfileScreen`) ve onlar iki ayrı stack'te; ekran yapmak iki param
+  listesi + iki stack kaydı demekti. `AddToListSheet`'in aynı gerekçesi —
+  üstelik "Senin Ziyaretlerin"de tam bu tuzak (eksik rota → çalışma anında
+  çökme) yeni kapatılmıştı, ikincisini açmanın anlamı yoktu.
+- **Ayrı `visible` bayrağı YOK**, tek kaynak `ranking: UserRanking | null`.
+  İki state'i senkron tutmak "açık ama verisi yok" ara durumunu mümkün kılardı.
+- **İKİ PROFİLDE DE AYNI DAVRANIŞ.** İhtiyaç başkasının profilindeydi ama
+  görsel olarak ÖZDEŞ satırların iki ekranda farklı davranması, bu projede dört
+  kez pahalıya patlamış isim/davranış uyumsuzluğunun kardeşi olurdu.
+- **SALT OKUNUR.** Yorumun evi mekan sayfasındaki form; ikinci bir giriş noktası
+  açmak aynı işi iki yerde tutmak olurdu (`DiaryEntryDetail`'in kararı).
+  Mekan sayfası sheet'in içindeki satırdan bir dokunuş uzakta — ve oraya
+  giderken **sheet önce kapanıyor**, çünkü açık bir RN `Modal` hedef ekranın
+  önünde kalır (`MapSummarySheet`'in aynı kararı).
+- **Yeni sorgu YOK:** `UserRanking` satırı `review_text` dahil zaten listede
+  geliyor, sheet parametreyle besleniyor (anlık görüntü kuralı).
+- **⚠️ `review_text`'in HİÇBİR YERDE uzunluk sınırı yok** — ne şemada
+  (`review_text text`) ne istemcide (`maxLength` yok). Projedeki diğer serbest
+  metinlerin hepsinin var (`note` 1000, `bio` 300, liste açıklaması 500). Bu bir
+  **tutarsızlık ve ayrı bir iş**; pratik sonucu, "zaten kısa" varsayımının
+  geçersiz olması ve metnin **kaydırılabilir** olmak zorunda kalması.
+  `ScrollView`'da `flexShrink: 1` bu yüzden şart — onsuz uzun bir yorumda
+  kırpılan ilk şey alttaki eylem satırı olurdu (`DiaryEntrySheet`'in dersi).
+- **KAPSAM DIŞI, bilinçli:** `MapSummarySheet`'teki sıralama satırları eski
+  davranışta kaldı, hâlâ doğrudan mekan sayfasına gidiyorlar. Orada `RankRow`
+  `reviewText` **almıyor** (okunacak yorum zaten görünmüyor) ve haritadan
+  bakarken istenen şey mekanın kendisi. Üçüncü bir yerde farklı davranış olduğu
+  doğru; rahatsız ederse ayrı bir diff.
+
 ### "Senin Ziyaretlerin" — mekan sayfası (2026-08-08, cihazda DOĞRULANDI)
 `user_rankings` ile `diary_entries` arayüzde **ilk kez buluşuyor**: ikisi
 veritabanında `place_id` ile bağlıydı ama "bu mekana kaç kez gittin" bilgisi
@@ -1406,6 +1451,10 @@ Uygulama fiziksel Android cihazda çalışıyor; her adım cihazda doğrulandı.
   kanonik sıralamaya dokunulmuyor. Ekleme ve düzenleme modunda da var.
 - **Yıldızlar büyük sistem yazı tipinde doğru çiziliyor** (2.0 ölçekte
   doğrulandı); önceden alt yarıları kırpılıyordu.
+- **Sıralama satırına dokununca yorumun tam metni açılıyor** (`RankingReviewSheet`):
+  kendi profilinde de, başkasınınkinde de. Başkasının profilinde artık **onun**
+  puanı ve yorumu görünüyor — önceden mekan sayfası açılıyor ve orada kullanıcı
+  kendi kaydını görüyordu.
 - **"Ziyaret Ekle" sheet'inde Kaydet butonu sabit footer'da**: form ne kadar
   uzarsa uzasın ve klavye açıkken de her zaman görünür.
 - **Arama ekranı durum ayrımı yapıyor**: bir sonuca dokunup geri dönünce yazılan
@@ -2447,6 +2496,13 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   Code'a ver → uygula → **cihazda görsel karşılaştırma** yapıp farkı bildir →
   birkaç turda yakınsa. **Tek seferde birebir eşleşme beklenmiyor**, iteratif
   bir süreç.
+- **⚠️ NEYİN OTA GİTTİĞİ, NEYİN BUILD İSTEDİĞİ ÖNCEDEN ÇIKARILDI (2026-08-08).**
+  Tam tablo **Bilinen Açık İşler → "Bir sonraki build'in paketi"** altında.
+  Özeti: `theme.ts`'in tamamı (renk/tipografi/boşluk) ve uygulama içi splash
+  **OTA**; ikon, native splash, **uygulama adı** ve `adaptiveIcon` rengi
+  **build**. Fontlar ikiye ayrılıyor — `useFonts` ile çalışma anında yüklenirse
+  OTA, config plugin'iyle gömülürse build. Yani bu faz doğal olarak **birkaç
+  OTA turu + tek bir build** şeklinde ilerleyecek.
 
 ## Bilinen Açık İşler (teknik borç)
 
@@ -2461,10 +2517,54 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > 3. **`expo` yama farkı** 54.0.35 → `~54.0.36` (Dağıtım §8'de ertelendi).
 > 4. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9; `.fingerprintignore`
 >    hazır ve kanıtlı, kalan iş Fark 2'nin bir build ile teşhisi).
+> 5. **Faz 4 marka görsellerinin NATIVE tarafı** — aşağıdaki tabloda.
 >
 > ⚠️ Build alınırken **§2'deki sürüm yükseltme ritüeli** ihmal edilmemeli:
 > `versionCode` +1 her zaman, `version` +1 native değişiklik varsa — ve
-> bu paketin 1., 2. ve 4. maddesi native değişiklik.
+> bu paketin 1., 2., 4. ve 5. maddesi native değişiklik.
+>
+> ### 🎨 Marka işi: neyin OTA gittiği, neyin build istediği (tespit: 2026-08-08)
+> `app.json` ve `app.config.js` okunarak çıkarıldı, tahmin değil. Faz 4'e
+> girmeden bu ayrım bilinmeli — yoksa "renkleri değiştirdik ama ikon eski
+> kaldı" sürprizi çıkar.
+>
+> **OTA ile gider (saf JS):** `theme.ts`'in tamamı — `Palette`/`Colors`,
+> `Type`'ın 8 rolü, `Spacing`, `Radius`, `Elevation` · tüm ekran düzenleri ·
+> **uygulama içi splash** (`RootNavigator.tsx`'teki `SplashScreen` bileşeni,
+> oturum çözülürken görünen logo lockup'ı).
+>
+> **Build ister (`expo prebuild` native projeye gömüyor):**
+> | `app.json` alanı | Ne |
+> |---|---|
+> | `icon` | Launcher ikonu |
+> | `android.adaptiveIcon.foregroundImage` | Uyarlanabilir ikon ön katmanı |
+> | `android.adaptiveIcon.backgroundColor` | **`#22C55E` — marka yeşili BURADA DA sabit** |
+> | `splash.image` / `splash.backgroundColor` | **Native** açılış ekranı |
+> | `name` | **"Beli Eats" — launcher'daki ad, Faz 4'ün göbeği** |
+> | `userInterfaceStyle` | `light` |
+>
+> ⚠️ **TUZAK — marka rengi İKİ yerde yaşıyor.** `theme.ts`'ten OTA ile
+> değiştirirsen `adaptiveIcon.backgroundColor` eski yeşilde kalır. Biri OTA'ya
+> açık, diğeri değil.
+>
+> **⚠️ ÖZEL FONTLAR — cevap "duruma göre", seçim bize ait:**
+> | Yol | OTA? |
+> |---|---|
+> | Çalışma anında `useFonts` (`.ttf` bir Metro asset'i) | ✅ Evet |
+> | `plugins: [["expo-font", { fonts: [...] }]]` ile native'e gömme | ❌ Build |
+>
+> Bugün **hiçbiri kullanılmıyor**: `expo-font@~14.0.12` bağımlılık olarak
+> duruyor (§5.1'deki çökme düzeltmesinden kalma) ama kodda tek bir
+> `useFonts`/`loadAsync` yok ve `plugins` listesinde `expo-font` yok. Font
+> eklemek sıfırdan bir karar. Bedeli: çalışma anında yükleme bir yükleme
+> durumu getiriyor — doğal yeri mevcut JS splash'i.
+>
+> **PRATİK SONUÇ — marka işi doğal olarak İKİ AŞAMALI:** (1) renk/tipografi/
+> boşluk OTA turlarıyla, FireVibe iterasyonu tam buraya oturuyor; (2) ikon +
+> native splash + uygulama adı tek bir build'de. ⚠️ Arada **görünür bir
+> uyumsuzluk penceresi** var: yalnızca OTA gidilirse kullanıcı eski marka
+> splash'inden yeni marka uygulamaya düşer. Kısa süre katlanılır, kalıcı
+> bırakılmaz.
 
 - **Kaydırmalı sekme geçişi (swipe) — BİR SONRAKİ BUILD'E ERTELENDİ
   (araştırma: 2026-08-07).** İstek: profil sekmeleri (Sıralamam/Günlük/
@@ -2521,17 +2621,20 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   - ✅ **BOŞLUK 2 KAPANDI (2026-08-08, cihazda doğrulandı):** mekan sayfasına
     **"Senin Ziyaretlerin"** bölümü eklendi. Detay: Mimari Notlar → aynı adlı
     bölüm.
-  - ⚠️ **BOŞLUK 1 AÇIK KALIYOR — buradaki eski "ikisini birden kapatır"
-    notu FAZLA İYİMSERDİ.** Kontrol edildi ve çürütüldü: yeni bölüm
-    `diary_entries.note`'u gösteriyor, BOŞLUK 1 ise `user_rankings.review_text`
-    hakkında. İki farklı kolon, iki farklı iş (bkz. "Puanlama ile günlük
-    arasındaki İŞ BÖLÜMÜ").
-    - Kendi mekan sayfanda `review_text` zaten forma **dolu geliyor**, yani
-      okunabiliyor. Asıl eksik **BAŞKASININ** yorumunu okuyabilmek: bugün
-      yalnızca satırdaki kırpılmış halde görünüyor ve tam metne ulaşan bir
-      yol yok.
-    - Dolayısıyla doğal yeri mekan sayfası değil **`UserProfile`** tarafı —
-      ayrı ve daha küçük bir iş. Somut bir hata üretmiyor, sırası gelince.
+  - ✅ **BOŞLUK 1 DE KAPANDI (2026-08-08, cihazda doğrulandı)** — ama
+    **buradaki eski "ikisini birden kapatır" notu YİNE DE YANLIŞTI** ve bu
+    kayda değer: "Senin Ziyaretlerin" onu kapatmadı, **ayrı bir iş** kapattı.
+    İkisi farklı kolonlar (`note` ↔ `review_text`), farklı işler.
+    - **Teşhis, tahmin edilenden büyüktü:** başkasının sıralama satırına
+      dokununca mekan sayfası açılıyordu ve o ekran **HER ZAMAN oturum
+      sahibinin** kaydını yüklüyor (`useRankings(user?.id)`). Yani kullanıcı
+      "onun yorumunu okuyorum" sanırken **kendi yorumunu** görüyordu.
+    - **Projenin bir kez düzelttiği hatanın ikiziydi:** günlük satırları da
+      bir dönem mekan sayfasına gidiyordu, gerekçe birebir aynıydı
+      (*"kullanıcı o kişinin ne düşündüğünü görmek istiyordu"*) ve
+      `DiaryEntryDetail` ile düzeltilmişti. Sıralama tarafı atlanmıştı.
+    - **Çözüm: `RankingReviewSheet`** — puan + TAM yorum + "Mekan sayfasına
+      git". Detay: Mimari Notlar → aynı adlı bölüm.
 - ~~İSİMLENDİRME GERİLİMİ: iki ayrı "yorum" alanı var~~ — **BÜYÜK ÖLÇÜDE
   ÇÖZÜLDÜ (2026-08-07).** `user_rankings.review_text` ve `diary_entries.note`
   ikiliği bir belirsizlik sanılıyordu; ürün kararıyla **kasıtlı bir iş
