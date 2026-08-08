@@ -6,6 +6,7 @@ import {
   Pressable,
   Modal,
   ScrollView,
+  Switch,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -72,6 +73,17 @@ export default function DiaryEntrySheet({
 
   const [visitedAt, setVisitedAt] = useState(() => toDateString(new Date()));
   const [rating, setRating] = useState(0);
+  /**
+   * "Sıralamamı da güncelle" (migration 017).
+   *
+   * VARSAYILAN AÇIK — bugünkü davranış. `MoveToListSheet`'in "Kaynak listeden
+   * de kaldır" anahtarındaki kuralın aynısı: anahtara hiç dokunmayan kullanıcı
+   * öncekiyle birebir aynı sonucu alır.
+   *
+   * Puan seçilmemişken anahtar RENDER EDİLMİYOR: puansız log zaten sıralamaya
+   * girmiyor, orada bir seçenek göstermek olmayan bir kararı sormak olurdu.
+   */
+  const [updateRanking, setUpdateRanking] = useState(true);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +102,10 @@ export default function DiaryEntrySheet({
     // 0 = "puan yok". `StarRating` sayı bekliyor, null'ı temsil edemiyor.
     setRating(entry?.rating ?? 0);
     setNote(entry?.note ?? '');
+    // Anahtar HER AÇILIŞTA varsayılana dönüyor: bir önceki kayıtta kapatılmış
+    // olması sonraki ziyareti sessizce etkilememeli. Kapatmak tek seferlik bir
+    // karar, kalıcı bir tercih değil.
+    setUpdateRanking(true);
     setError(null);
   }, [visible, entry]);
 
@@ -111,12 +127,14 @@ export default function DiaryEntrySheet({
           visitedAt,
           rating: ratingValue,
           note: noteValue,
+          updateRanking,
         })
       : await logDiaryEntry({
           placeId,
           visitedAt,
           rating: ratingValue,
           note: noteValue,
+          updateRanking,
         });
 
     setSaving(false);
@@ -264,7 +282,12 @@ export default function DiaryEntrySheet({
                 <StarRating rating={rating} size={32} onChange={setRating} />
                 <Text style={styles.ratingHint}>
                   {rating > 0
-                    ? `${rating.toFixed(1)} / 5.0 — sıralamana işlenecek`
+                    ? // Metin ANAHTARA BAĞLI: anahtar kapalıyken "sıralamana
+                      // işlenecek" demek düpedüz yalan olurdu. Bu projede
+                      // isim/davranış uyumsuzluğu dört kez pahalıya patladı.
+                      updateRanking
+                      ? `${rating.toFixed(1)} / 5.0 — sıralamana işlenecek`
+                      : `${rating.toFixed(1)} / 5.0 — yalnızca bu ziyarete işlenecek`
                     : editing
                       ? // Düzenlemede puanı kaldırmak sıralamayı GERİ ALMIYOR;
                         // kullanıcıya olmayan bir söz vermiyoruz.
@@ -272,6 +295,34 @@ export default function DiaryEntrySheet({
                       : 'İsteğe bağlı. Puan vermezsen yalnızca günlüğünde kalır.'}
                 </Text>
               </View>
+
+              {/* ── Sıralama anahtarı (migration 017) ──
+                  YALNIZCA puan seçiliyken görünüyor. İki sebep: (a) puansız
+                  logda sıralama zaten güncellenmiyor, seçenek anlamsız olurdu;
+                  (b) bu sheet'in yerleşimi ekran yüksekliği + sistem yazı tipi
+                  ölçeğine duyarlı (Kaydet butonu bir dönem kırpılıyordu) —
+                  satırı koşullu tutmak en sık kullanılan "puansız hızlı log"
+                  akışının yüksekliğini hiç değiştirmiyor. */}
+              {rating > 0 && (
+                <View style={styles.switchRow}>
+                  <View style={styles.switchText}>
+                    <Text style={styles.switchLabel}>Sıralamamı da güncelle</Text>
+                    <Text style={styles.switchHint}>
+                      Kapatırsan bu puan yalnızca günlüğünde kalır.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={updateRanking}
+                    onValueChange={setUpdateRanking}
+                    disabled={saving}
+                    trackColor={{
+                      false: Colors.borderStrong,
+                      true: Colors.brandBorder,
+                    }}
+                    thumbColor={updateRanking ? Colors.brand : Colors.canvasAlt}
+                  />
+                </View>
+              )}
 
               {/* ── Not (opsiyonel) ── */}
               <View style={styles.labelRow}>
@@ -432,6 +483,28 @@ const styles = StyleSheet.create({
   clearRating: {
     ...Type.caption,
     color: Colors.danger,
+  },
+
+  /**
+   * Sıralama anahtarı — `MoveToListSheet`'in "Kaynak listeden de kaldır"
+   * satırıyla BİREBİR aynı token'lar. İki sheet'te iki farklı anahtar görünümü
+   * olmasın diye kopyalandı, yeni bir dil uydurulmadı.
+   */
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  switchText: { flex: 1, gap: Spacing.xxs },
+  switchLabel: {
+    ...Type.captionStrong,
+    color: Colors.textStrong,
+  },
+  switchHint: {
+    ...Type.micro,
+    color: Colors.textMuted,
   },
 
   noteInput: {

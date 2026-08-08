@@ -34,6 +34,17 @@ export interface DiaryEntryInput {
   /** Verilmezse giriş yalnızca günlükte kalır, sıralamaya girmez. */
   rating?: number | null;
   note?: string | null;
+  /**
+   * Puan verildiğinde `user_rankings` de güncellensin mi (migration 017).
+   *
+   * VARSAYILAN `true` — bugünkü davranış. Kullanıcı "Ziyaret Ekle" formundaki
+   * "Sıralamamı da güncelle" anahtarını kapatırsa `false` geliyor ve puan
+   * YALNIZCA günlükte kalıyor.
+   *
+   * `rating` yoksa bu alanın hiçbir etkisi yok: puansız log zaten sıralamaya
+   * girmiyor.
+   */
+  updateRanking?: boolean;
 }
 
 /**
@@ -64,6 +75,9 @@ export async function logDiaryEntry(
     p_visited_at: params.visitedAt ?? null,
     p_rating: params.rating ?? null,
     p_note: params.note ?? null,
+    // `?? true`: alan verilmezse sunucu varsayılanıyla AYNI sonuç. Sunucu
+    // tarafında da `coalesce(..., true)` var — iki uçta da bugünkü davranış.
+    p_update_ranking: params.updateRanking ?? true,
   });
 
   if (error) {
@@ -85,7 +99,10 @@ export async function logDiaryEntry(
  *
  * DAVRANIŞ — ekleme ile aynı olmayan iki nokta:
  *  • Puan yalnızca GERÇEKTEN değiştiyse sıralamaya yansıyor; not/tarih
- *    düzeltmek sıralamaya dokunmuyor.
+ *    düzeltmek sıralamaya dokunmuyor. Değiştiyse kanonik puanı EZİYOR ("son
+ *    düzenleme kazanır") — migration 017'den beri kullanıcı bunu
+ *    `updateRanking: false` ile durdurabiliyor, yani CLAUDE.md'nin "kabul
+ *    edilen tuzak" diye yazdığı davranış artık onun kontrolünde.
  *  • Puanı kaldırmak (`rating: null`) sıralamayı GERİ ALMIYOR — `removeEntry`
  *    ile simetrik, gerekçe orada yazılı.
  *
@@ -100,12 +117,15 @@ export async function updateDiaryEntry(params: {
   rating?: number | null;
   /** `null` → notu sil. */
   note?: string | null;
+  /** Bkz. `DiaryEntryInput.updateRanking` — varsayılan `true`. */
+  updateRanking?: boolean;
 }): Promise<{ error: MutationError | null }> {
   const { error } = await supabase.rpc('update_diary_entry', {
     p_entry_id: params.entryId,
     p_visited_at: params.visitedAt ?? null,
     p_rating: params.rating ?? null,
     p_note: params.note ?? null,
+    p_update_ranking: params.updateRanking ?? true,
   });
 
   if (error) {
