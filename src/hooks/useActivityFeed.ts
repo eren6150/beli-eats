@@ -94,9 +94,25 @@ export function useActivityFeed(userId: string | undefined) {
     setFollowsAnyone(true);
 
     // 2) Onların girişleri + mekan + yazar + beğeni sayısı — TEK sorgu.
+    //
+    // ⚠️ `profiles!diary_entries_user_id_fkey` — FK ADI ŞART, SADELEŞTİRME.
+    // Düz `profiles(...)` yazmak bu sorguyu PGRST201 ile patlatıyor (cihazda
+    // görüldü, PostgREST'in `hint` alanıyla doğrulandı). Sebep: `diary_entries`
+    // ile `profiles` arasında PostgREST'in seçebileceği İKİ yol var —
+    //   1. doğrudan FK  → `diary_entries_user_id_fkey` (many-to-one, istediğimiz)
+    //   2. `entry_likes` üzerinden dolaylı (many-to-many)
+    // İkincisi migration 016 ile doğdu: `entry_likes`'ın birincil anahtarı
+    // `(entry_id, user_id)` ve ikisi de FK — yani PostgREST'in ARA TABLO
+    // (junction) tanımına birebir uyuyor, ilişkiyi otomatik ilan ediyor.
+    // Aynı desen `useFollow`'da iki yön için zaten kullanılıyor.
+    //
+    // `places(*)` ve `entry_likes(count)` ayrıştırma İSTEMİYOR: o ikisine giden
+    // tek yol var. Kırılan tek gömülü kaynak `profiles`'tı.
     const { data, error: feedError } = await supabase
       .from('diary_entries')
-      .select('*, places(*), profiles(id, username, avatar_url), entry_likes(count)')
+      .select(
+        '*, places(*), profiles!diary_entries_user_id_fkey(id, username, avatar_url), entry_likes(count)'
+      )
       .in('user_id', followingIds)
       .order('created_at', { ascending: false })
       .limit(FEED_LIMIT);
