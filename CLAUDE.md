@@ -276,6 +276,45 @@ sonek yaklaşımı: `eren` → `eren2` → `eren3`.
   aynı @ öncesine sahip yeni e-postayla kayıt önce `Database error saving new
   user` veriyordu, migration sonrası başarılı ve `eren2` olarak kaydoldu.
 
+#### Sonek mekanizmasının ÇEVRESİ — kapandı (2026-08-09)
+Migration 012 çakışmayı sunucuda çözüyor ve **doğru çalışıyor**: `eren61502`
+adında biri gelirse ve o ad doluysa `eren615022` üretiliyor, kayıt asla
+patlamıyor. Soru soruldu, izlendi, mekanizma sağlam çıktı.
+
+**Sorun mekanizmada değil ÇEVRESİNDEYDİ, ve üçü üst üste biniyordu:**
+1. **Yeniden adlandırma tamamen sessiz** — ekranda "Başarılı!" yazıyor,
+   adının değiştiği hiçbir yerde söylenmiyor.
+2. **(e) düzeltildikten sonra KÖTÜLEŞTİ.** Eskiden metadata boştu ve taban
+   e-postanın @ öncesiydi (kimsenin seçmediği bir ad). Artık `useAuth`
+   kullanıcının YAZDIĞI adı gönderiyor — sistem bilinçli bir tercihi eziyor.
+3. **Kaçış yolu yoktu:** `EditProfile` kullanıcı adını kilitli gösteriyordu,
+   yani kişi istemediği bir adla **kalıcı olarak** sıkışıyordu.
+
+Ayrıca haksızlık boyutu: o adı İSTEMEYEN kişi kalıcı sahibi oluyor ve
+gerçekten isteyeni engelliyor.
+
+**Düzeltme — `src/lib/username.ts` + iki ekran, saf JS:**
+- Kayıtta ve düzenlemede **önden müsaitlik kontrolü**, tek ortak metin.
+- `EditProfile`'daki **kilit açıldı**; çakışma `23505` ile de yakalanıyor ve
+  aynı metni gösteriyor (ön kontrol yarışı çözmüyor, kısıt çözüyor).
+- **Kontrol başarısız olursa kayıt BLOKLANMIYOR** (`checked: false`) — bir
+  kolaylık kontrolünün patlaması kimsenin hesap açmasını engellememeli.
+- **Düzenlemede ad YALNIZCA değiştiyse doğrulanıyor:** mevcut adların bir
+  kısmı @ öncesinden türedi ve yeni biçim kurallarını sağlamayabilir; aksi
+  halde kullanıcı sadece biyografisini düzeltmek isterken kilitlenirdi.
+- **Biçim kuralları minimal** (3–30 karakter, boşluk yok). Karakter kümesi ve
+  büyük/küçük harf normalleştirmesi EKLENMEDİ — mevcut adlar nokta/tire/büyük
+  harf taşıyabilir, daha sıkısı ayrı bir karar + veri göçü demek.
+
+⚠️ **BAYAT YORUM UYARISI:** `supabase_migration_012_username_conflict.sql`
+satır 125-128 hâlâ *"istemci bugün `options.data` GÖNDERMİYOR"* diyor.
+**Gönderiyor** (`useAuth.tsx`). Migration dosyası çalıştırılmış bir kayıt
+olduğu için içeriği DEĞİŞTİRİLMEDİ; doğrusu burada.
+
+⚠️ **`profiles.username`'in şemada uzunluk sınırı YOK** (`text unique not
+null`). `review_text` ile aynı tutarsızlık. İstemcideki 30 karakter bir
+savunma, gerçek tavan değil — CHECK kısıtı ayrı bir migration işi.
+
 #### Düzeltme sırası (öneri)
 **1 → 3 → 2**, çünkü ilk ikisi küçük ve tek dosyalık, sonuncusu ekran işi:
 

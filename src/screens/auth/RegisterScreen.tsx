@@ -16,6 +16,12 @@ import { useAuth } from '../../hooks/useAuth';
 import Icon from '../../components/ui/Icon';
 import TextField from '../../components/ui/TextField';
 import Button from '../../components/ui/Button';
+import {
+  normalizeUsername,
+  validateUsername,
+  isUsernameTaken,
+  USERNAME_TAKEN_TEXT,
+} from '../../lib/username';
 import { Colors, Type, Spacing, Radius } from '../../constants/theme';
 
 /** Logo dairesinin çapı — LoginScreen ile AYNI. Farklı olduğu dönemde iki
@@ -35,19 +41,48 @@ export default function RegisterScreen() {
     // o yüzden boşluk temizliği burada anlamlı hale geldi: `"   "` bugünkü
     // `!username` kontrolünü geçer, sunucuda btrim'lenip boşalır ve kullanıcı
     // sebebini anlamadan `kullanici` adını alırdı.
-    const trimmedUsername = username.trim();
+    const trimmedUsername = normalizeUsername(username);
     if (!trimmedUsername || !email || !password) {
       Alert.alert('Hata', 'Lütfen tüm alanları doldurun.');
       return;
     }
+
+    const formatError = validateUsername(trimmedUsername);
+    if (formatError) {
+      Alert.alert('Hata', formatError);
+      return;
+    }
+
     if (password.length < 6) {
       Alert.alert('Hata', 'Şifre en az 6 karakter olmalı.');
       return;
     }
+
     setLoading(true);
+
+    /**
+     * ── KULLANICI ADI MÜSAİT Mİ ────────────────────────────────────────────
+     * Sunucu çakışmayı zaten çözüyor (migration 012: `eren` → `eren2`) ve
+     * kayıt asla patlamıyor — ama bunu SESSİZCE yapıyordu. Kullanıcı yazdığı
+     * adı aldığını sanıp farklı bir adla kalıyordu, üstelik `EditProfile`
+     * kilitli olduğu için düzeltemiyordu bile.
+     *
+     * Kontrol başarısız olursa (ağ / anon okuma izni) `checked: false` gelir
+     * ve kayda DEVAM ederiz: bir kolaylık kontrolünün patlaması kimsenin
+     * hesap açmasını engellememeli. Sonek mantığı emniyet ağı olarak duruyor.
+     */
+    const { taken } = await isUsernameTaken(trimmedUsername);
+    if (taken) {
+      setLoading(false);
+      Alert.alert('Hata', USERNAME_TAKEN_TEXT);
+      return;
+    }
+
     const { error } = await signUp(email, password, trimmedUsername);
     setLoading(false);
     if (error) {
+      // Metin artık `useAuth` tarafından koda göre üretiliyor; ham İngilizce
+      // mesaj ekrana ulaşmıyor.
       Alert.alert('Kayıt Hatası', error.message);
     } else {
       Alert.alert('Başarılı!', 'Hesabın oluşturuldu. Giriş yapabilirsin.');

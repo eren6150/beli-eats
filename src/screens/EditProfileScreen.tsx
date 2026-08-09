@@ -15,22 +15,35 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { ProfileStackParamList } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
-import { Colors, Radius, Spacing, Type } from '../constants/theme';
+import { Colors, Spacing, Type } from '../constants/theme';
 import TextField from '../components/ui/TextField';
 import Button from '../components/ui/Button';
 import ErrorBanner from '../components/ui/ErrorBanner';
+import {
+  normalizeUsername,
+  validateUsername,
+  isUsernameTaken,
+  USERNAME_TAKEN_TEXT,
+} from '../lib/username';
 
 /**
  * Profil düzenleme.
  *
- * ── V1'DE YALNIZCA `full_name` ve `bio` ──────────────────────────────────────
- * `username` DIŞARIDA: `unique not null` ve migration 012'nin sonek mantığı
- * YALNIZCA kayıt anında (trigger içinde) çalışıyor. Düzenlemede çakışma olsa
- * kullanıcı ham bir `23505` görürdü — çakışma denetimi + hata metni + yeniden
- * deneme akışı ayrı ve daha büyük bir iş. Alan gizlenmiyor, KİLİTLİ ve sebebi
- * yazılı gösteriliyor: boş bırakmak "neden değiştiremiyorum" sorusunu
- * cevapsız bırakırdı.
+ * ── `username` ARTIK DÜZENLENEBİLİR (2026-08-09) ─────────────────────────────
+ * Bir dönem KİLİTLİYDİ ve sebebi *"çakışma denetimi + hata metni ayrı ve daha
+ * büyük bir iş"* diye yazılıydı. O denetim kayıt ekranı için zaten yazıldı
+ * (`src/lib/username.ts`), yani iş küçüldü ve kilit **gerçek bir soruna**
+ * dönüşmüştü:
  *
+ * Migration 012 çakışan bir adı sunucuda sessizce değiştiriyor (`eren` →
+ * `eren2`). Kullanıcı bunu ekranda GÖRMÜYOR ve kilit yüzünden sonradan
+ * DÜZELTEMİYORDU — yani istemediği bir adla kalıcı olarak sıkışıyordu. Kademe
+ * 2'de (tanımadığın kişilere açılırken) bu kabul edilemez.
+ *
+ * Çakışma iki yerde birden karşılanıyor: önden müsaitlik kontrolü (yaygın
+ * durum) ve `23505` yakalama (yarış). İkisi de AYNI metni gösteriyor.
+ *
+ * ── `avatar_url` HÂLÂ DIŞARIDA ───────────────────────────────────────────────
  * `avatar_url` DIŞARIDA: fotoğraf altyapısı artık var (`expo-image-manipulator`,
  * Storage) ama avatar AYRI bir bucket + ayrı politikalar + ayrı boyut kararı
  * demek; mekan fotoğrafı bucket'ına koymak yanlış olurdu. Doğal ikinci adım.
@@ -46,6 +59,13 @@ type RouteType = RouteProp<ProfileStackParamList, 'EditProfile'>;
 const FULL_NAME_MAX = 100;
 const BIO_MAX = 300;
 
+/**
+ * ⚠️ Şemada karşılığı YOK — `username text unique not null`, uzunluk kısıtı
+ * yazılmamış. Bu yalnızca girdi alanının tavanı; `validateUsername` de aynı
+ * sınırı uyguluyor. Gerçek tavan için CHECK kısıtı ayrı bir migration işi.
+ */
+const USERNAME_MAX = 30;
+
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
@@ -53,11 +73,13 @@ export default function EditProfileScreen() {
   const { user } = useAuth();
   const { updateProfile } = useProfile(user?.id);
 
+  const [username, setUsername] = useState(route.params?.username ?? '');
   const [fullName, setFullName] = useState(route.params?.fullName ?? '');
   const [bio, setBio] = useState(route.params?.bio ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const initialUsername = route.params?.username ?? '';
   const initialFullName = route.params?.fullName ?? '';
   const initialBio = route.params?.bio ?? '';
 
@@ -67,7 +89,11 @@ export default function EditProfileScreen() {
    */
   const normalize = (v: string): string | null => v.trim() || null;
 
+  const trimmedUsername = normalizeUsername(username);
+  const usernameChanged = trimmedUsername !== normalizeUsername(initialUsername);
+
   const dirty =
+    usernameChanged ||
     normalize(fullName) !== normalize(initialFullName) ||
     normalize(bio) !== normalize(initialBio);
 
@@ -77,7 +103,33 @@ export default function EditProfileScreen() {
     setSaving(true);
     setError(null);
 
+    /**
+     * Kullanıcı adı YALNIZCA DEĞİŞTİYSE doğrulanıyor ve gönderiliyor.
+     *
+     * Sebep: mevcut adların bir kısmı e-postanın @ öncesinden türedi ve
+     * buradaki biçim kurallarını sağlamayabilir (ör. çok kısa). Değişmemiş bir
+     * adı doğrulamaya sokmak, kullanıcıyı SADECE biyografisini düzeltmek
+     * isterken kilitlerdi.
+     */
+    if (usernameChanged) {
+      const formatError = validateUsername(trimmedUsername);
+      if (formatError) {
+        setSaving(false);
+        setError(formatError);
+        return;
+      }
+
+      const { taken } = await isUsernameTaken(trimmedUsername);
+      if (taken) {
+        setSaving(false);
+        setError(USERNAME_TAKEN_TEXT);
+        return;
+      }
+    }
+
     const { error: updateError } = await updateProfile({
+      // `undefined` = "dokunma"; hook bu alanları patch'ten ayıklıyor.
+      username: usernameChanged ? trimmedUsername : undefined,
       full_name: normalize(fullName),
       bio: normalize(bio),
     });
@@ -85,8 +137,20 @@ export default function EditProfileScreen() {
     setSaving(false);
 
     if (updateError) {
-      // Ekrana kısa metin, konsola tam nesne (hook logluyor).
-      setError('Profil kaydedilemedi. Bağlantını kontrol et.');
+      /**
+       * `23505` = unique ihlali, yani ön kontrol ile yazma ARASINDA biri o adı
+       * aldı. Ön kontrol yarışı çözmüyor ve çözmesi de gerekmiyor — gerçek
+       * teklik kısıtın kendisinde. Kullanıcı iki yolda da AYNI metni görüyor.
+       *
+       * Postgres hata KODU ayrıştırmak projenin onayladığı ayrım: `code`
+       * belgeli ve kararlı bir sözleşme (`useListItems`'ın aynı gerekçesi).
+       */
+      const code = (updateError as { code?: string }).code;
+      setError(
+        code === '23505'
+          ? USERNAME_TAKEN_TEXT
+          : 'Profil kaydedilemedi. Bağlantını kontrol et.'
+      );
       return;
     }
 
@@ -184,16 +248,16 @@ export default function EditProfileScreen() {
         >
           {error && <ErrorBanner message={error} style={styles.banner} />}
 
-          {/* Kilitli kullanıcı adı — gizlemek yerine sebebiyle gösteriliyor. */}
-          <View style={styles.lockedGroup}>
-            <Text style={styles.lockedLabel}>Kullanıcı adı</Text>
-            <View style={styles.lockedBox}>
-              <Text style={styles.lockedValue}>{route.params?.username ?? '—'}</Text>
-            </View>
-            <Text style={styles.lockedHint}>
-              Kullanıcı adı şu an değiştirilemiyor.
-            </Text>
-          </View>
+          {/* Kullanıcı adı artık DÜZENLENEBİLİR — gerekçe dosyanın başında. */}
+          <TextField
+            label="Kullanıcı adı"
+            placeholder="@kullanici_adi"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={username}
+            onChangeText={setUsername}
+            maxLength={USERNAME_MAX}
+          />
 
           <TextField
             label="Ad Soyad"
@@ -276,30 +340,8 @@ const styles = StyleSheet.create({
   },
   banner: { marginBottom: Spacing.md },
 
-  lockedGroup: { marginBottom: Spacing.md },
-  lockedLabel: {
-    ...Type.captionStrong,
-    color: Colors.textStrong,
-    marginBottom: Spacing.xs,
-  },
-  lockedBox: {
-    backgroundColor: Colors.canvasAlt,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  lockedValue: {
-    fontSize: Type.body.fontSize,
-    fontWeight: Type.body.fontWeight,
-    color: Colors.textMuted,
-  },
-  lockedHint: {
-    ...Type.caption,
-    color: Colors.textSecondary,
-    marginTop: Spacing.xxs,
-  },
+  // `locked*` stilleri SİLİNDİ: kullanıcı adı artık `TextField` ile
+  // düzenleniyor, kilitli kutu diye bir şey kalmadı.
 
   saveButton: { marginTop: Spacing.md },
 });
