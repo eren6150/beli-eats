@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>E-posta onaylandı — Beli Eats</title>
+<meta name="robots" content="noindex" />
+<!--
+  ────────────────────────────────────────────────────────────────────────────
+  E-POSTA ONAY İNİŞ SAYFASI
+
+  NE İŞE YARIYOR
+  Supabase, onay bağlantısına tıklandığında e-postayı ÖNCE sunucuda onaylıyor,
+  SONRA tarayıcıyı "Site URL"e yönlendiriyor. O alan varsayılanda
+  http://localhost:3000 olduğu için kullanıcı ERR_CONNECTION_REFUSED görüyordu
+  — hesap onaylanmış olmasına rağmen "kayıt olamadım" izlenimi veriyordu.
+  Bu sayfa o inişi karşılıyor.
+
+  NEDEN UYGULAMAYA YÖNLENDİRMİYOR
+  Deep link (belieats://…) için app.json'a `scheme` eklemek gerekiyor; o NATIVE
+  bir alan, yani yeni bir build şart. Ayrıca uygulamada bağlantıyı karşılayan
+  kod da yok (`detectSessionInUrl: false` — React Native için doğru ayar, ama
+  token'ları elle ayrıştırıp setSession çağırmayı gerektiriyor). İkisi birden
+  "bir sonraki build'in paketi"nde duruyor. O gün geldiğinde bu sayfaya
+  "Uygulamayı aç" butonu eklenebilir.
+
+  BAĞIMLILIK YOK: tek dosya, harici font/script/stil yok. GitHub Pages'te
+  olduğu gibi çalışıyor.
+
+  ⚠️ FAZ 4 (marka) geldiğinde bu sayfa da güncellenmeli: başlık, ad ve renkler
+  theme.ts'teki değerlerin elle kopyalanmış hali.
+  ────────────────────────────────────────────────────────────────────────────
+-->
+<style>
+  /* Renkler theme.ts'ten birebir: brand / brandStrong / brandSubtle. */
+  :root {
+    --brand: #22c55e;
+    --brand-strong: #16a34a;
+    --brand-subtle: #dcfce7;
+    --canvas: #f9fafb;
+    --surface: #ffffff;
+    --border: #f3f4f6;
+    --text: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--canvas);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px 28px;
+    text-align: center;
+  }
+
+  .badge {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 24px;
+    border-radius: 50%;
+    background: var(--brand-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Onay işareti — ikon dosyası yerine inline SVG, harici istek yok. */
+  .badge svg { width: 40px; height: 40px; stroke: var(--brand-strong); }
+
+  h1 {
+    margin: 0 0 12px;
+    font-size: 24px;
+    line-height: 1.25;
+    letter-spacing: -0.5px;
+  }
+
+  p {
+    margin: 0 0 8px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+
+  .hint {
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .app-name {
+    margin-top: 28px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brand-strong);
+    letter-spacing: 0.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    /* Uygulamada karanlık mod İNŞA EDİLMİYOR ama bu sayfa tarayıcıda açılıyor
+       ve sistem karanlıksa beyaz bir levha göz alıyor. */
+    :root {
+      --canvas: #111827;
+      --surface: #1f2937;
+      --border: #374151;
+      --text: #f9fafb;
+      --text-secondary: #d1d5db;
+      --text-muted: #9ca3af;
+      --brand-subtle: #14532d;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    </div>
+
+    <h1>E-postan onaylandı</h1>
+
+    <p>Uygulamaya dönüp giriş yapabilirsin.</p>
+
+    <p class="hint">Bu sekmeyi kapatabilirsin.</p>
+
+    <div class="app-name">BELİ EATS</div>
+  </main>
+
+  <script>
+    /*
+      Supabase token'ları adres çubuğunda `#access_token=…` olarak bırakıyor.
+      Sayfa bir şey yapmıyor ama token'ın geçmişte ve paylaşılabilir bir
+      bağlantıda durması gereksiz bir sızıntı — adresi temizliyoruz.
+      `replaceState` geçmişe yeni kayıt eklemiyor, yani geri tuşu bozulmuyor.
+    */
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+  </script>
+</body>
+</html>
