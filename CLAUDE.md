@@ -163,11 +163,24 @@ Onay açıkken giriş YAPILAMAZ. Kullanıcı Login'e atılıyor, reddediliyor ve
 e-postasına bakması gerektiğini söyleyen hiçbir şey yok. "Onay bekleniyor"
 durumunu gösteren ekran/mesaj **hiç yok**.
 
-**(b) Reddedilme mesajı ham ve İngilizce.** `LoginScreen.tsx:39` →
-`Alert.alert('Giriş Hatası', error.message)`; Supabase'in `Email not confirmed`'i
-aynen ekrana basılıyor. `RegisterScreen.tsx:46` aynı ihlal. Bu zaten "ham
-`error.message` bir kullanıcı metnine ŞABLONLANMAZ" kuralının ihlali — onay
-açıkken en sık görülen hata bu olacağı için görünürlüğü tavan yapar.
+**~~(b) Reddedilme mesajı ham ve İngilizce.~~ → KAPANDI (2026-08-09, cihazda
+DOĞRULANDI).** Ham `error.message` ekrana basılıyordu (`Email not confirmed`,
+`Invalid login credentials`) — "ham `error.message` bir kullanıcı metnine
+ŞABLONLANMAZ" kuralının ihlaliydi ve onay açılınca en sık görülen hata bu
+olacağı için görünürlüğü tavan yapacaktı.
+
+Düzeltme **`useAuth.tsx`'te, ekranlarda DEĞİL** — projenin kuralı *"hook kısa
+Türkçe metin döndürür, ham hata konsola"* (`useRankings`/`useProfile` bir kez
+böyle düzeltilmişti). `toDisplayError` hata **KODUNU** eşliyor, iki auth ekranı
+**hiç değişmedi** (ikisi de zaten `error.message` gösteriyordu).
+- Kod eşlemesi mesaj regex'lemekten farklı ve projenin zaten onayladığı ayrım:
+  `code` belgeli ve kararlı bir sözleşme (`useListItems`'ın `23505`/`23503`
+  ayrıştırmasıyla aynı gerekçe).
+- Eşlenen üç kod: `email_not_confirmed` · `invalid_credentials` ·
+  `user_already_exists`. Sonuncusu onay KAPALIYKEN de canlıydı.
+- Bilinmeyen kod → tek genel metin. Ham nesne **ve kodun kendisi** ayrı
+  satırlarda `console.error`'a gidiyor, yani eşlenmemiş bir kod testte görünür
+  ve listeye eklenir.
 
 **(c) Zaten kayıtlı e-posta → sessiz SAHTE başarı.** Supabase onay açıkken e-posta
 sayımını (enumeration) engellemek için var olan bir adrese `signUp` çağrısında

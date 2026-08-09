@@ -6,8 +6,54 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+
+/**
+ * Supabase hata KODU → kullanıcıya gösterilecek kısa Türkçe metin.
+ *
+ * ── NEDEN KOD, MESAJ DEĞİL ───────────────────────────────────────────────────
+ * Projenin "hata türü AYRIŞTIRILMIYOR" kararı ağ/native mesajlarını regex'lemek
+ * içindi ve o karar duruyor. Bu farklı: `code` **belgeli ve kararlı bir
+ * sözleşme** — `useListItems`'ın Postgres `23505`/`23503` kodlarını ayrıştırması
+ * da aynı gerekçeye dayanıyor.
+ *
+ * ── NEDEN HOOK'TA, EKRANDA DEĞİL ─────────────────────────────────────────────
+ * Projenin kuralı: **hook kısa Türkçe metin döndürür, ham hata konsola gider.**
+ * `useRankings` ve `useProfile` bir kez tam olarak bu şekilde düzeltilmişti.
+ * Burada eşleme hook'ta olduğu için iki auth ekranı HİÇ DEĞİŞMEDİ — ikisi de
+ * zaten `error.message` gösteriyor, artık gösterdikleri metin bu.
+ */
+const AUTH_ERROR_TEXT: Record<string, string> = {
+  // Onay AÇILDIĞINDA en sık görülecek hata bu olacak (madde b).
+  email_not_confirmed:
+    'E-postanı onaylaman gerekiyor. Gelen kutunu kontrol et.',
+  invalid_credentials: 'E-posta veya şifre hatalı.',
+  // Onay KAPALIYKEN bugün de canlı: var olan bir e-postayla kaydolmayı denemek
+  // düzgün hata veriyor ama metni ham İngilizce geliyordu.
+  user_already_exists: 'Bu e-posta zaten kayıtlı, giriş yapmayı dene.',
+};
+
+/**
+ * Ham `AuthError`'ı ekrana basılabilir bir `Error`'a çevirir; `null` ise `null`.
+ *
+ * Bilinmeyen kod → tek bir genel metin. Bu **bilinçli**: teşhis koymayan kısa
+ * bir mesaj, yanlış teşhis koyan uzun bir mesajdan iyi. Ham nesne zaten
+ * `console.error`'da ve KOD ayrı bir alanda basılıyor — eşlenmemiş bir kod
+ * çıkarsa testte görünür ve listeye eklenir.
+ */
+function toDisplayError(error: AuthError | null, kaynak: string): Error | null {
+  if (!error) return null;
+
+  console.error(`[useAuth] ${kaynak} — kod:`, error.code ?? '(yok)');
+  console.error(`[useAuth] ${kaynak} — ham hata:`, error);
+
+  const text =
+    (error.code && AUTH_ERROR_TEXT[error.code]) ??
+    'Bir şeyler ters gitti, tekrar dene.';
+
+  return new Error(text);
+}
 
 /**
  * Oturum durumu — TEK KAYNAK (Context).
@@ -91,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    return { error: toDisplayError(error, 'signIn') };
   }, []);
 
   /**
@@ -126,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
         options: { data: { username } },
       });
-      return { error };
+      return { error: toDisplayError(error, 'signUp') };
     },
     []
   );
