@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -28,13 +28,40 @@ import { Colors, Type, Spacing, Radius } from '../../constants/theme';
  *  ekran arası geçişte logo zıplıyordu. */
 const LOGO_SIZE = 80;
 
+/**
+ * "Tekrar gönder" kilidi. Supabase'in kendi hız sınırı da var ve o bundan
+ * bağımsız çalışıyor (başka cihazdan denenebilir) — bu kilit kullanıcıyı
+ * o hatayı görmekten koruyan ilk bariyer, tek bariyer değil.
+ */
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export default function RegisterScreen() {
   const navigation = useNavigation<any>();
-  const { signUp } = useAuth();
+  const { signUp, resendConfirmation } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  /**
+   * Onay bekleniyor durumu — `null` iken form, dolu iken durum görünümü.
+   *
+   * AYRI EKRAN/ROTA YAPILMADI: yeni bir rota + `AuthStack` değişikliği demekti,
+   * oysa gösterilecek tek bir bilgi var. Mevcut parçalarla (Icon + Button)
+   * kuruluyor, yeni tasarım dili gerekmiyor.
+   */
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  /** "Tekrar gönder" kilidi — saniye cinsinden kalan süre. */
+  const [cooldown, setCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+
+  // Geri sayım. Aralık YALNIZCA kilit varken kuruluyor ve temizleniyor —
+  // sürekli çalışan bir sayaç ekran kapandıktan sonra da tetiklenirdi.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   const handleRegister = async () => {
     // Kullanıcı adı artık gerçekten KULLANILIYOR (metadata ile trigger'a gidiyor),
@@ -78,16 +105,52 @@ export default function RegisterScreen() {
       return;
     }
 
-    const { error } = await signUp(email, password, trimmedUsername);
+    const { error, alreadyRegistered, needsConfirmation } = await signUp(
+      email,
+      password,
+      trimmedUsername
+    );
     setLoading(false);
+
     if (error) {
       // Metin artık `useAuth` tarafından koda göre üretiliyor; ham İngilizce
       // mesaj ekrana ulaşmıyor.
       Alert.alert('Kayıt Hatası', error.message);
-    } else {
-      Alert.alert('Başarılı!', 'Hesabın oluşturuldu. Giriş yapabilirsin.');
-      navigation.navigate('Login');
+      return;
     }
+
+    // (c) Supabase bunu HATA olarak döndürmüyor — sessiz sahte başarı olurdu.
+    if (alreadyRegistered) {
+      Alert.alert('Kayıt Hatası', 'Bu e-posta zaten kayıtlı, giriş yapmayı dene.');
+      return;
+    }
+
+    // (a) Onay bekleniyor: formun yerine durum görünümü. Login'e ATMIYORUZ —
+    // onay açıkken giriş yapılamaz, kullanıcı orada reddedilirdi.
+    if (needsConfirmation) {
+      setPendingEmail(email);
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+      return;
+    }
+
+    // Oturum açıldı (onay KAPALI): `RootNavigator` oturumu görüp uygulamaya
+    // geçiyor. Buradan yönlendirme yapmıyoruz — iki taraf yarışırdı.
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail || cooldown > 0 || resending) return;
+
+    setResending(true);
+    const { error } = await resendConfirmation(pendingEmail);
+    setResending(false);
+
+    if (error) {
+      Alert.alert('Gönderilemedi', error.message);
+      return;
+    }
+
+    setCooldown(RESEND_COOLDOWN_SECONDS);
+    Alert.alert('Gönderildi', 'Onay bağlantısını tekrar gönderdik.');
   };
 
   return (
@@ -110,6 +173,47 @@ export default function RegisterScreen() {
             <Text style={styles.tagline}>Lezzetleri keşfet, sırala, paylaş.</Text>
           </View>
 
+          {pendingEmail ? (
+            /* ── Onay bekleniyor (a) + (d) ── */
+            <View style={styles.formCard}>
+              <View style={styles.pendingIcon}>
+                <Icon name="mail" size={32} color={Colors.brandStrong} />
+              </View>
+
+              <Text style={styles.formTitle}>E-postanı kontrol et</Text>
+
+              <Text style={styles.pendingText}>
+                <Text style={styles.pendingEmail}>{pendingEmail}</Text> adresine
+                onay bağlantısı gönderdik. Bağlantıya dokunduktan sonra giriş
+                yapabilirsin.
+              </Text>
+
+              <Text style={styles.pendingHint}>
+                Gelmediyse spam klasörüne bakmayı unutma.
+              </Text>
+
+              <Button
+                label={
+                  cooldown > 0
+                    ? `Tekrar gönder (${cooldown})`
+                    : 'Tekrar gönder'
+                }
+                onPress={handleResend}
+                loading={resending}
+                disabled={cooldown > 0}
+                style={styles.primaryButton}
+              />
+
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => navigation.navigate('Login')}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  <Text style={styles.linkText}>Giriş ekranına dön</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
           <View style={styles.formCard}>
             <Text style={styles.formTitle}>Hesap Oluştur</Text>
 
@@ -154,6 +258,7 @@ export default function RegisterScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -212,6 +317,32 @@ const styles = StyleSheet.create({
    * İkinci bir kopya bırakmak, iki tanımın zamanla ayrışması demekti.
    */
   primaryButton: { marginTop: Spacing.xs },
+
+  // ── Onay bekleniyor durumu ──
+  pendingIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.brandSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: Spacing.md,
+  },
+  pendingText: {
+    ...Type.body,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
+  pendingEmail: {
+    color: Colors.textPrimary,
+    fontWeight: Type.bodyStrong.fontWeight,
+  },
+  pendingHint: {
+    ...Type.caption,
+    color: Colors.textMuted,
+    marginBottom: Spacing.lg,
+  },
   secondaryButton: { marginTop: Spacing.lg, alignItems: 'center' },
   secondaryButtonText: {
     ...Type.caption,

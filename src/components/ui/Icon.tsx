@@ -59,6 +59,8 @@ const ICONS = {
 
   // Durum
   alert: 'alert-circle-outline',
+  /** Kayıt sonrası "onay bağlantısı gönderdik" durumu. */
+  mail: 'mail-outline',
 
   // Sekmeler
   home: 'home-outline',

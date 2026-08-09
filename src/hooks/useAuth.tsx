@@ -32,6 +32,10 @@ const AUTH_ERROR_TEXT: Record<string, string> = {
   // Onay KAPALIYKEN bugün de canlı: var olan bir e-postayla kaydolmayı denemek
   // düzgün hata veriyor ama metni ham İngilizce geliyordu.
   user_already_exists: 'Bu e-posta zaten kayıtlı, giriş yapmayı dene.',
+  // "Tekrar gönder" için: Supabase kendi hız sınırını uyguluyor ve bizim
+  // 60 sn'lik istemci kilidimizden bağımsız (başka cihazdan da denenebilir).
+  over_email_send_rate_limit:
+    'Çok sık denedin. Biraz bekleyip tekrar dene.',
 };
 
 /**
@@ -97,11 +101,23 @@ interface AuthContextValue {
     email: string,
     password: string
   ) => Promise<{ error: Error | null }>;
+  /**
+   * Dönüş şekli GENİŞLEDİ (2026-08-09) — `error`'a iki semantik bayrak eklendi.
+   * Ekran Supabase detayını (`data.user.identities`) BİLMİYOR; ayrım hook'ta.
+   */
   signUp: (
     email: string,
     password: string,
     username: string
-  ) => Promise<{ error: Error | null }>;
+  ) => Promise<{
+    error: Error | null;
+    /** E-posta zaten kayıtlı — Supabase bunu hata olarak DÖNDÜRMÜYOR. */
+    alreadyRegistered: boolean;
+    /** Kayıt oldu ama oturum yok: onay bağlantısı bekleniyor. */
+    needsConfirmation: boolean;
+  }>;
+  /** Onay e-postasını tekrar gönderir. */
+  resendConfirmation: (email: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -167,15 +183,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const signUp = useCallback(
     async (email: string, password: string, username: string) => {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { username } },
       });
-      return { error: toDisplayError(error, 'signUp') };
+
+      /**
+       * ── ÜÇ SONUCU AYIRAN TEK KAYNAK: `session` + `identities` ──────────────
+       *
+       * `session` VAR            → kullanıcı zaten giriş yaptı (onay KAPALI).
+       *                            `RootNavigator` oturumu görüp uygulamaya
+       *                            geçiyor; ekranın yapacağı bir şey yok.
+       * `session` YOK + identities BOŞ
+       *                          → **zaten kayıtlı e-posta** (madde c).
+       *                            Supabase onay açıkken e-posta sayımını
+       *                            engellemek için HATA DÖNDÜRMÜYOR; sahte bir
+       *                            user nesnesi dönüyor ve tek ayırt edici
+       *                            işaret `identities` dizisinin boş olması.
+       * `session` YOK + identities DOLU
+       *                          → **onay bekleniyor** (madde a).
+       *
+       * Bu ayrım panel ayarını OKUMUYOR: onay açık da olsa kapalı da olsa aynı
+       * kod doğru davranıyor. Yapılandırmaya dallanmak, bu projede üç kez
+       * pahalıya patlamış "belirli bir yapılandırma için doğru formül"
+       * sınıfının auth tarafındaki karşılığı olurdu.
+       */
+      const alreadyRegistered =
+        !error && !data.session && (data.user?.identities?.length ?? 0) === 0;
+
+      const needsConfirmation =
+        !error && !data.session && (data.user?.identities?.length ?? 0) > 0;
+
+      return {
+        error: toDisplayError(error, 'signUp'),
+        alreadyRegistered,
+        needsConfirmation,
+      };
     },
     []
   );
+
+  /**
+   * Onay e-postasını tekrar gönderir (madde d).
+   *
+   * Spam'e düşen ya da silinen bir onay maili için tek çıkış yolu. Supabase'in
+   * `resend`'i zaten vardı ama hiçbir yerden çağrılmıyordu.
+   */
+  const resendConfirmation = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    return { error: toDisplayError(error, 'resend') };
+  }, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -190,8 +248,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * uygulama geneline yayılıyor.
    */
   const value = useMemo<AuthContextValue>(
-    () => ({ session, user, loading, signIn, signUp, signOut }),
-    [session, user, loading, signIn, signUp, signOut]
+    () => ({
+      session,
+      user,
+      loading,
+      signIn,
+      signUp,
+      resendConfirmation,
+      signOut,
+    }),
+    [session, user, loading, signIn, signUp, resendConfirmation, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
