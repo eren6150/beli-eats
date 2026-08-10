@@ -42,6 +42,7 @@ import DiaryEntrySheet from '../components/diary/DiaryEntrySheet';
 import DiaryRow from '../components/diary/DiaryRow';
 import SegmentedTabs from '../components/ui/SegmentedTabs';
 import PhotoGrid from '../components/photos/PhotoGrid';
+import ReportPhotoSheet from '../components/photos/ReportPhotoSheet';
 import { usePlacePhotos } from '../hooks/usePlacePhotos';
 import { usePlaceVisits } from '../hooks/usePlaceVisits';
 import { makePhotoRenditions, uploadPlacePhoto } from '../lib/placePhotos';
@@ -160,6 +161,8 @@ export default function RestaurantDetailScreen() {
    */
   const [uploadingKind, setUploadingKind] = useState<PlacePhotoKind | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  /** Şikayet edilecek fotoğraf — `null` ise seçici kapalı (migration 018). */
+  const [reportingPhoto, setReportingPhoto] = useState<PlacePhoto | null>(null);
   const {
     fetchPhotos,
     byKind,
@@ -621,6 +624,7 @@ export default function RestaurantDetailScreen() {
               horizontalPadding={Spacing.lg}
               currentUserId={user?.id}
               onDelete={handleDeletePhoto}
+              onReport={setReportingPhoto}
               emptyLabel={PHOTO_EMPTY_LABEL[photoTab]}
               // Yer tutucu YALNIZCA yüklemenin hedeflendiği sekmede.
               pending={uploadingKind === photoTab ? 1 : 0}
@@ -786,6 +790,16 @@ export default function RestaurantDetailScreen() {
         placeName={place?.name ?? placeName}
         onClose={() => setDiarySheetVisible(false)}
         onSaved={handleDiarySaved}
+      />
+
+      {/* Şikayet seçicisi. Sonuç mesajını EKRAN gösteriyor: sheet kapandıktan
+          sonra bir uyarı çıkarmak, sheet'in kendi içinde göstermekten daha
+          doğru — kapanan bir yüzeyde mesaj bir an görünüp kaybolurdu. */}
+      <ReportPhotoSheet
+        photo={reportingPhoto}
+        currentUserId={user?.id}
+        onClose={() => setReportingPhoto(null)}
+        onDone={(message) => Alert.alert('Bildirim', message)}
       />
     </View>
   );

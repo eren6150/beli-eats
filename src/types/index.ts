@@ -181,6 +181,16 @@ export interface PlacePhoto {
    */
   thumb_path: string;
   caption: string | null;
+  /**
+   * Moderasyonla gizlendi mi (migration 018).
+   *
+   * SELECT politikası gizli satırları YALNIZCA yükleyicisine gösteriyor
+   * (`not hidden or auth.uid() = user_id`), yani bu alan başkasının
+   * fotoğrafında pratikte hep `false` — gizli olan zaten listeye hiç girmiyor.
+   * Değeri okuyan tek yer, yükleyicinin kendi karesindeki "Gizlendi" etiketi:
+   * onsuz fotoğrafı sessizce kaybolmuş görünür ve bir hata sanırdı.
+   */
+  hidden: boolean;
   created_at: string;
   /** `select '*, profiles(*)'` ile gelen join — "kim yükledi" için. */
   profiles?: Profile | null;

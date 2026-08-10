@@ -36,9 +36,20 @@ export interface PhotoGridProps {
   photos: PlacePhoto[];
   /** Yatay padding — kare boyutunu doğru hesaplamak için gerekiyor. */
   horizontalPadding: number;
-  /** Verilirse kullanıcı KENDİ fotoğrafına uzun basıp silebiliyor. */
+  /**
+   * Oturum sahibi. Uzun basışın hangi dala gideceğini bu belirliyor:
+   * kendi fotoğrafı → sil, başkasınınki → bildir.
+   */
   currentUserId?: string;
   onDelete?: (photo: PlacePhoto) => void;
+  /**
+   * Başkasının fotoğrafında uzun basış → şikayet seçicisi.
+   *
+   * Verilmezse o dal HİÇ kurulmuyor — `onDelete`'in aynı kuralı ve projenin
+   * "tıklanabilir görünüp tepki vermemek, hiç tıklanabilir görünmemekten
+   * kötü" ilkesi.
+   */
+  onReport?: (photo: PlacePhoto) => void;
   emptyLabel: string;
   /**
    * Uçuştaki yükleme sayısı — her biri için spinner'lı bir yer tutucu kare.
@@ -75,8 +86,11 @@ function PhotoCell({
   return (
     <Pressable
       onPress={onPress}
-      // Uzun basış → sil. Projedeki yıkıcı eylem deseni bu (`ListCard`,
-      // `DiaryRow`): her kareye çöp kutusu koymak ızgarayı gürültülendirirdi.
+      // Uzun basış → KENDİ fotoğrafında sil, BAŞKASININKİNDE bildir. Projedeki
+      // yıkıcı/ikincil eylem deseni bu (`ListCard`, `DiaryRow`): her kareye
+      // ikon koymak ızgarayı gürültülendirirdi. "Bildir" için ayrı bir yüzey
+      // açılmadı çünkü bu dal zaten BOŞTU — başkasının fotoğrafında uzun
+      // basışın hiçbir karşılığı yoktu.
       onLongPress={onLongPress}
       style={({ pressed }) => [
         { width: size, height: size },
@@ -98,6 +112,22 @@ function PhotoCell({
           }).start()
         }
       />
+
+      {/**
+        * "Gizlendi" etiketi — YALNIZCA yükleyicinin kendi karesinde görünür.
+        *
+        * Politika gizli satırları başkasına HİÇ döndürmüyor (migration 018:
+        * `not hidden or auth.uid() = user_id`), yani bu rozet mantıken zaten
+        * yalnızca sahibine çiziliyor; ekstra bir sahiplik kontrolü gereksiz.
+        *
+        * Etiket olmadan kullanıcı fotoğrafını sessizce KAYBOLMUŞ görürdü
+        * (başkalarında görünmüyor) ve bunu bir hata sanardı.
+        */}
+      {photo.hidden && (
+        <View style={styles.hiddenBadge}>
+          <Text style={styles.hiddenBadgeText}>Gizlendi</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -107,6 +137,7 @@ export default function PhotoGrid({
   horizontalPadding,
   currentUserId,
   onDelete,
+  onReport,
   emptyLabel,
   pending = 0,
 }: PhotoGridProps) {
@@ -142,6 +173,19 @@ export default function PhotoGrid({
 
         {photos.map((photo) => {
           const mine = Boolean(currentUserId && photo.user_id === currentUserId);
+
+          /**
+           * Uzun basış TEK jest, İKİ anlam — hangisi olduğunu sahiplik
+           * belirliyor. Oturum yoksa (`currentUserId` undefined) ikisi de
+           * kurulmuyor: şikayet RLS'te `auth.uid()` istiyor, anon bir
+           * kullanıcıya tepki vermeyecek bir jest sunmak yanıltıcı olurdu.
+           */
+          const longPress = !currentUserId
+            ? undefined
+            : mine
+              ? onDelete && (() => onDelete(photo))
+              : onReport && (() => onReport(photo));
+
           return (
             <PhotoCell
               key={photo.id}
@@ -151,7 +195,7 @@ export default function PhotoGrid({
                 setFullLoading(true);
                 setViewing(photo);
               }}
-              onLongPress={mine && onDelete ? () => onDelete(photo) : undefined}
+              onLongPress={longPress || undefined}
             />
           );
         })}
@@ -206,6 +250,21 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderSubtle,
   },
   thumb: { width: '100%', height: '100%' },
+
+  /** Karenin altına oturan şerit — görselin kendisini kapatmıyor. */
+  hiddenBadge: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.scrimStrong,
+    paddingVertical: Spacing.xxs,
+    alignItems: 'center',
+  },
+  hiddenBadgeText: {
+    ...Type.micro,
+    color: Colors.textOnBrand,
+  },
 
   empty: {
     ...Type.caption,

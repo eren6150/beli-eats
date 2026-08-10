@@ -264,3 +264,79 @@ export async function uploadPlacePhoto(
 
   return { transport: full.transport, error: null };
 }
+
+/**
+ * Fotoğraf türleriyle AYNI SÖZLEŞME: değerler İngilizce, arayüz Türkçe.
+ * DB tarafında `photo_reports_reason_valid` CHECK kısıtı ile aynı küme
+ * (migration 018) — buraya yeni sebep eklemek SQL kısıtını da güncellemek
+ * demek.
+ *
+ * SERBEST METİN AÇIKLAMA YOK, bilinçli: kendisi moderasyon gerektiren yeni bir
+ * kötüye kullanım yüzeyi olurdu (şikayet kutusuna hakaret yazılabilir).
+ * Kategori triyaj için yeterli.
+ */
+export type PhotoReportReason =
+  | 'inappropriate'
+  | 'irrelevant'
+  | 'spam'
+  | 'other';
+
+export const PHOTO_REPORT_REASON_TR: Record<PhotoReportReason, string> = {
+  inappropriate: 'Uygunsuz içerik',
+  irrelevant: 'Bu mekanla ilgisiz',
+  spam: 'Spam veya reklam',
+  other: 'Diğer',
+};
+
+/**
+ * Bir fotoğrafı şikayet eder — hook DIŞINDA, modül seviyesi fonksiyon.
+ *
+ * `addPlaceToList`'in aynı deseni: çağıran ızgara bileşeni, tek seferlik bir
+ * yazma yapıyor ve listeyi yeniden okumuyor (şikayet ekranda hiçbir şeyi
+ * değiştirmiyor — moderasyon panelde).
+ *
+ * ── `23505` BİR HATA DEĞİL, BİLGİDİR ─────────────────────────────────────────
+ * `photo_reports` PK'sı `(photo_id, user_id)`, yani ikinci şikayet unique
+ * kısıta takılıyor. Bunu "zaten bildirdin" bilgisine çeviriyoruz —
+ * `addPlaceToList`'in `23505`'i "mekan listede zaten var" diye okumasıyla
+ * birebir aynı. Kazanç: "bu fotoğrafı bildirdim mi" diye AYRI BİR SORGU
+ * atmaya gerek yok; ızgarada kare başına sorgu N+1 demekti.
+ *
+ * ── `42501` / RLS REDDİ ──────────────────────────────────────────────────────
+ * Kendi fotoğrafını şikayet etmek politikada engelli (migration 018,
+ * `with check` alt sorgusu). Arayüz o durumda eylemi hiç göstermiyor, yani
+ * buraya normalde gelinmiyor; yine de sessiz kalmamak için ayrı metin var.
+ *
+ * Konsol seviyesi ayrımı korunuyor: ele alınmış durumlar `warn`, gerçek
+ * hatalar `error`.
+ */
+export async function reportPhoto(
+  photoId: string,
+  userId: string,
+  reason: PhotoReportReason
+): Promise<{ error: Error | null; alreadyReported: boolean }> {
+  const { error } = await supabase
+    .from('photo_reports')
+    .insert({ photo_id: photoId, user_id: userId, reason });
+
+  if (!error) return { error: null, alreadyReported: false };
+
+  if (error.code === '23505') {
+    console.warn('[placePhotos] fotoğraf zaten bildirilmiş:', photoId);
+    return { error: null, alreadyReported: true };
+  }
+
+  console.error('[placePhotos] şikayet yazılamadı:', error);
+
+  if (error.code === '42501') {
+    return {
+      error: new Error('Kendi fotoğrafını bildiremezsin.'),
+      alreadyReported: false,
+    };
+  }
+
+  return {
+    error: new Error('Bildirilemedi. Bağlantını kontrol et.'),
+    alreadyReported: false,
+  };
+}
