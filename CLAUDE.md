@@ -3030,7 +3030,7 @@ her biri bir öncekinin üstüne biniyor:
 | Kademe | Kim kullanıyor | Ne gerekiyor |
 |---|---|---|
 | **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
-| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı **(a)–(d)**~~ ✅ · ~~**custom SMTP**~~ ✅ · **fotoğraf moderasyonu** ⏳ (veri hazır, istemci sırada) · **kendi alan adı** (spam) ⬜ |
+| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⬜ — *son kalan koşul, Faz 4'e bağlı* |
 | **3 — genel yayın** | Herkes | Faz 4 (marka) + Google çağrıları **Edge Function** arkasına + Play Store için **AAB** |
 
 - **Kademe 2'nin koşulları DÖRDE ÇIKTI, ikisi kapandı (2026-08-09):**
@@ -3041,10 +3041,10 @@ her biri bir öncekinin üstüne biniyor:
     davetlilerin çoğu onay mailini **hiç alamayacaktı** ve sebebini kimse
     bilmeyecekti. Ders: *e-posta onayını açmak, mail ALTYAPISI kararını da
     beraberinde getiriyor.* (Önce Brevo denendi, hesap sorunları çözülemedi.)
-  - ⏳ **Fotoğraf moderasyonu** — **veri katmanı hazır** (migration 018
-    çalıştırıldı ve doğrulandı), **istemci sırada**. Koşul ancak "Bildir"
-    eylemi sahaya çıkınca karşılanıyor: bugün kullanıcı hâlâ hiçbir şey
-    bildiremiyor. Detay bu bölümün ilk maddesinde.
+  - ✅ **Fotoğraf moderasyonu** — migration 018 + istemci sahada (2026-08-10,
+    iki hesapla ve gerçek APK'da doğrulandı). Kullanıcı başkasının
+    fotoğrafını uzun basıp bildirebiliyor, moderasyon panelden yapılıyor,
+    gizlenen fotoğraf yükleyicisinde "Gizlendi" etiketiyle duruyor.
   - ⬜ **Kendi alan adı** — SPF/DKIM olmadan onay mailleri spam'e düşebilir.
     Faz 4'le birleşiyor: marka adı kararlaşınca alan adı alınır.
 - **Kademe 3'ün Edge Function maddesi çift işe yarıyor:** hem Places anahtarını
@@ -3081,9 +3081,26 @@ her biri bir öncekinin üstüne biniyor:
     bildirimi · otomatik gizleme eşiği (bu ölçekte tek kötü niyetli kullanıcı
     meşru fotoğrafları gizletebilirdi) · serbest metin şikayet açıklaması
     (kendisi moderasyon gerektiren yeni bir kötüye kullanım yüzeyi olurdu).
-  - **Kalan iş:** istemci tarafı — "Bildir" eylemi, kategori seçimi, `23505` →
-    "zaten bildirdin", ve yükleyicinin kendi gizlenmiş fotoğrafındaki
-    "Gizlendi" etiketi.
+  - ✅ **İSTEMCİ DE TAMAM (2026-08-10).** Uzun basış tek jest iki anlam:
+    kendi fotoğrafında **sil**, başkasınınkinde **bildir** — o dal zaten
+    boştu, yeni yüzey açılmadı. Dört kategori bir sheet'te (`Alert` Android'de
+    en fazla üç buton destekliyor). `23505` "zaten bildirdin"e çevriliyor,
+    yani "bildirdim mi" için ayrı sorgu yok. Gizlenen fotoğraf yükleyicisinde
+    "Gizlendi" etiketiyle duruyor.
+  - **Yanında çıkan ayrı bir düzeltme:** dosyası eksik bir fotoğraf tam ekranda
+    **sonsuz spinner** üretiyordu (`onError` yoktu, `onLoadEnd` 404'te
+    Android'de güvenilir tetiklenmiyor) ve ızgarada **boş gri kare**
+    bırakıyordu (opaklık `onLoad` beklerken 0'da kalıyordu). İkisi de artık
+    durumunu söylüyor.
+    - ⚠️ **TEST YÖNTEMİ:** gerçek silme ile test EDİLEMEZ — iki önbellek
+      katmanı var ve JS reload ikisini de temizlemiyor (cihazda RN `Image`'ın
+      native disk önbelleği, Supabase tarafında CDN). Doğru yol: SQL ile
+      **var olmayan bir yola** işaret eden bir satır yazmak; 404 garanti,
+      önbellek devre dışı.
+    - **Cache-busting REDDEDİLDİ:** her görseli her render'da yeniden
+      indirtir ve bu projenin ücretsiz katmandaki asıl darboğazı egress.
+      Üstelik önbellekleme burada doğru: her yükleme benzersiz bir yola
+      gidiyor, yani bir yoldaki içerik asla değişmiyor.
 
 ## Konuşulacak (kullanıcı isteği, karar VERİLMEDİ)
 - **Bir listeye dokununca haritadaki pin'lerin o listeye göre filtrelenmesi/vurgulanması**
