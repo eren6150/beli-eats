@@ -21,6 +21,12 @@ anahtarı** · **yıldızların büyük yazı tipinde kırpılma düzeltmesi** �
 
 Böylece `user_rankings` ↔ `diary_entries` arasındaki **iki boşluk da kapandı**.
 
+**Kademe 2 hazırlığı başladı (2026-08-09).** E-posta onayı **açıldı** ve akış
+uçtan uca doğrulandı: onay maili → iniş sayfası → giriş. Kullanıcı adı
+çakışması artık önden uyarıyor ve profilden düzeltilebiliyor. Custom SMTP
+(**SendGrid**) bağlandı — bu koşul plan yapılırken atlanmıştı, sahada çıktı.
+Kalan iki koşul: **fotoğraf moderasyonu** ve **kendi alan adı**.
+
 **Engelleyici açık iş yok.** Sıradakiler için üç yere bak: Yol Haritası →
 **Faz 3'ün ertelenen dört maddesi** (üçü ölçek/veri koşulu bekliyor) ·
 **Bilinen Açık İşler** (bir sonraki build'in paketi orada, en üstte — Faz 4'ün
@@ -74,11 +80,10 @@ takip ettiği kişilerin aktivite akışı olacak.
 ## Mimari Notlar
 
 ### Veri / Backend
-- Auth: kayıt/giriş aktif. **Zorunlu e-posta onayı BİLİNÇLİ OLARAK KAPALI** —
-  arkadaş testi süresince böyle kalacak. Açmanın önündeki altı somut sorun ve
-  düzeltme sırası: Mimari Notlar → **Auth / kayıt akışı**. (2026-08-03'te açılması
-  düşünüldü, analiz sonrası **ertelendi**: tek diff'e sığmıyor ve arkadaş testini
-  geciktirirdi.)
+- Auth: kayıt/giriş aktif. **Zorunlu e-posta onayı AÇIK** (2026-08-09) ve
+  akış uçtan uca doğrulandı. Önündeki altı sorunun hepsi kapandı; altyapının
+  üç panel parçası (**custom SMTP / Site URL / Redirect URLs**) ve alan adı
+  uyarısı: Mimari Notlar → **Auth / kayıt akışı**.
 - Takip sistemi: `follows` tablosu (`follower_id`, `following_id`)
 - **Migration'lar elle çalıştırılıyor** (Supabase SQL Editor). Sıfırdan kurulum sırası
   `supabase_schema.sql` başında yazılı:
@@ -135,33 +140,69 @@ takip ettiği kişilerin aktivite akışı olacak.
     kırılgan. Tek kısa mesaj + "Tekrar dene" ikisini de doğru karşılıyor. Metinler bu
     yüzden teşhis koymuyor: "Bağlantını kontrol et", "Bağlantı yok" değil.
 
-### Auth / kayıt akışı — E-POSTA ONAYI KAPALI, dört açık iş (analiz: 2026-08-03)
-> Altı maddeydi. **(f)** migration 012 ile **kapandı**, **(e)**'nin kodu
-> düzeltildi (cihazda doğrulanmadı) — ikisi de 2026-08-04. Kalan (a)–(d)'nin
-> hepsi yalnızca **onay açılınca** canlıya çıkıyor.
-E-posta onayını açma kararı **ertelendi**. Aşağıdaki altısı tek diff'e sığmıyordu ve
-arkadaş testini geciktirecekti. **Panelden onay açılırsa (a)–(d) o anda canlıya
-çıkar** — mevcut APK'da hiçbiri karşılanmıyor. (e) ve (f) onaydan bağımsız, bugün
-de bozuklar.
+### Auth / kayıt akışı — ✅ E-POSTA ONAYI AÇIK, ALTI MADDE DE KAPANDI
+> **2026-08-09'da tamamlandı ve uçtan uca doğrulandı.** Onay panelden AÇILDI.
+> (e) ve (f) 2026-08-04'te kapanmıştı; (b) ile (a)/(c)/(d) 1a paketinin üç
+> diff'iyle kapandı. Aşağıdaki analiz **tarihsel kayıt** olarak duruyor —
+> her maddenin ne olduğu ve nasıl çözüldüğü kendi başlığında yazılı.
 
-Analiz burada tam olarak duruyor ki açma kararı verildiğinde sıfırdan teşhis
-gerekmesin.
+**Çalışan akış:** `RegisterScreen.handleRegister` → `useAuth.signUp`
+(`options.data.username` ile) → `auth.users` insert → **trigger**
+`on_auth_user_created` profil satırını yazıyor (çakışmada sonek üretiyor) →
+onay maili gidiyor → kullanıcı bağlantıya dokunuyor → **iniş sayfası**
+(`docs/index.html`, GitHub Pages) → uygulamaya dönüp giriş yapıyor.
 
-**Bugünkü akış:** `RegisterScreen.handleRegister` → `useAuth.signUp` →
+#### ⚠️ Onay akışının ÜÇ altyapı parçası — üçü de panelde
+Kodda değil, **panelde** yaşıyorlar; unutulursa akış sessizce kırılır.
+
+1. **Custom SMTP — ZORUNLU, opsiyonel değil.** Supabase'in dahili mail
+   sunucusu *"yalnızca test için"* ve **proje genelinde saatte birkaç
+   e-posta** ile sınırlı. Sahada bulundu: 3-4 kayıt denemesi kotayı bitirdi
+   ve sonraki her deneme `over_email_send_rate_limit` verdi; 10 dakika
+   beklemek yetmedi çünkü **pencere saatlik ve limit IP/e-posta başına
+   değil, PROJE genelinde**.
+   - **Kullanılan sağlayıcı: SendGrid.** Önce Brevo denendi, hesap
+     açma/giriş sorunları çözülemedi ve vazgeçildi.
+   - ⚠️ **Custom SMTP bağlamak kotayı OTOMATİK YÜKSELTMİYOR** —
+     Authentication → Rate Limits'teki değer elle artırılmalı, yoksa aynı
+     duvara toslanır.
+2. **Site URL** — Supabase onay bağlantısında e-postayı ÖNCE sunucuda
+   onaylıyor, SONRA tarayıcıyı buraya yönlendiriyor. Fabrika varsayılanı
+   `http://localhost:3000` olduğu için kullanıcı `ERR_CONNECTION_REFUSED`
+   görüyordu — **hesap onaylanmış olmasına rağmen** "kayıt olamadım"
+   izlenimi veriyordu. Artık GitHub Pages'teki iniş sayfasına bakıyor.
+3. **Redirect URLs** — bugün BOŞ olabilir; o liste yalnızca kodda
+   `emailRedirectTo` gönderilirse devreye giriyor ve göndermiyoruz. Deep
+   link geldiğinde doldurulacak (bir sonraki build'in paketi).
+
+⚠️ **ALAN ADI YOK, SPAM RİSKİ GERÇEK.** SPF/DKIM imzası olmadığı için onay
+mailleri Gmail/Outlook'ta spam'e düşebilir. Arkadaş testinde tolere edilir;
+**davetli çevreye açmadan önce kendi alan adı bağlanmalı.** Faz 4'le doğal
+olarak birleşiyor: marka adı kararlaşınca alan adı alınır, mail altyapısı
+onun üstüne kurulur.
+
+#### Kapanan maddeler — tarihsel kayıt
+
+**Eski akış:** `RegisterScreen.handleRegister` → `useAuth.signUp` →
 `supabase.auth.signUp({ email, password })` → `auth.users` insert → **trigger**
 `on_auth_user_created` profil satırını yazıyor (`supabase_schema.sql:29-46`) →
 istemci ayrıca `profiles.insert` deniyor.
 
-#### Onay açılınca kırılacaklar
+#### Onay açılınca kırılacaklardı — ÜÇÜ DE KAPANDI (2026-08-09)
 
-**(a) Başarı mesajı doğrudan yalan olur.** `RegisterScreen.tsx:48-49`:
-```ts
-Alert.alert('Başarılı!', 'Hesabın oluşturuldu. Giriş yapabilirsin.');
-navigation.navigate('Login');
-```
-Onay açıkken giriş YAPILAMAZ. Kullanıcı Login'e atılıyor, reddediliyor ve
-e-postasına bakması gerektiğini söyleyen hiçbir şey yok. "Onay bekleniyor"
-durumunu gösteren ekran/mesaj **hiç yok**.
+**~~(a) Başarı mesajı doğrudan yalan olur.~~ → KAPANDI.** Eskiden
+`Alert('Başarılı! … Giriş yapabilirsin')` + `navigate('Login')` yapıyordu;
+onay açıkken giriş YAPILAMAZ, yani kullanıcı Login'e atılıp reddediliyordu ve
+e-postasına bakması gerektiğini söyleyen hiçbir şey yoktu.
+
+Artık `RegisterScreen` **Login'e atmıyor**; formun yerine bir durum görünümü
+geliyor: mail ikonu + *"{email} adresine onay bağlantısı gönderdik"* + spam
+hatırlatması + "Tekrar gönder" + "Giriş ekranına dön".
+- **Ayrı ekran/rota YAPILMADI** — yeni rota + `AuthStack` değişikliği demekti,
+  oysa gösterilecek tek bir bilgi var. Mevcut parçalarla (`Icon` + `Button`)
+  kuruldu, yeni tasarım dili gerekmedi.
+- Yan fayda: yönlendirme kalktı. Onay KAPALIYKEN `RootNavigator` zaten oturumu
+  görüp uygulamaya geçiriyordu — iki taraf yarışıyordu.
 
 **~~(b) Reddedilme mesajı ham ve İngilizce.~~ → KAPANDI (2026-08-09, cihazda
 DOĞRULANDI).** Ham `error.message` ekrana basılıyordu (`Email not confirmed`,
@@ -182,17 +223,33 @@ böyle düzeltilmişti). `toDisplayError` hata **KODUNU** eşliyor, iki auth ekr
   satırlarda `console.error`'a gidiyor, yani eşlenmemiş bir kod testte görünür
   ve listeye eklenir.
 
-**(c) Zaten kayıtlı e-posta → sessiz SAHTE başarı.** Supabase onay açıkken e-posta
-sayımını (enumeration) engellemek için var olan bir adrese `signUp` çağrısında
-**hata döndürmez**; sahte bir user nesnesi döner ve ayırt edici işaret
-`data.user.identities` dizisinin **boş** olmasıdır. Kod yalnızca `error`'a baktığı
-için ekranda "Başarılı!" yazar, onay e-postası hiç gelmez, kullanıcı bekler.
-**Onay KAPALIYKEN bu senaryo düzgün hata veriyor** — yani (c) onayla birlikte
-doğan yeni bir kör nokta.
+**~~(c) Zaten kayıtlı e-posta → sessiz SAHTE başarı.~~ → KAPANDI.** Supabase
+onay açıkken e-posta sayımını (enumeration) engellemek için var olan bir adrese
+`signUp` çağrısında **hata döndürmüyor**; sahte bir user nesnesi dönüyor ve tek
+ayırt edici işaret `data.user.identities` dizisinin **boş** olması. Kod yalnızca
+`error`'a baktığı için ekranda "Başarılı!" yazıyor, mail hiç gelmiyor, kullanıcı
+bekliyordu. Artık `signUp` `alreadyRegistered` döndürüyor.
 
-**(d) "E-posta gelmedi" için çıkış yok.** Spam'e düşerse veya silinirse tekrar
-gönderme yolu yok. `supabase.auth.resend({ type: 'signup', email })` mevcut ama
-hiçbir yerden çağrılmıyor.
+**~~(d) "E-posta gelmedi" için çıkış yok.~~ → KAPANDI.** `auth.resend` mevcuttu
+ama hiçbir yerden çağrılmıyordu. Artık onay görünümünde **"Tekrar gönder"** var:
+60 saniyelik istemci kilidi + geri sayım. Supabase'in kendi hız sınırı bundan
+BAĞIMSIZ (başka cihazdan da denenebilir), o yüzden
+`over_email_send_rate_limit` de metin tablosunda.
+
+#### 🔑 ÜÇ SONUCU AYIRAN TEK KAYNAK — panel ayarı OKUNMUYOR
+(a) ve (c)'nin çözümü aynı iki alandan çıkıyor ve bu, tasarımın en kayda değer
+yanı:
+
+| `session` | `identities` | Anlamı |
+|---|---|---|
+| **var** | — | Oturum açıldı (onay KAPALI). `RootNavigator` devralıyor, ekran hiçbir şey yapmıyor. |
+| yok | **boş** | **Zaten kayıtlı e-posta** → (c) |
+| yok | **dolu** | **Onay bekleniyor** → (a) |
+
+**Aynı kod onay açıkken de kapalıyken de doğru davranıyor.** Yapılandırmaya
+dallanmak, bu projede üç kez pahalıya patlamış *"belirli bir yapılandırma için
+doğru formül"* sınıfının auth tarafındaki karşılığı olurdu. Supabase detayı
+(`data.user.identities`) **hook'ta** kalıyor; ekran onu bilmiyor.
 
 #### Onaydan BAĞIMSIZ, bugün de bozuk
 
@@ -2030,8 +2087,10 @@ eder — ikincisi çökme yüzünden **hiç test edilemedi**, hâlâ açık bir 
      Yine de "kayıt olamıyorum" şikayeti gelirse kontrol:
      `select username from profiles order by created_at desc;` ve
      `select public.next_available_username('<sikayet-eden-@-oncesi>');`
-   - E-posta onayı **kapalı** tutuluyor; arkadaşlardan onay maili beklemeleri
-     istenmemeli.
+   - ~~E-posta onayı **kapalı** tutuluyor~~ → **AÇILDI (2026-08-09).** Artık
+     yeni kayıtlar onay maili alıyor ve onaylamadan giriş yapamıyor. Spam
+     klasörü uyarısı yapılmalı: alan adı bağlanana kadar mailler oraya
+     düşebilir (gerekçe: Mimari Notlar → Auth / kayıt akışı).
 
 ### 7. GitHub deposu
 `eren6150/beli-eats` olarak push edildi ve doğrulandı.
@@ -2570,10 +2629,19 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > 4. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9; `.fingerprintignore`
 >    hazır ve kanıtlı, kalan iş Fark 2'nin bir build ile teşhisi).
 > 5. **Faz 4 marka görsellerinin NATIVE tarafı** — aşağıdaki tabloda.
+> 6. **E-posta onayı için DEEP LINK + otomatik giriş.** Bugün onay bağlantısı
+>    uygulamayı açmıyor, web sayfasına iniyor (`docs/index.html`) ve kullanıcı
+>    elle giriş yapıyor. Çalışıyor ama iki adım fazla. Gerekenler:
+>    `app.json` → `"scheme": "belieats"` (**native alan → build**) ·
+>    `signUp`'a `emailRedirectTo` · panelde **Redirect URLs**'e ekleme ·
+>    ⚠️ **ve kod:** `supabaseClient` `detectSessionInUrl: false` (RN için doğru
+>    ayar), yani token'lar URL'in `#` parçasından ELLE ayrıştırılıp
+>    `supabase.auth.setSession()` çağrılmalı; `Linking` dinleyicisi de yok.
+>    Yani "yönlendirmeyi düzeltmek" değil, **yeni bir özellik**.
 >
 > ⚠️ Build alınırken **§2'deki sürüm yükseltme ritüeli** ihmal edilmemeli:
 > `versionCode` +1 her zaman, `version` +1 native değişiklik varsa — ve
-> bu paketin 1., 2., 4. ve 5. maddesi native değişiklik.
+> bu paketin 1., 2., 4., 5. ve 6. maddesi native değişiklik.
 >
 > ### 🎨 Marka işi: neyin OTA gittiği, neyin build istediği (tespit: 2026-08-08)
 > `app.json` ve `app.config.js` okunarak çıkarıldı, tahmin değil. Faz 4'e
@@ -2803,11 +2871,13 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
     ikisi de kontrol edilmeli (APK build'i gerekmiyor, Expo Go yeterli).
     **Ders: navigasyon türü artık her görsel geri bildirimde sorulacak bir
     değişken** — tek modda test etmek bu sınıfı yakalamıyor.
-- **Auth / kayıt akışında dört açık iş (a–d).** E-posta onayı bu yüzden bilinçli
-  olarak kapalı ve dördü de **yalnızca onay açılınca** canlıya çıkıyor. Tam
-  analiz, dosya:satır referansları ve düzeltme sırası: Mimari Notlar →
-  **Auth / kayıt akışı**. `(e)` **kod olarak düzeltildi** (2026-08-04), cihazda
-  doğrulanmayı bekliyor; `(f)` **kapandı** (migration 012).
+- ~~**Auth / kayıt akışında dört açık iş (a–d).**~~ → **HEPSİ KAPANDI
+  (2026-08-09)** ve e-posta onayı **açıldı**. Altı maddenin tamamı, üç panel
+  altyapı parçası (SMTP/Site URL/Redirect URLs) ve **alan adı → spam** uyarısı:
+  Mimari Notlar → **Auth / kayıt akışı**.
+  - ⚠️ **Kalan tek iş oradan doğuyor:** onay bağlantısı uygulamayı AÇMIYOR,
+    web sayfasına iniyor. Deep link + otomatik giriş **build gerektiriyor** ve
+    build paketinin 6. maddesi.
 - ~~`useAuth` Context'e çevrilmeli~~ — **KAPANDI (2026-08-06), Expo Go'da
   13 testle DOĞRULANDI.** Faz 3'ün ÖN KOŞULU olarak yapıldı: o faz en az üç
   yeni ekran getiriyor (`UserProfile`, `FollowersList`, `EditProfile`) ve
@@ -2930,11 +3000,20 @@ her biri bir öncekinin üstüne biniyor:
 | Kademe | Kim kullanıyor | Ne gerekiyor |
 |---|---|---|
 | **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
-| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | E-posta onayı **(a)–(d)** + **fotoğraf moderasyonu** |
+| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı **(a)–(d)**~~ ✅ · **fotoğraf moderasyonu** · ~~**custom SMTP**~~ ✅ · **kendi alan adı** (spam) |
 | **3 — genel yayın** | Herkes | Faz 4 (marka) + Google çağrıları **Edge Function** arkasına + Play Store için **AAB** |
 
-- **Kademe 2'nin iki koşulu da bu dosyada tam analizli duruyor:** (a)–(d)
-  Mimari Notlar → "Auth / kayıt akışı", moderasyon ise bu bölümün ilk maddesi.
+- **Kademe 2'nin koşulları DÖRDE ÇIKTI, ikisi kapandı (2026-08-09):**
+  - ✅ **E-posta onayı akışı** — açıldı ve uçtan uca doğrulandı.
+  - ✅ **Custom SMTP (SendGrid)** — ⚠️ **bu koşul plan yapılırken ATLANMIŞTI
+    ve sahada ortaya çıktı.** Supabase'in dahili mail sunucusu proje genelinde
+    saatte birkaç e-postayla sınırlı; onu bilmeden davetli çevreye açılsaydı
+    davetlilerin çoğu onay mailini **hiç alamayacaktı** ve sebebini kimse
+    bilmeyecekti. Ders: *e-posta onayını açmak, mail ALTYAPISI kararını da
+    beraberinde getiriyor.* (Önce Brevo denendi, hesap sorunları çözülemedi.)
+  - ⬜ **Fotoğraf moderasyonu** — bu bölümün ilk maddesi.
+  - ⬜ **Kendi alan adı** — SPF/DKIM olmadan onay mailleri spam'e düşebilir.
+    Faz 4'le birleşiyor: marka adı kararlaşınca alan adı alınır.
 - **Kademe 3'ün Edge Function maddesi çift işe yarıyor:** hem Places anahtarını
   istemciden tamamen kaldırıyor (Dağıtım §6/2'nin kökten çözümü) hem `places`
   yazma yolunu sunucuya taşıyor.
