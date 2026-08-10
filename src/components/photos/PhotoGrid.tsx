@@ -82,6 +82,16 @@ function PhotoCell({
   onLongPress?: () => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
+  /**
+   * Görsel indirilemedi mi (404, ağ, bozuk dosya).
+   *
+   * ⚠️ ONSUZ SESSİZ BİR BOŞLUK KALIYORDU: kare `opacity: 0` ile başlıyor ve
+   * yalnızca `onLoad` ile 1'e çıkıyor, yani yükleme başarısız olunca opaklık
+   * 0'da KALIYOR ve kullanıcı boş gri bir kare görüyor — hiçbir açıklama yok.
+   * Sahada görüldü: Storage'daki dosyalar silinince satırlar kaldı ve ızgara
+   * sessizce boşaldı.
+   */
+  const [failed, setFailed] = useState(false);
 
   return (
     <Pressable
@@ -111,7 +121,16 @@ function PhotoCell({
             useNativeDriver: true,
           }).start()
         }
+        onError={() => setFailed(true)}
       />
+
+      {/* Kırık kare — boş gri bir kutu yerine ne olduğunu söylüyor. */}
+      {failed && (
+        <View style={styles.cellFallback}>
+          <Icon name="photo" size={20} color={Colors.textMuted} />
+          <Text style={styles.cellFallbackText}>Yüklenemedi</Text>
+        </View>
+      )}
 
       {/**
         * "Gizlendi" etiketi — YALNIZCA yükleyicinin kendi karesinde görünür.
@@ -144,6 +163,19 @@ export default function PhotoGrid({
   const { width } = useWindowDimensions();
   const [viewing, setViewing] = useState<PlacePhoto | null>(null);
   const [fullLoading, setFullLoading] = useState(false);
+  /**
+   * Tam boy görsel indirilemedi mi.
+   *
+   * ⚠️ BU DURUM SONSUZ SPINNER ÜRETİYORDU. Spinner'ı kapatan tek şey
+   * `onLoadEnd`'di ve `onError` HİÇ YOKTU; görsel 404 dönünce `onLoadEnd`
+   * Android'de güvenilir biçimde tetiklenmiyor, dolayısıyla dönen ikon
+   * sonsuza kadar kalıyor ve kullanıcı ne olduğunu anlamıyordu. Sahada
+   * görüldü (Storage'daki dosyalar silinip satırlar kalınca).
+   *
+   * Durum GEÇİCİ bir veri kazasına özgü DEĞİL: moderasyonla silinen bir
+   * dosya, elle temizlik veya kopan ağ aynı sonucu üretiyor.
+   */
+  const [fullError, setFullError] = useState(false);
 
   const size = (width - horizontalPadding * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 
@@ -193,6 +225,9 @@ export default function PhotoGrid({
               size={size}
               onPress={() => {
                 setFullLoading(true);
+                // Hata durumu her açılışta sıfırlanıyor: önceki fotoğrafın
+                // hatası yenisinde asılı kalmamalı.
+                setFullError(false);
                 setViewing(photo);
               }}
               onLongPress={longPress || undefined}
@@ -210,14 +245,33 @@ export default function PhotoGrid({
         statusBarTranslucent
       >
         <Pressable style={styles.viewerRoot} onPress={() => setViewing(null)}>
-          {fullLoading && <ActivityIndicator color={Colors.textOnBrand} />}
-          {viewing && (
-            <Image
-              source={{ uri: photoPublicUrl(viewing.storage_path) ?? undefined }}
-              style={styles.full}
-              resizeMode="contain"
-              onLoadEnd={() => setFullLoading(false)}
-            />
+          {fullLoading && !fullError && (
+            <ActivityIndicator color={Colors.textOnBrand} />
+          )}
+
+          {fullError ? (
+            <View style={styles.viewerError}>
+              <Icon name="alert" size={32} color={Colors.textOnBrand} />
+              <Text style={styles.viewerErrorText}>Fotoğraf yüklenemedi.</Text>
+              <Text style={styles.viewerErrorHint}>
+                Dosya kaldırılmış olabilir.
+              </Text>
+            </View>
+          ) : (
+            viewing && (
+              <Image
+                source={{ uri: photoPublicUrl(viewing.storage_path) ?? undefined }}
+                style={styles.full}
+                resizeMode="contain"
+                onLoadEnd={() => setFullLoading(false)}
+                // ⚠️ ONSUZ SPINNER SONSUZA KADAR DÖNÜYORDU: 404'te `onLoadEnd`
+                // Android'de güvenilir tetiklenmiyor.
+                onError={() => {
+                  setFullLoading(false);
+                  setFullError(true);
+                }}
+              />
+            )
           )}
           <View style={styles.viewerClose}>
             <Icon name="close" size={24} color={Colors.textOnBrand} />
@@ -251,6 +305,19 @@ const styles = StyleSheet.create({
   },
   thumb: { width: '100%', height: '100%' },
 
+  /** Kırık kare — görselin yerine, kutuyu tamamen dolduruyor. */
+  cellFallback: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.xxs,
+    backgroundColor: Colors.canvasAlt,
+  },
+  cellFallbackText: {
+    ...Type.micro,
+    color: Colors.textMuted,
+  },
+
   /** Karenin altına oturan şerit — görselin kendisini kapatmıyor. */
   hiddenBadge: {
     position: 'absolute',
@@ -279,6 +346,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   full: { width: '100%', height: '80%' },
+  viewerError: {
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.xl,
+  },
+  viewerErrorText: {
+    ...Type.bodyStrong,
+    color: Colors.textOnBrand,
+    textAlign: 'center',
+  },
+  viewerErrorHint: {
+    ...Type.caption,
+    color: Colors.textOnBrand,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
   viewerClose: {
     position: 'absolute',
     top: Spacing['3xl'],
