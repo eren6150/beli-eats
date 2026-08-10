@@ -7,6 +7,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Colors, Elevation, Radius, Spacing, Type } from '../../constants/theme';
+import Icon, { IconName } from './Icon';
 
 /**
  * Birincil/ikincil buton — form ekranlarının ortak parçası.
@@ -29,6 +30,12 @@ export interface ButtonProps {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary';
+  /**
+   * Etiketin SOLUNA ikon. Verilmezse hiç render edilmiyor ve yerleşim
+   * değişmiyor — `RankRow`/`DiaryRow`'un opsiyonel parça deseni.
+   * Renk metinle aynı: buton tek bir görsel birim, ikon ayrı bir vurgu değil.
+   */
+  icon?: IconName;
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
@@ -38,6 +45,7 @@ export default function Button({
   label,
   onPress,
   variant = 'primary',
+  icon,
   loading = false,
   disabled = false,
   style,
@@ -63,9 +71,18 @@ export default function Button({
           color={isPrimary ? Colors.textOnBrand : Colors.brand}
         />
       ) : (
-        <Text style={isPrimary ? styles.primaryText : styles.secondaryText}>
-          {label}
-        </Text>
+        <>
+          {icon ? (
+            <Icon
+              name={icon}
+              size={18}
+              color={isPrimary ? Colors.textOnBrand : Colors.textPrimary}
+            />
+          ) : null}
+          <Text style={isPrimary ? styles.primaryText : styles.secondaryText}>
+            {label}
+          </Text>
+        </>
       )}
     </Pressable>
   );
@@ -75,6 +92,11 @@ const styles = StyleSheet.create({
   base: {
     borderRadius: Radius.md,
     paddingVertical: Spacing.md,
+    // `row` + `gap` ikonsuz butonda da güvenli: tek çocuk varken satır
+    // yönünün bir etkisi yok, `gap` da uygulanmıyor. Yani ikon eklemek
+    // mevcut butonların görünümünü DEĞİŞTİRMİYOR.
+    flexDirection: 'row',
+    gap: Spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },

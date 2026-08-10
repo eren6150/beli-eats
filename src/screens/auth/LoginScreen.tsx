@@ -24,10 +24,24 @@ const LOGO_SIZE = 80;
 
 export default function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const { signIn, linkNotice, clearLinkNotice } = useAuth();
+  const { signIn, signInWithGoogle, linkNotice, clearLinkNotice } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  /**
+   * Başarıda hiçbir şey yapmıyoruz: oturum açılınca `onAuthStateChange` →
+   * `RootNavigator` devralıyor. Buradan yönlendirmek iki tarafı yarıştırırdı
+   * (`RegisterScreen`'in aynı kararı).
+   */
+  const handleGoogle = async () => {
+    setGoogleLoading(true);
+    const { error, cancelled } = await signInWithGoogle();
+    setGoogleLoading(false);
+    if (cancelled) return; // vazgeçmek hata değil
+    if (error) Alert.alert('Giriş Hatası', error.message);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -108,6 +122,20 @@ export default function LoginScreen() {
             style={styles.primaryButton}
           />
 
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>veya</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <Button
+            label="Google ile devam et"
+            variant="secondary"
+            icon="google"
+            onPress={handleGoogle}
+            loading={googleLoading}
+          />
+
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => navigation.navigate('Register')}
@@ -183,6 +211,25 @@ const styles = StyleSheet.create({
    * konsaydı iki ikincil bağlantı üst üste yığılır, ikisi de zayıflardı.
    */
   linkNotice: { marginBottom: Spacing.md },
+  /**
+   * "veya" ayırıcısı — iki giriş yolunun ALTERNATİF olduğunu söylüyor.
+   * Onsuz Google butonu, üstündeki birincil butonun devamı gibi okunuyordu.
+   */
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginVertical: Spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.borderSubtle,
+  },
+  dividerText: {
+    ...Type.caption,
+    color: Colors.textMuted,
+  },
   passwordField: { marginBottom: Spacing.xs },
   forgotButton: {
     alignSelf: 'flex-end',

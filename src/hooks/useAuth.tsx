@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseRecovery } from '../lib/supabaseClient';
 import { authRedirectUrl } from '../lib/authRedirect';
@@ -116,6 +117,14 @@ interface AuthContextValue {
     password: string
   ) => Promise<{ error: Error | null }>;
   /**
+   * Google ile giriş. `cancelled` hata DEĞİL — kullanıcı tarayıcıyı kapattı;
+   * ekran bu durumda hiçbir şey göstermemeli.
+   */
+  signInWithGoogle: () => Promise<{
+    error: Error | null;
+    cancelled: boolean;
+  }>;
+  /**
    * Dönüş şekli GENİŞLEDİ (2026-08-09) — `error`'a iki semantik bayrak eklendi.
    * Ekran Supabase detayını (`data.user.identities`) BİLMİYOR; ayrım hook'ta.
    */
@@ -207,8 +216,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * ekranını görüp uygulamaya geçiyor; takılırsa giriş ekranında kalıyor ve
    * elle girebiliyor.
    */
-  const handleAuthUrl = useCallback(async (url: string | null) => {
-    if (!url) return;
+  const exchangeAuthCode = useCallback(async (url: string | null) => {
+    if (!url) return { error: null };
 
     const { queryParams } = Linking.parse(url);
     const pick = (v: string | string[] | undefined | null) =>
@@ -222,14 +231,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!code) {
       if (errorDescription) {
         console.error('[useAuth] derin bağlantı hatayla döndü:', errorDescription);
-        setLinkNotice('Bağlantı işlenemedi. E-posta ve şifrenle giriş yapabilirsin.');
+        return {
+          error: new Error(
+            'Bağlantı işlenemedi. E-posta ve şifrenle giriş yapabilirsin.'
+          ),
+        };
       }
       // Kodu da hatası da olmayan adresler bizim işimiz değil (uygulamanın
       // başka derin bağlantıları ileride buradan geçebilir) — sessizce geç.
-      return;
+      return { error: null };
     }
 
-    if (handledCodesRef.current.has(code)) return;
+    if (handledCodesRef.current.has(code)) return { error: null };
     handledCodesRef.current.add(code);
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -248,26 +261,103 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
        */
       console.error('[useAuth] exchangeCodeForSession — kod:', error.code ?? '(yok)');
       console.error('[useAuth] exchangeCodeForSession — ham hata:', error);
-      setLinkNotice('Otomatik giriş yapılamadı. E-posta ve şifrenle giriş yapabilirsin.');
-      return;
+      return {
+        error: new Error(
+          'Otomatik giriş yapılamadı. E-posta ve şifrenle giriş yapabilirsin.'
+        ),
+      };
     }
 
-    setLinkNotice(null);
+    return { error: null };
   }, []);
 
+  /**
+   * ── SUNUM ÇAĞIRANA AİT — `exchangeAuthCode` `linkNotice` YAZMIYOR ─────────
+   * Aynı değişimin iki çağıranı var ve doğru sunum farklı:
+   *   · PASİF yol (aşağıdaki dinleyici): kullanıcı e-postadaki bağlantıya
+   *     dokundu, uygulamaya döndü ve giriş ekranında kaldı → kalıcı bir şerit
+   *     gerekiyor, çünkü ekranda sebebi anlatan başka bir şey yok.
+   *   · AKTİF yol (`signInWithGoogle`): kullanıcı butona bastı ve cevabını
+   *     bekliyor → `Alert` doğru, şerit gecikmeli ve kopuk kalırdı.
+   * Değişimin içine `setLinkNotice` gömmek ikisini tek sunuma mahkûm ederdi.
+   */
   useEffect(() => {
     // Uygulama bağlantıyla SOĞUK açıldıysa dinleyici geç kalır — ilk adresi
     // ayrıca sormak zorundayız. Zaten çalışıyorken gelen bağlantılar için de
     // dinleyici gerekiyor. İkisi birden şart; tekrarı `handledCodesRef` yutuyor.
-    Linking.getInitialURL().then(handleAuthUrl);
-    const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
+    const run = (url: string | null) =>
+      exchangeAuthCode(url).then(({ error }) => {
+        if (error) setLinkNotice(error.message);
+      });
+
+    Linking.getInitialURL().then(run);
+    const sub = Linking.addEventListener('url', ({ url }) => run(url));
     return () => sub.remove();
-  }, [handleAuthUrl]);
+  }, [exchangeAuthCode]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: toDisplayError(error, 'signIn') };
   }, []);
+
+  /**
+   * Google ile giriş — TARAYICI TABANLI (native seçici değil).
+   *
+   * ── NEDEN TARAYICI ───────────────────────────────────────────────────────
+   * Altyapıyı e-posta onayının derin bağlantısıyla PAYLAŞIYOR: aynı `scheme`,
+   * aynı geri dönüş adresi, aynı `?code=` değişimi. Native seçici
+   * (`@react-native-google-signin`) ayrı bir SDK, ayrı yapılandırma ve
+   * Google Console'da ayrı bir istemci türü demekti.
+   *
+   * ── KULLANICI ADI: HİÇBİR ŞEY YAPMIYORUZ, ZATEN DOĞRU ────────────────────
+   * `handle_new_user` trigger'ı adı şöyle üretiyor (migration 012):
+   *     coalesce(raw_user_meta_data->>'username', e-postanın @ öncesi)
+   * Google `username` metadata'sı GÖNDERMİYOR → ikinci dala düşüyor → ad
+   * alınmışsa sonek (`eren` → `eren2`). İstenen davranış bu; ne migration ne
+   * yeni ekran gerekti. Kullanıcı sonradan `EditProfile`'dan düzeltebiliyor.
+   *
+   * ── AKIŞ ─────────────────────────────────────────────────────────────────
+   * `skipBrowserRedirect: true` → supabase-js kendisi yönlendirmiyor, sadece
+   * gidilecek adresi veriyor; tarayıcıyı biz `openAuthSessionAsync` ile
+   * açıyoruz. Bu, sonuç adresini DOĞRUDAN elimize veriyor — işletim
+   * sisteminin şema yönlendirmesine hiç bağlı değil, o yüzden e-posta
+   * bağlantısından daha sağlam bir yol.
+   */
+  const signInWithGoogle = useCallback(async () => {
+    const redirectTo = authRedirectUrl();
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+
+    if (error) {
+      return { error: toDisplayError(error, 'signInWithOAuth'), cancelled: false };
+    }
+
+    if (!data?.url) {
+      console.error('[useAuth] signInWithOAuth url döndürmedi:', data);
+      return {
+        error: new Error('Bir şeyler ters gitti, tekrar dene.'),
+        cancelled: false,
+      };
+    }
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+    /**
+     * `dismiss` = kullanıcı tarayıcıyı kapattı, `cancel` = geri tuşu.
+     * İkisi de HATA DEĞİL: vazgeçen kullanıcıya kırmızı bir uyarı göstermek
+     * onun kendi kararını hata gibi sunmak olurdu.
+     */
+    if (result.type !== 'success' || !result.url) {
+      return { error: null, cancelled: true };
+    }
+
+    // Aynı değişim mantığı, aynı tekrar koruması — e-posta yolundan farkı yok.
+    const { error: exchangeError } = await exchangeAuthCode(result.url);
+    return { error: exchangeError, cancelled: false };
+  }, [exchangeAuthCode]);
 
   /**
    * Profil satırını YAZMIYOR — yazan tek şey `on_auth_user_created` trigger'ı.
@@ -444,6 +534,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       loading,
       signIn,
+      signInWithGoogle,
       signUp,
       resendConfirmation,
       sendPasswordResetCode,
@@ -457,6 +548,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       loading,
       signIn,
+      signInWithGoogle,
       signUp,
       resendConfirmation,
       sendPasswordResetCode,

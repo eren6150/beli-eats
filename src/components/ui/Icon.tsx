@@ -71,6 +71,10 @@ const ICONS = {
   mapActive: 'map',
   person: 'person-outline',
   personActive: 'person',
+
+  // Sağlayıcılar
+  /** Google ile giriş butonu. Ionicons'un marka glifi — renk çağırandan. */
+  google: 'logo-google',
 } satisfies Record<string, IoniconName>;
 
 export type IconName = keyof typeof ICONS;

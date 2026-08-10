@@ -24,5 +24,17 @@ import * as Linking from 'expo-linking';
 export const AUTH_REDIRECT_PATH = 'auth-callback';
 
 export function authRedirectUrl(): string {
-  return Linking.createURL(AUTH_REDIRECT_PATH);
+  const url = Linking.createURL(AUTH_REDIRECT_PATH);
+
+  /**
+   * ⚠️ GEÇİCİ TEŞHİS — Supabase Redirect URLs deseni doğrulanınca SİLİNECEK.
+   *
+   * Onay bağlantısı Site URL'e düşüyordu, yani Supabase bu adresi listeyle
+   * eşleştiremiyordu. Hangi adresin gönderildiğini tahmin etmek yerine
+   * ölçüyoruz. Metro terminali (npx expo start) satırı KIRPMIYOR — LogBox'ın
+   * kırmızı ekranı kırpıyor, oraya değil terminale bakılmalı.
+   */
+  console.log('[authRedirect] gönderilen adres:', url);
+
+  return url;
 }

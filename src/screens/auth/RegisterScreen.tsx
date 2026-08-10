@@ -37,7 +37,8 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function RegisterScreen() {
   const navigation = useNavigation<any>();
-  const { signUp, resendConfirmation } = useAuth();
+  const { signUp, resendConfirmation, signInWithGoogle } = useAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -135,6 +136,20 @@ export default function RegisterScreen() {
 
     // Oturum açıldı (onay KAPALI): `RootNavigator` oturumu görüp uygulamaya
     // geçiyor. Buradan yönlendirme yapmıyoruz — iki taraf yarışırdı.
+  };
+
+  /**
+   * `LoginScreen` ile AYNI davranış — Google'da "kayıt" ile "giriş" diye iki
+   * ayrı işlem yok: hesap yoksa oluşuyor, varsa giriliyor. İki ekranda farklı
+   * davranmak, bu projede dört kez pahalıya patlamış isim/davranış
+   * uyumsuzluğunun bir başka yüzü olurdu.
+   */
+  const handleGoogle = async () => {
+    setGoogleLoading(true);
+    const { error, cancelled } = await signInWithGoogle();
+    setGoogleLoading(false);
+    if (cancelled) return;
+    if (error) Alert.alert('Giriş Hatası', error.message);
   };
 
   const handleResend = async () => {
@@ -249,6 +264,20 @@ export default function RegisterScreen() {
               style={styles.primaryButton}
             />
 
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>veya</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Button
+              label="Google ile devam et"
+              variant="secondary"
+              icon="google"
+              onPress={handleGoogle}
+              loading={googleLoading}
+            />
+
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => navigation.goBack()}
@@ -317,6 +346,24 @@ const styles = StyleSheet.create({
    * İkinci bir kopya bırakmak, iki tanımın zamanla ayrışması demekti.
    */
   primaryButton: { marginTop: Spacing.xs },
+
+  // "veya" ayırıcısı — LoginScreen ile birebir aynı; iki giriş yolunun
+  // alternatif olduğunu söylüyor.
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginVertical: Spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.borderSubtle,
+  },
+  dividerText: {
+    ...Type.caption,
+    color: Colors.textMuted,
+  },
 
   // ── Onay bekleniyor durumu ──
   pendingIcon: {
