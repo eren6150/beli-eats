@@ -2,7 +2,7 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-08
+## 📍 Nerede kaldık — 2026-08-10
 
 **Faz 3'ün sosyal katmanı KAPANDI ve tamamen sahada.** Döngünün tamamı
 push + OTA + gerçek APK'da doğrulandı, arkadaşla çapraz hesap testi de geçti:
@@ -26,6 +26,27 @@ uçtan uca doğrulandı: onay maili → iniş sayfası → giriş. Kullanıcı a
 çakışması artık önden uyarıyor ve profilden düzeltilebiliyor. Custom SMTP
 (**SendGrid**) bağlandı — bu koşul plan yapılırken atlanmıştı, sahada çıktı.
 Kalan iki koşul: **fotoğraf moderasyonu** ve **kendi alan adı**.
+
+**Bir sonraki build'in planı YAPILDI ve Aşama 0 KAPANDI (2026-08-10).**
+İş ikiye ayrıldı: **Aşama 0** = build gerektirmeyen, bugün OTA ile gidebilen
+işler · **Build 1** = native değişiklik isteyen paket.
+
+- ✅ **Aşama 0 — şifre sıfırlama (OTP).** Giriş ekranında "Şifreni mi
+  unuttun?" → e-posta → mailde gelen kod → yeni şifre. Saf JS, OTA ile
+  sahada. Detay ve iki kalıcı ders: Mimari Notlar → **Şifre sıfırlama**.
+- ⬜ **Build 1 — sırada.** İçeriği: **deep link** (onay maili uygulamayı
+  açsın) · **Google ile giriş** · `react-native-keyboard-controller` ·
+  kaydırmalı sekmeler · `expo` yama farkı · `fingerprint` `runtimeVersion`'a
+  dönüş. Paketin tamamı Bilinen Açık İşler → **"Bir sonraki build'in
+  paketi"** altında.
+  - **Karar (2026-08-10): Google girişi TARAYICI TABANLI yol** olacak
+    (`expo-web-browser` + `scheme` + `Linking` dinleyicisi), native seçici
+    değil — altyapıyı **deep link ile paylaşıyor**, yani iki iş aynı
+    build'de doğal olarak birleşiyor.
+  - **Karar: ilk Google girişinde kullanıcı adı OTOMATİK atanacak**
+    (e-postanın @ öncesi + gerekirse migration 012'nin soneki), kullanıcı
+    sonradan `EditProfile`'dan düzeltir. **Yeni ekran / soru akışı YOK** —
+    kullanıcı kararı.
 
 **Engelleyici açık iş yok.** Sıradakiler için üç yere bak: Yol Haritası →
 **Faz 3'ün ertelenen dört maddesi** (üçü ölçek/veri koşulu bekliyor) ·
@@ -412,6 +433,76 @@ where t.tgname = 'on_auth_user_created';
 **(e) hâlâ `supabase_schema.sql`'deki tanıma değil, `useAuth.ts`'e dayanıyor ve
 açık:** istemci `options.data` göndermediği için kullanıcının yazdığı ad hâlâ
 atılıyor, @ öncesi kullanılıyor. Sonraki APK'ya planlandı.
+
+### Şifre sıfırlama (OTP) — Aşama 0, 2026-08-10, cihazda DOĞRULANDI
+Giriş ekranı → **"Şifreni mi unuttun?"** → `ForgotPasswordScreen` (tek ekran,
+iki adım: e-posta → kod + yeni şifre) → "şifren güncellendi" → Login.
+
+Öncesinde şifresini unutan kullanıcının **hiçbir çıkış yolu yoktu**; kod
+tabanında `resetPasswordForEmail` tek bir yerde bile geçmiyordu.
+
+- **Panel şartı — kod olmadan çalışmaz:** Authentication → Emails →
+  **Reset Password** şablonu `{{ .Token }}` kullanmalı. Fabrika şablonu
+  **bağlantı** gönderiyor; bağlantı Site URL'e (GitHub Pages iniş sayfası)
+  gider ve **deep link olmadığı için hiçbir şey yapmaz**. Bağlantı şablondan
+  tamamen çıkarıldı — kod ile bağlantı zaten **aynı OTP'yi** temsil ediyor,
+  kaybedilen bir şey yok. Deep link geldiğinde (build paketinin 6. maddesi)
+  burası yeniden değerlendirilir.
+- **Var olmayan e-posta HATA DÖNDÜRMÜYOR** (Supabase e-posta sayımını
+  engelliyor) ve ayırt edici bir işaret de yok — `signUp`'ın `identities`
+  ayrımının aksine burada ayrım **yapılamaz**. Ekran bu yüzden "gönderdik"
+  değil **"kayıtlıysa gönderdik"** diyor.
+- **"Kodu tekrar gönder"** 60 sn kilitli, `RegisterScreen`'in deseninin
+  aynısı; Supabase'in kendi hız sınırı bundan bağımsız.
+- Adımı `sentToEmail` belirliyor, **ayrı bir `step` bayrağı YOK**
+  (`RankingReviewSheet`'in kararı): iki state'i senkron tutmak "kod
+  adımındayım ama hangi adrese gönderdiğimi bilmiyorum" durumunu doğururdu.
+
+#### 🔑 AYRI SUPABASE İSTEMCİSİ (`supabaseRecovery`) — sadeleştirilemez
+`verifyOtp({ type: 'recovery' })` **oturum AÇAR**. Ana istemcide çağrılsaydı
+`onAuthStateChange` tetiklenir, `RootNavigator`'ın `session ? <Main/> :
+<Auth/>` anahtarı döner ve kullanıcı **yeni şifresini girmeden uygulamanın
+içine düşerdi**.
+
+- **Asıl zarar navigasyon değil SESSİZ YANLIŞ DURUM:** ardından gelen
+  `updateUser` patlarsa (ağ, `weak_password`) kullanıcı içeridedir, şifresi
+  DEĞİŞMEMİŞTİR ve bunu söyleyen hiçbir şey yoktur. Yanlışı ancak bir sonraki
+  girişte, yeni şifresi reddedildiğinde fark ederdi.
+- **Reddedilen alternatif:** ana istemcide `verifyOtp` → hemen `updateUser`.
+  Mutlu yolda çalışır; hata yolunda "içeri al, sonra `signOut` + Alert ile
+  dışarı at" gerekirdi — kullanıcının gözünde uygulamaya girip anında
+  atılmak.
+- **Üç ayar da zorunlu:** `persistSession: false` (oturum yalnızca bellekte) ·
+  **farklı `storageKey`** (supabase-js anahtarı proje URL'inden türetiyor, yani
+  iki istemci varsayılanda AYNI anahtarı kullanır; `persistSession` bir gün
+  yanlışlıkla açılırsa bu istemci kullanıcının GERÇEK oturumunu ezerdi) ·
+  `autoRefreshToken: false`.
+- **`signOut` `scope: 'local'` ŞART:** varsayılan `'global'` kullanıcının
+  **diğer cihazlardaki oturumlarını da** kapatırdı.
+- **Yan fayda — "şifreni tekrar gir" alanı GEREKMEDİ:** akış "giriş yap" ile
+  bittiği için yeni şifre anında kanıtlanıyor, yazım hatası orada yakalanıyor.
+
+#### ⚠️ OTP UZUNLUĞU SABİT DEĞİL — "yapılandırmaya gömülü varsayım"ın 4. yüzü
+İlk halde `CODE_LENGTH = 6` sabiti vardı (hem `maxLength` hem "tam 6 olmalı"
+kontrolü). Supabase'de OTP uzunluğu **panelden ayarlanıyor**
+(Authentication → Sign In / Providers → Email → **Email OTP Length**, 6–10) ve
+bu projede **8**. Mail 8 haneli kod getiriyor, kutu 6 hanede doluyor,
+kullanıcı **geçerli kodunu giremiyordu**.
+
+- **Bu, CLAUDE.md'nin üç kez ısırdığını yazdığı sınıfın DÖRDÜNCÜSÜ**
+  (nav bar `insets.bottom` · diary sabit yükseklik · `StarRating` yazı tipi
+  ölçeği). Ortak imza aynı: *"formül belirli bir yapılandırma için doğru"*.
+- **Yeni olan yanı:** önceki üçünde değişken **cihazdaydı** (navigasyon türü,
+  ekran boyutu, yazı tipi ölçeği). Burada değişken **sunucu panelinde** —
+  yani hata sınıfı cihaz ayarlarıyla sınırlı değil, **her dış yapılandırma**
+  aynı riski taşıyor.
+- **Düzeltme yine "6'yı 8 yapmak" DEĞİL**, o sayıya olan bağımlılığı
+  kaldırmak: tavan/taban Supabase'in sınırları (`CODE_MIN/MAX_LENGTH`),
+  gerçek doğrulama sunucunun işi, **ekrandaki metinler sayı vermiyor**
+  ("Doğrulama kodu", "Kod eksik görünüyor"). Panel değeri değişirse uygulama
+  değişmeden çalışmaya devam eder.
+- Panel değeri **bilinçli olarak 8'de bırakıldı**: kod artık bağımsız olduğu
+  için bir güvenlik ayarını kozmetik sebeple zayıflatmanın gerekçesi yok.
 
 ### `places` cache tablosu (Faz 1a — TAMAMLANDI)
 Google'dan çekilen mekan bilgisinin paylaşılan cache'i. Migration 002 + 003.
