@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { AuthError, Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, supabaseRecovery } from '../lib/supabaseClient';
 
 /**
  * Supabase hata KODU → kullanıcıya gösterilecek kısa Türkçe metin.
@@ -36,6 +36,17 @@ const AUTH_ERROR_TEXT: Record<string, string> = {
   // 60 sn'lik istemci kilidimizden bağımsız (başka cihazdan da denenebilir).
   over_email_send_rate_limit:
     'Çok sık denedin. Biraz bekleyip tekrar dene.',
+
+  // ── Şifre sıfırlama (OTP) ────────────────────────────────────────────────
+  // ⚠️ `otp_expired` YANLIŞ KOD İÇİN DE dönüyor, yalnızca süresi dolmuş kod
+  // için değil (Supabase ikisini ayırmıyor: "Token has expired or is invalid").
+  // Metin bu yüzden iki ihtimali de karşılıyor — "süresi doldu" demek, altı
+  // haneyi yanlış yazan kullanıcıya yanlış teşhis koymak olurdu.
+  otp_expired: 'Kod geçersiz ya da süresi dolmuş. Yeni kod iste.',
+  weak_password: 'Bu şifre çok zayıf, daha güçlü bir tane dene.',
+  same_password: 'Yeni şifren eskisiyle aynı olamaz.',
+  // Kod doğrulama denemeleri de sınırlı — e-posta gönderiminden ayrı bir kota.
+  over_request_rate_limit: 'Çok sık denedin. Biraz bekleyip tekrar dene.',
 };
 
 /**
@@ -118,6 +129,14 @@ interface AuthContextValue {
   }>;
   /** Onay e-postasını tekrar gönderir. */
   resendConfirmation: (email: string) => Promise<{ error: Error | null }>;
+  /** Şifre sıfırlama için 6 haneli kodu e-postaya gönderir. */
+  sendPasswordResetCode: (email: string) => Promise<{ error: Error | null }>;
+  /** Kodu doğrulayıp yeni şifreyi yazar. Oturuma DOKUNMAZ (bkz. gövdesi). */
+  resetPassword: (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -235,6 +254,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: toDisplayError(error, 'resend') };
   }, []);
 
+  /**
+   * Şifre sıfırlama kodunu gönderir.
+   *
+   * ── `redirectTo` GÖNDERİLMİYOR — bilinçli ────────────────────────────────
+   * Şablon `{{ .Token }}` kullandığı için mailde bağlantı yok; yönlendirilecek
+   * bir yer de yok. Bağlantılı akışa (deep link) geçildiği gün burası da
+   * değişecek — o iş build paketinin 6. maddesi.
+   *
+   * ── VAR OLMAYAN E-POSTA HATA DÖNDÜRMEZ ───────────────────────────────────
+   * Supabase e-posta sayımını (enumeration) engellemek için kayıtlı olmayan
+   * adreslerde de BAŞARILI dönüyor. Ekran bu yüzden "gönderdik" değil
+   * "kayıtlıysa gönderdik" diyor — `signUp`'ın `identities` ayrımıyla aynı
+   * aile, ama burada ayırt edici bir işaret YOK, yani ayrım da yapılamaz.
+   */
+  const sendPasswordResetCode = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    return { error: toDisplayError(error, 'resetPasswordForEmail') };
+  }, []);
+
+  /**
+   * Kodu doğrular ve yeni şifreyi yazar — **ana oturuma hiç dokunmadan**.
+   *
+   * İki çağrı da `supabaseRecovery` üzerinde: gerekçenin tamamı
+   * `supabaseClient.ts`'te, bu istemcinin tanımının başında. Kısaca:
+   * `verifyOtp` oturum AÇAR ve ana istemcide çağrılsaydı kullanıcı yeni
+   * şifresini girmeden uygulamanın içine düşerdi.
+   *
+   * ── ADIM SIRASI ÖNEMLİ ───────────────────────────────────────────────────
+   * `verifyOtp` başarısızsa `updateUser` HİÇ ÇAĞRILMIYOR — geçersiz kodla
+   * şifre yazma denemesi zaten reddedilirdi ama hata mesajı "kodun yanlış"
+   * yerine alakasız bir şey olurdu.
+   *
+   * ── `signOut` HER İKİ YOLDA DA ÇAĞRILIYOR ────────────────────────────────
+   * `scope: 'local'` şart: varsayılan `'global'` kullanıcının **diğer
+   * cihazlardaki oturumlarını da** kapatırdı. Burada istenen tek şey bu geçici
+   * bellek-içi oturumu bırakmak; istemci modül seviyesinde yaşadığı için
+   * temizlenmezse uygulama kapanana kadar elde kalırdı.
+   */
+  const resetPassword = useCallback(
+    async (email: string, code: string, newPassword: string) => {
+      const { error: verifyError } = await supabaseRecovery.auth.verifyOtp({
+        email,
+        token: code,
+        type: 'recovery',
+      });
+
+      if (verifyError) {
+        return { error: toDisplayError(verifyError, 'verifyOtp') };
+      }
+
+      const { error: updateError } = await supabaseRecovery.auth.updateUser({
+        password: newPassword,
+      });
+
+      await supabaseRecovery.auth.signOut({ scope: 'local' });
+
+      return { error: toDisplayError(updateError, 'updateUser') };
+    },
+    []
+  );
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -255,9 +335,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       resendConfirmation,
+      sendPasswordResetCode,
+      resetPassword,
       signOut,
     }),
-    [session, user, loading, signIn, signUp, resendConfirmation, signOut]
+    [
+      session,
+      user,
+      loading,
+      signIn,
+      signUp,
+      resendConfirmation,
+      sendPasswordResetCode,
+      resetPassword,
+      signOut,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

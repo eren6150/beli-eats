@@ -75,7 +75,18 @@ export default function LoginScreen() {
             secureTextEntry
             value={password}
             onChangeText={setPassword}
+            // Bağlantı alanın hemen altına otursun diye taban boşluk kısaldı;
+            // normal `Spacing.md` bırakılsa link havada duran ayrı bir öge gibi
+            // görünür, hangi alana ait olduğu okunmazdı.
+            containerStyle={styles.passwordField}
           />
+
+          <TouchableOpacity
+            style={styles.forgotButton}
+            onPress={() => navigation.navigate('ForgotPassword')}
+          >
+            <Text style={styles.forgotText}>Şifreni mi unuttun?</Text>
+          </TouchableOpacity>
 
           <Button
             label="Giriş Yap"
@@ -153,6 +164,21 @@ const styles = StyleSheet.create({
    * `TextField`'in başında duruyor; burada ikinci bir kopyası kalmasın.)
    */
   primaryButton: { marginTop: Spacing.xs },
+  /**
+   * "Şifreni mi unuttun?" sağa yaslı ve şifre alanına bitişik — form
+   * ekranlarının yerleşik dili. Sayfanın altındaki "Kayıt Ol" satırının yanına
+   * konsaydı iki ikincil bağlantı üst üste yığılır, ikisi de zayıflardı.
+   */
+  passwordField: { marginBottom: Spacing.xs },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginBottom: Spacing.md,
+  },
+  forgotText: {
+    ...Type.caption,
+    color: Colors.brand,
+    fontWeight: Type.bodyStrong.fontWeight,
+  },
   secondaryButton: {
     marginTop: Spacing.lg,
     alignItems: 'center',

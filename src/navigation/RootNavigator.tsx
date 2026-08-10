@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import TabNavigator from './TabNavigator';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import Icon from '../components/ui/Icon';
 import { Colors, Type, Spacing, Radius } from '../constants/theme';
 import { SkeletonBox } from '../components/ui/SkeletonLoader';
@@ -22,6 +23,7 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStack.Navigator>
   );
 }

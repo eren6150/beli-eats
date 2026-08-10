@@ -56,3 +56,52 @@ export const supabase = createClient(
     },
   }
 );
+
+/**
+ * ── ŞİFRE SIFIRLAMA İÇİN AYRI İSTEMCİ ────────────────────────────────────────
+ *
+ * ⚠️ Bu ikinci istemci bir "temizlik" tercihi DEĞİL, bir hata sınıfını kökten
+ * kaldıran bir karar. Sadeleştirip tek istemciye indirmek hatayı geri getirir.
+ *
+ * ── NEYDİ ────────────────────────────────────────────────────────────────────
+ * `verifyOtp({ type: 'recovery' })` başarılı olduğunda **oturum açar**. Ana
+ * istemcide çağrılsaydı `onAuthStateChange` tetiklenir, `AuthProvider`
+ * `session`'ı doldurur ve `RootNavigator`'ın `session ? <Main/> : <Auth/>`
+ * anahtarı dönerdi — yani kullanıcı **yeni şifresini girmeden** uygulamanın
+ * içine düşer, sıfırlama ekranı unmount olurdu.
+ *
+ * Asıl zarar navigasyon değil SESSİZ YANLIŞ DURUM: ardından gelen
+ * `updateUser` patlarsa (ağ hatası, "şifre çok zayıf") kullanıcı uygulamanın
+ * içindedir, şifresi DEĞİŞMEMİŞTİR ve bunu söyleyen hiçbir şey yoktur. Yanlışı
+ * ancak bir dahaki girişte, yeni şifresi kabul edilmediğinde fark ederdi.
+ *
+ * ── ŞİMDİ ────────────────────────────────────────────────────────────────────
+ * Doğrulama ve şifre yazma bu istemcide olup bitiyor; ana istemcinin oturumu
+ * hiç değişmiyor, `RootNavigator` kımıldamıyor, ekran akışın sonuna kadar
+ * kontrolü elinde tutuyor ve hatayı düzgün gösterebiliyor.
+ *
+ * Yan fayda: akış "şifren güncellendi → giriş yap" ile bitiyor, yani yeni şifre
+ * ANINDA kanıtlanıyor. Yazım hatası orada yakalandığı için ayrı bir "şifreni
+ * tekrar gir" alanına da gerek kalmadı.
+ *
+ * ── ÜÇ AYARIN ÜÇÜ DE ZORUNLU ────────────────────────────────────────────────
+ * `persistSession: false`  → oturum yalnızca bellekte; diske hiç yazılmıyor.
+ * `storageKey` FARKLI      → emniyet kemeri. supabase-js depolama anahtarını
+ *                            proje URL'inden türetiyor, yani iki istemci
+ *                            varsayılanda AYNI anahtarı kullanır; bir gün
+ *                            `persistSession` yanlışlıkla açılırsa bu istemci
+ *                            kullanıcının GERÇEK oturumunu ezerdi.
+ * `autoRefreshToken: false`→ geçici bir oturum, arka planda yenilenmesin.
+ */
+export const supabaseRecovery = createClient(
+  supabaseUrl || UNCONFIGURED_URL,
+  supabaseAnonKey || UNCONFIGURED_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: 'sb-beli-eats-recovery',
+    },
+  }
+);
