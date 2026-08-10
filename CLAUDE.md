@@ -1303,6 +1303,36 @@ tablo arasındaki **her gömülü sorgu belirsizleşir** — yenisi de, çalış
 eskisi de. `follows` da aynı şekilde bir ara tablo; `useFollow` FK adıyla
 ayrıştırmayı zaten bu yüzden yapıyor.
 
+#### 🔁 AYNI HATA İKİNCİ KEZ OLDU (migration 018, 2026-08-09) — ve ders BU
+Yukarıdaki kural yazıldıktan **sonra** `photo_reports` eklendi ve
+`usePlacePhotos`'un `select('*, profiles(*)')` sorgusunu patlattı. Fotoğraflar
+**sahada tamamen çalışmaz oldu** (migration panelde çalıştığı an, istemci
+diff'inden bağımsız olarak).
+
+**Kuralın yazılı olması yetmedi, çünkü YANLIŞ ZAMANDA duruyordu.** Kural
+"yeni sorgu yazarken" hatırlanacak bir yerdeydi; oysa tehlike **migration
+yazarken** doğuyor ve kırdığı şey **zaten çalışan eski sorgular**.
+
+**SÜREÇ KURALI — ara tablo ekleyen her migration için ZORUNLU:**
+> Migration bir ara tablo (iki FK + bunlardan oluşan PK) ekliyorsa, dosyaya
+> **hangi mevcut sorguları belirsizleştirdiği tek tek yazılmalı.** Kontrol
+> tek komut:
+> ```
+> grep -rn "from('<TABLO_A>')" src/ | grep -n "<TABLO_B>("
+> ```
+> Ara tabloyu eklemekle o sorguları ayrıştırmak **AYNI DİFF'TE** gitmeli;
+> migration önce çalıştığı için arada kırık bir pencere kalıyor.
+
+**Bugüne kadar ara tablo olan üç tablo:** `follows` (profiles↔profiles),
+`entry_likes` (diary_entries↔profiles), `photo_reports`
+(place_photos↔profiles). Dördüncüsü eklenirse bu listeye yazılmalı.
+
+⚠️ **İKİNCİL ETKİ — yükleme "başarısız" görünürken BAŞARILI olabiliyor.**
+Yükleme yolu (Storage + `insert`) bu sorguyu kullanmıyor; kırılan şey
+yüklemeden sonraki **listeyi tazeleme**. Kullanıcı hata görüp tekrar
+deniyor ve **mükerrer kayıt** oluşuyor. Bu sınıf bir kırılmadan sonra
+`place_photos`'ta çift satır kontrolü yapılmalı.
+
 **Düzeltme** tek satır — gömülü kaynağı FK adıyla ayrıştır:
 ```ts
 profiles(id, username, avatar_url)

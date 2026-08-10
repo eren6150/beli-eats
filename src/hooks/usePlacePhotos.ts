@@ -28,9 +28,27 @@ export function usePlacePhotos(placeId: string | undefined) {
     setLoading(true);
     setError(null);
 
+    /**
+     * ⚠️ `profiles!place_photos_user_id_fkey` — FK ADI ŞART, SADELEŞTİRME.
+     *
+     * Düz `profiles(*)` yazmak bu sorguyu PGRST201 ile patlatıyor. Sebep:
+     * `place_photos` ile `profiles` arasında PostgREST'in seçebileceği İKİ yol
+     * var —
+     *   1. doğrudan FK → `place_photos_user_id_fkey` (many-to-one, istediğimiz)
+     *   2. `photo_reports` üzerinden dolaylı (many-to-many)
+     * İkincisi MİGRATION 018 ile doğdu: `photo_reports`'un birincil anahtarı
+     * `(photo_id, user_id)` ve ikisi de FK, yani PostgREST'in ARA TABLO
+     * tanımına uyuyor ve ilişkiyi kendiliğinden ilan ediyor.
+     *
+     * ⚠️ BU HATA İKİNCİ KEZ OLDU. Birincisi `useActivityFeed`'di ve
+     * `entry_likes` (migration 016) yüzündendi; ders CLAUDE.md'ye
+     * genelleştirilmiş bir kural olarak yazıldı ama 018 yazılırken MEVCUT
+     * SORGULARA KARŞI TARANMADI. Bu sorgu 018'den önce yazılmıştı ve
+     * çalışıyordu — kuralın "çalışan eskisi de bozulur" kısmı tam olarak bu.
+     */
     const { data, error: queryError } = await supabase
       .from('place_photos')
-      .select('*, profiles(*)')
+      .select('*, profiles!place_photos_user_id_fkey(*)')
       .eq('place_id', placeId)
       .order('created_at', { ascending: false });
 
