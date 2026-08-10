@@ -53,6 +53,31 @@ export const supabase = createClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      /**
+       * ── NEDEN PKCE (supabase-js varsayılanı `implicit`) ───────────────────
+       *
+       * GÜVENLİK — Android'de teorik değil gerçek bir fark. Özel şema
+       * (`belieats://`) işletim sisteminde MÜNHASIR DEĞİL: başka bir uygulama
+       * da aynı şemayı kaydedip yönlendirmeyi yakalayabilir.
+       *   implicit → yakalayanın eline gerçek `access_token` + `refresh_token`
+       *              geçer, yani hesabın tamamı.
+       *   pkce     → eline yalnızca tek kullanımlık, 5 dakika ömürlü bir
+       *              `code` geçer ve o, BİZİM deposumuzdaki doğrulayıcı
+       *              olmadan işe yaramaz.
+       * Native uygulamalar için standart OAuth pratiği (RFC 8252).
+       *
+       * PRATİK — implicit token'ları URL'in `#` FRAGMENT'ında döndürüyor;
+       * `Linking.parse()` fragment okumuyor, yani ya elle URL ayrıştırmak ya
+       * da `expo-auth-session` paketini eklemek gerekirdi (Supabase'in kendi
+       * RN örneği bunu yapıyor). PKCE'de `code` düz bir QUERY parametresi →
+       * `Linking.parse()` doğrudan veriyor, ek paket yok.
+       *
+       * ⚠️ Bu AYAR İSTEMCİ GENELİ. `signInWithPassword` ve `verifyOtp`
+       * flowType'tan bağımsız çalışıyor (şifre sıfırlama OTP'si bu yüzden
+       * etkilenmemeli) — ama "etkilenmemeli" bir varsayım, ikisi de her
+       * build'de yeniden test ediliyor.
+       */
+      flowType: 'pkce',
     },
   }
 );
@@ -92,6 +117,10 @@ export const supabase = createClient(
  *                            `persistSession` yanlışlıkla açılırsa bu istemci
  *                            kullanıcının GERÇEK oturumunu ezerdi.
  * `autoRefreshToken: false`→ geçici bir oturum, arka planda yenilenmesin.
+ *
+ * `flowType` BİLEREK verilmedi (ana istemci `pkce`): bu istemcinin yaptığı iki
+ * çağrı da (`verifyOtp`, `updateUser`) flowType'tan bağımsız. Doğrulanmış bir
+ * yola gerekmeyen bir ayar eklemiyoruz.
  */
 export const supabaseRecovery = createClient(
   supabaseUrl || UNCONFIGURED_URL,

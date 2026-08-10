@@ -4,10 +4,13 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
+import * as Linking from 'expo-linking';
 import { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseRecovery } from '../lib/supabaseClient';
+import { authRedirectUrl } from '../lib/authRedirect';
 
 /**
  * Supabase hata KODU → kullanıcıya gösterilecek kısa Türkçe metin.
@@ -129,6 +132,13 @@ interface AuthContextValue {
   }>;
   /** Onay e-postasını tekrar gönderir. */
   resendConfirmation: (email: string) => Promise<{ error: Error | null }>;
+  /**
+   * Derin bağlantı işlenirken bir şey ters gittiyse gösterilecek kısa metin.
+   * `LoginScreen` okuyor — kullanıcı bağlantıya dokunup giriş ekranında
+   * kaldıysa sebebini görmeli, sessiz kalmamalı.
+   */
+  linkNotice: string | null;
+  clearLinkNotice: () => void;
   /** Şifre sıfırlama için 6 haneli kodu e-postaya gönderir. */
   sendPasswordResetCode: (email: string) => Promise<{ error: Error | null }>;
   /** Kodu doğrulayıp yeni şifreyi yazar. Oturuma DOKUNMAZ (bkz. gövdesi). */
@@ -151,6 +161,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [linkNotice, setLinkNotice] = useState<string | null>(null);
+
+  /**
+   * İşlenmiş `code`'lar. `getInitialURL()` ile `url` dinleyicisi AYNI adresi
+   * iki kez verebiliyor (uygulama bağlantıyla soğuk açıldığında ikisi de
+   * ateşleniyor). Kod tek kullanımlık olduğu için ikinci değişim SUNUCUDA
+   * zaten reddedilirdi — ama kullanıcı sebepsiz bir hata şeridi görürdü.
+   */
+  const handledCodesRef = useRef<Set<string>>(new Set());
+
+  const clearLinkNotice = useCallback(() => setLinkNotice(null), []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -169,6 +190,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  /**
+   * Derin bağlantı işleyicisi — e-posta onayı VE Google girişi aynı yoldan.
+   *
+   * PKCE akışında yönlendirme `?code=<...>` taşıyor (implicit'teki `#`
+   * fragment'ı değil), yani `Linking.parse` doğrudan okuyabiliyor.
+   * `exchangeCodeForSession` oturumu açınca `onAuthStateChange` tetikleniyor
+   * ve `RootNavigator` uygulamaya geçiyor — yani "otomatik giriş" için ayrıca
+   * bir yönlendirme yazmıyoruz.
+   *
+   * ── `loading`'e DOKUNULMUYOR — bilinçli ──────────────────────────────────
+   * Değişim sırasında splash göstermek cazipti (mevcut makine, bedava) ama
+   * `loading`'i buradan yönetmek ağ takılırsa kullanıcıyı splash'te ASILI
+   * bırakırdı ve o durumdan çıkış yok. Bunun yerine kullanıcı bir saniye giriş
+   * ekranını görüp uygulamaya geçiyor; takılırsa giriş ekranında kalıyor ve
+   * elle girebiliyor.
+   */
+  const handleAuthUrl = useCallback(async (url: string | null) => {
+    if (!url) return;
+
+    const { queryParams } = Linking.parse(url);
+    const pick = (v: string | string[] | undefined | null) =>
+      Array.isArray(v) ? v[0] : v ?? null;
+
+    const code = pick(queryParams?.code);
+    const errorDescription =
+      pick(queryParams?.error_description) ?? pick(queryParams?.error);
+
+    // Supabase hata ile de dönebiliyor (ör. süresi geçmiş onay bağlantısı).
+    if (!code) {
+      if (errorDescription) {
+        console.error('[useAuth] derin bağlantı hatayla döndü:', errorDescription);
+        setLinkNotice('Bağlantı işlenemedi. E-posta ve şifrenle giriş yapabilirsin.');
+      }
+      // Kodu da hatası da olmayan adresler bizim işimiz değil (uygulamanın
+      // başka derin bağlantıları ileride buradan geçebilir) — sessizce geç.
+      return;
+    }
+
+    if (handledCodesRef.current.has(code)) return;
+    handledCodesRef.current.add(code);
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      /**
+       * Başarısızlık BURADAKİ tek anlam değil: Supabase e-postayı kendi
+       * `/verify` ucunda ONAYLADIKTAN SONRA buraya yönlendiriyor, yani hesap
+       * büyük ihtimalle onaylanmış durumda. Sık sebepler: kodun 5 dakikası
+       * dolmuş, bağlantıya ikinci kez dokunulmuş, ya da kayıt BAŞKA bir
+       * cihazda yapıldığı için PKCE doğrulayıcısı bu cihazın deposunda yok.
+       *
+       * Bu yüzden metin "onaylanamadı" demiyor — yalnızca otomatik girişin
+       * olmadığını söyleyip elle girişe yönlendiriyor. Yanlış teşhis koymayan
+       * kısa metin kuralı.
+       */
+      console.error('[useAuth] exchangeCodeForSession — kod:', error.code ?? '(yok)');
+      console.error('[useAuth] exchangeCodeForSession — ham hata:', error);
+      setLinkNotice('Otomatik giriş yapılamadı. E-posta ve şifrenle giriş yapabilirsin.');
+      return;
+    }
+
+    setLinkNotice(null);
+  }, []);
+
+  useEffect(() => {
+    // Uygulama bağlantıyla SOĞUK açıldıysa dinleyici geç kalır — ilk adresi
+    // ayrıca sormak zorundayız. Zaten çalışıyorken gelen bağlantılar için de
+    // dinleyici gerekiyor. İkisi birden şart; tekrarı `handledCodesRef` yutuyor.
+    Linking.getInitialURL().then(handleAuthUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
+    return () => sub.remove();
+  }, [handleAuthUrl]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -205,7 +299,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { username } },
+        options: {
+          data: { username },
+          /**
+           * Onay bağlantısı artık UYGULAMAYI açıyor (öncesinde GitHub Pages
+           * iniş sayfasına düşüyor ve kullanıcı elle giriş yapıyordu).
+           * Adres `authRedirectUrl()` ile üretiliyor; Supabase panelindeki
+           * Redirect URLs listesinde kayıtlı olmayan bir adres SESSİZCE Site
+           * URL'e düşer, yani akış kırılmaz ama eski davranışa geri döner.
+           */
+          emailRedirectTo: authRedirectUrl(),
+        },
       });
 
       /**
@@ -250,7 +354,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * `resend`'i zaten vardı ama hiçbir yerden çağrılmıyordu.
    */
   const resendConfirmation = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      // `signUp` ile AYNI adres. Atlanırsa tekrar gönderilen mail eski
+      // davranışa (Site URL) döner ve iki mail farklı yerlere giderdi —
+      // kullanıcının hangisine dokunduğuna bağlı, teşhisi zor bir tutarsızlık.
+      options: { emailRedirectTo: authRedirectUrl() },
+    });
     return { error: toDisplayError(error, 'resend') };
   }, []);
 
@@ -337,6 +448,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resendConfirmation,
       sendPasswordResetCode,
       resetPassword,
+      linkNotice,
+      clearLinkNotice,
       signOut,
     }),
     [
@@ -348,6 +461,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resendConfirmation,
       sendPasswordResetCode,
       resetPassword,
+      linkNotice,
+      clearLinkNotice,
       signOut,
     ]
   );

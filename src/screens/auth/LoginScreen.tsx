@@ -16,6 +16,7 @@ import { useAuth } from '../../hooks/useAuth';
 import Icon from '../../components/ui/Icon';
 import TextField from '../../components/ui/TextField';
 import Button from '../../components/ui/Button';
+import ErrorBanner from '../../components/ui/ErrorBanner';
 import { Colors, Type, Spacing, Radius } from '../../constants/theme';
 
 /** Logo dairesinin çapı — `Radius.full` ile daire kalır. */
@@ -23,7 +24,7 @@ const LOGO_SIZE = 80;
 
 export default function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const { signIn } = useAuth();
+  const { signIn, linkNotice, clearLinkNotice } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,6 +60,18 @@ export default function LoginScreen() {
         {/* Form */}
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Giriş Yap</Text>
+
+          {/* Derin bağlantı işlenemediyse kullanıcı burada, sebebini bilmeden
+              kalırdı. `onRetry` YOK: yeniden denenecek bir şey yok, yapılacak
+              tek şey formu doldurmak — kapatma butonu o yüzden "Tamam". */}
+          {linkNotice ? (
+            <ErrorBanner
+              message={linkNotice}
+              onRetry={clearLinkNotice}
+              retryLabel="Tamam"
+              style={styles.linkNotice}
+            />
+          ) : null}
 
           <TextField
             label="E-posta"
@@ -169,6 +182,7 @@ const styles = StyleSheet.create({
    * ekranlarının yerleşik dili. Sayfanın altındaki "Kayıt Ol" satırının yanına
    * konsaydı iki ikincil bağlantı üst üste yığılır, ikisi de zayıflardı.
    */
+  linkNotice: { marginBottom: Spacing.md },
   passwordField: { marginBottom: Spacing.xs },
   forgotButton: {
     alignSelf: 'flex-end',
