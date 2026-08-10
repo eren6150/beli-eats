@@ -92,7 +92,7 @@ takip ettiği kişilerin aktivite akışı olacak.
   `008_move_list_items_copy` → `009_diary_entries` → `010_log_diary_entry` →
   `011_update_diary_entry` → `012_username_conflict` → `013_place_photos` →
   `014_place_photos_storage` → `015_public_diary` → `016_entry_likes` →
-  `017_optional_ranking_update`.
+  `017_optional_ranking_update` → `018_photo_moderation`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -3000,7 +3000,7 @@ her biri bir öncekinin üstüne biniyor:
 | Kademe | Kim kullanıyor | Ne gerekiyor |
 |---|---|---|
 | **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
-| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı **(a)–(d)**~~ ✅ · **fotoğraf moderasyonu** · ~~**custom SMTP**~~ ✅ · **kendi alan adı** (spam) |
+| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı **(a)–(d)**~~ ✅ · ~~**custom SMTP**~~ ✅ · **fotoğraf moderasyonu** ⏳ (veri hazır, istemci sırada) · **kendi alan adı** (spam) ⬜ |
 | **3 — genel yayın** | Herkes | Faz 4 (marka) + Google çağrıları **Edge Function** arkasına + Play Store için **AAB** |
 
 - **Kademe 2'nin koşulları DÖRDE ÇIKTI, ikisi kapandı (2026-08-09):**
@@ -3011,28 +3011,49 @@ her biri bir öncekinin üstüne biniyor:
     davetlilerin çoğu onay mailini **hiç alamayacaktı** ve sebebini kimse
     bilmeyecekti. Ders: *e-posta onayını açmak, mail ALTYAPISI kararını da
     beraberinde getiriyor.* (Önce Brevo denendi, hesap sorunları çözülemedi.)
-  - ⬜ **Fotoğraf moderasyonu** — bu bölümün ilk maddesi.
+  - ⏳ **Fotoğraf moderasyonu** — **veri katmanı hazır** (migration 018
+    çalıştırıldı ve doğrulandı), **istemci sırada**. Koşul ancak "Bildir"
+    eylemi sahaya çıkınca karşılanıyor: bugün kullanıcı hâlâ hiçbir şey
+    bildiremiyor. Detay bu bölümün ilk maddesinde.
   - ⬜ **Kendi alan adı** — SPF/DKIM olmadan onay mailleri spam'e düşebilir.
     Faz 4'le birleşiyor: marka adı kararlaşınca alan adı alınır.
 - **Kademe 3'ün Edge Function maddesi çift işe yarıyor:** hem Places anahtarını
   istemciden tamamen kaldırıyor (Dağıtım §6/2'nin kökten çözümü) hem `places`
   yazma yolunu sunucuya taşıyor.
 
-- **Fotoğraflarda moderasyon / şikayet mekanizması YOK (2026-08-05, migration 013).**
-  `place_photos` SELECT politikası `using (true)` — fotoğraflar **herkese açık
-  ve kalıcı**; kullanıcı yalnızca **kendi** yüklediğini silebiliyor.
-  - **Bu bilinçli bir takas:** bir menü fotoğrafının varlık sebebi paylaşılmak,
-    gizli fotoğraf anlamsız olurdu. Ayrıca `diary_entries`'in tersi bir karar
-    ve gerekçesi migration 013'te yazılı.
-  - **Eksik olan:** başkasının yüklediği uygunsuz/yanlış içeriği bildirme yolu,
-    yöneticinin silme yetkisi, ve yükleyene karşı bir yaptırım.
-  - Gerektiğinde muhtemel yol: `photo_reports` tablosu (şikayet eden, sebep,
-    durum) + `place_photos`'a `hidden boolean` + SELECT politikasına
-    `and not hidden` + yöneticiler için `service_role` üzerinden silme.
-    Veri migration'ı gerektirmiyor, yani sonradan eklemek ucuz — bu yüzden
-    bugün yapılmadı.
-  - **Tetikleyici:** uygulamanın arkadaş çevresi dışına açılması. Ondan önce
-    değil, ondan sonra da geciktirmeden.
+- **Fotoğraf moderasyonu — VERİ KATMANI HAZIR (migration 018, 2026-08-09),
+  İSTEMCİ SIRADA.** Tetikleyici gerçekleşti: uygulama arkadaş çevresi dışına
+  açılıyor.
+  - **Neydi:** `place_photos` SELECT `using (true)`, silme yalnızca sahibine.
+    Başkasının uygunsuz içeriğini bildirmenin, gizlemenin veya sildirmenin
+    hiçbir yolu yoktu. Fotoğrafların herkese açık olması bilinçli bir
+    takastı (menü fotoğrafının varlık sebebi paylaşılmak) ve o karar duruyor.
+  - **Migration 018 ne getirdi:** `place_photos.hidden` · SELECT politikası
+    `not hidden or auth.uid() = user_id` · `photo_reports` tablosu (bileşik
+    PK, dört sabit kategori, **yalnızca INSERT politikası**) · ve bir
+    **güvenlik düzeltmesi**: migration 013'ün kullanılmayan UPDATE politikası
+    düşürüldü — RLS kolon bazlı olmadığı için o politika, moderasyon edilen
+    kullanıcının `hidden`'ı kendi `false`'a çekmesine izin veriyordu.
+  - **Yönetici arayüzü YOK ve olmayacak (bu ölçekte):** rol sistemi
+    kurulmadı, moderasyon Supabase panelinden yapılıyor (`service_role` RLS'i
+    baypas ediyor). Panelde kullanılacak sorgular migration dosyasının 5.
+    bölümünde hazır.
+  - **"Kendi fotoğrafını şikayet edememe" RLS'te GERÇEKTEN zorlanıyor** —
+    `entry_likes`'ta yapılamamıştı (tablo CHECK'i başka tabloya bakamıyor),
+    burada `with check` alt sorgu kabul ettiği için mümkün oldu.
+  - ⚠️ **YUMUŞAK GİZLEME DOSYAYI İNTERNETTEN KALDIRMIYOR.** Bucket public
+    (migration 014, gerekçe egress). `hidden` fotoğrafı UYGULAMADAN gizler;
+    doğrudan URL'i bilen görmeye devam eder. Gerçekten yasa dışı içerik için
+    Storage'dan **iki nesneyi de** (`storage_path` + `thumb_path`) elle silmek
+    gerekiyor — adımlar ve sıra uyarısı ("önce yolları oku, sonra satırı sil")
+    migration dosyasında.
+  - **Bilinçli olarak YOK:** yükleyiciye yaptırım · şikayet edene sonuç
+    bildirimi · otomatik gizleme eşiği (bu ölçekte tek kötü niyetli kullanıcı
+    meşru fotoğrafları gizletebilirdi) · serbest metin şikayet açıklaması
+    (kendisi moderasyon gerektiren yeni bir kötüye kullanım yüzeyi olurdu).
+  - **Kalan iş:** istemci tarafı — "Bildir" eylemi, kategori seçimi, `23505` →
+    "zaten bildirdin", ve yükleyicinin kendi gizlenmiş fotoğrafındaki
+    "Gizlendi" etiketi.
 
 ## Konuşulacak (kullanıcı isteği, karar VERİLMEDİ)
 - **Bir listeye dokununca haritadaki pin'lerin o listeye göre filtrelenmesi/vurgulanması**
