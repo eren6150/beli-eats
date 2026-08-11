@@ -11,16 +11,51 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
 import { logDiaryEntry, updateDiaryEntry } from '../../hooks/useDiary';
-import { DiaryEntry } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
+import { DiaryEntry, PlacePhotoKind } from '../../types';
+import {
+  makePhotoRenditions,
+  uploadPlacePhoto,
+  PHOTO_KIND_TR,
+} from '../../lib/placePhotos';
 import { Colors, Elevation, Radius, Spacing, Type } from '../../constants/theme';
 import { toDateString, fromDateString, formatVisitDate } from '../../lib/date';
 import ErrorBanner from '../ui/ErrorBanner';
 import StarRating from '../ui/StarRating';
 import Icon from '../ui/Icon';
+import PhotoKindSheet from '../photos/PhotoKindSheet';
+
+/**
+ * Henüz YÜKLENMEMİŞ, yalnızca seçilmiş fotoğraf. Yükleme kaydetmeden sonra
+ * yapılıyor çünkü `place_photos.entry_id` bir FK — giriş satırı önce var olmalı.
+ */
+interface PendingPhoto {
+  /** Yerel liste anahtarı; sunucudaki id ile ilgisi yok. */
+  id: string;
+  uri: string;
+  width: number;
+  height: number;
+  kind: PlacePhotoKind;
+}
+
+/** Tür seçicinin hedefi: yeni bir seçim mi, listedeki bir fotoğraf mı. */
+type KindTarget =
+  | { mode: 'new'; asset: Omit<PendingPhoto, 'kind' | 'id'> }
+  | { mode: 'edit'; id: string; kind: PlacePhotoKind }
+  | null;
+
+/** Tür seçilmemişken seçicide işaretli duran değer. */
+const DEFAULT_KIND: PlacePhotoKind = 'food';
+
+/** Şeritteki önizleme karesinin kenarı. */
+const THUMB_SIZE = 72;
 
 /**
  * "Ziyaret ekle" formu — mekan detayından açılan modal.
@@ -89,6 +124,24 @@ export default function DiaryEntrySheet({
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const { user } = useAuth();
+
+  /**
+   * ── FOTOĞRAFLAR YALNIZCA EKLEME MODUNDA ──────────────────────────────────
+   * Düzenleme modunda fotoğraf bölümü HİÇ render edilmiyor. Sebep: girişin
+   * zaten yüklenmiş fotoğrafları var ve onları göstermeden boş bir şerit
+   * çizmek düpedüz yalan olurdu ("bu ziyaretin fotoğrafı yok" der gibi).
+   * Mevcut fotoğrafları yükleyip yönetmek (silme dahil) ayrı bir iş.
+   *
+   * ⚠️ DOĞAN AÇIK: mekan sayfasındaki yükleme butonu Aşama 4'te kaldırılırsa,
+   * fotoğrafını sonradan eklemek isteyen kullanıcının hiçbir yolu kalmaz.
+   * Bu, o aşamada karara bağlanmalı — ya düzenleme modu fotoğraf almalı ya da
+   * mekan sayfasındaki yol bir biçimde korunmalı.
+   */
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [kindTarget, setKindTarget] = useState<KindTarget>(null);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
   // Form AÇILIŞTA dolduruluyor (kapanışta değil): düzenlemede girişin kendi
   // değerleri, eklemede bugün + boş. `entry` bağımlılıkta çünkü aynı sheet
   // örneği farklı girişler için art arda açılabiliyor.
@@ -107,7 +160,98 @@ export default function DiaryEntrySheet({
     // karar, kalıcı bir tercih değil.
     setUpdateRanking(true);
     setError(null);
+    // Seçilmiş ama yüklenmemiş fotoğraflar sheet kapanınca DÜŞÜYOR: bir
+    // sonraki ziyarete sızmaları veri hatası olurdu.
+    setPhotos([]);
+    setKindTarget(null);
   }, [visible, entry]);
+
+  /**
+   * ── FOTOĞRAF SEÇME: "+" → Alert ──────────────────────────────────────────
+   * Üç seçenek (İptal / Kamera / Galeriden Seç) Android `Alert`'in tam
+   * sınırında, yani ikinci bir sheet yazmaya gerek yok. Tür seçimi dörde
+   * çıktığı için ORADA sheet gerekiyor (`PhotoKindSheet`).
+   *
+   * ⚠️ Kamera izni MANIFEST'te zaten var: `expo-image-picker` kendi
+   * AndroidManifest'inde ilan ediyor ve kütüphane autolink edildiği için izin
+   * versionCode 4'ten beri APK'da. Yani bu özellik build gerektirmedi.
+   */
+  const pickFrom = async (source: 'camera' | 'library') => {
+    const perm =
+      source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!perm.granted) {
+      Alert.alert(
+        'İzin gerekli',
+        source === 'camera'
+          ? 'Fotoğraf çekmek için kamera erişimine izin vermelisin.'
+          : 'Fotoğraf eklemek için galeri erişimine izin vermelisin.'
+      );
+      return;
+    }
+
+    // `quality: 1` — burada SIKIŞTIRMA YOK. Sıkıştırmayı `makePhotoRenditions`
+    // yapıyor; iki kez sıkıştırmak çift kayıp olurdu (mekan sayfasındaki
+    // mevcut akışın kararı, aynen korunuyor).
+    const picked =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 1 })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 1,
+          });
+
+    if (picked.canceled || !picked.assets?.[0]) return;
+
+    const asset = picked.assets[0];
+
+    /**
+     * Seçim doğrudan listeye EKLENMİYOR: önce tür soruluyor (kullanıcı kararı,
+     * "her fotoğrafa tür seçtir"). Seçici kapatılırsa fotoğraf da eklenmiyor —
+     * tür gerçekten zorunlu olsun diye. Sessizce varsayılan atamak, kullanıcının
+     * açıkça istediği adımı atlamak olurdu.
+     */
+    setKindTarget({
+      mode: 'new',
+      asset: { uri: asset.uri, width: asset.width, height: asset.height },
+    });
+  };
+
+  const handleAddPhoto = () => {
+    Alert.alert('Fotoğraf ekle', 'Nereden eklemek istersin?', [
+      { text: 'İptal', style: 'cancel' },
+      { text: 'Kamera', onPress: () => pickFrom('camera') },
+      { text: 'Galeriden Seç', onPress: () => pickFrom('library') },
+    ]);
+  };
+
+  const handleKindSelect = (kind: PlacePhotoKind) => {
+    if (!kindTarget) return;
+
+    if (kindTarget.mode === 'new') {
+      setPhotos((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-${prev.length}`,
+          ...kindTarget.asset,
+          kind,
+        },
+      ]);
+    } else {
+      const targetId = kindTarget.id;
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === targetId ? { ...p, kind } : p))
+      );
+    }
+
+    setKindTarget(null);
+  };
+
+  const removePendingPhoto = (id: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
+  };
 
   const handleSave = async () => {
     if (saving) return;
@@ -121,30 +265,96 @@ export default function DiaryEntrySheet({
     const ratingValue = rating > 0 ? rating : null;
     const noteValue = note.trim() || null;
 
-    const { error: saveError } = entry
-      ? await updateDiaryEntry({
-          entryId: entry.id,
-          visitedAt,
-          rating: ratingValue,
-          note: noteValue,
-          updateRanking,
-        })
-      : await logDiaryEntry({
-          placeId,
-          visitedAt,
-          rating: ratingValue,
-          note: noteValue,
-          updateRanking,
-        });
+    /**
+     * ── SIRA: ÖNCE GİRİŞ, SONRA FOTOĞRAF ─────────────────────────────────────
+     * `place_photos.entry_id` bir FK (migration 020), yani giriş satırı var
+     * olmadan fotoğraf yazılamaz. Ters sıra denenmedi ve denenemez.
+     */
+    let savedEntryId: string | null = entry?.id ?? null;
 
-    setSaving(false);
-
-    if (saveError) {
-      setError(saveError.message);
-      return;
+    if (entry) {
+      const { error: updateError } = await updateDiaryEntry({
+        entryId: entry.id,
+        visitedAt,
+        rating: ratingValue,
+        note: noteValue,
+        updateRanking,
+      });
+      if (updateError) {
+        setSaving(false);
+        setError(updateError.message);
+        return;
+      }
+    } else {
+      const { entryId, error: logError } = await logDiaryEntry({
+        placeId,
+        visitedAt,
+        rating: ratingValue,
+        note: noteValue,
+        updateRanking,
+      });
+      if (logError) {
+        setSaving(false);
+        setError(logError.message);
+        return;
+      }
+      savedEntryId = entryId;
     }
 
+    /**
+     * ── FOTOĞRAF YÜKLEME — BAŞARISIZLIĞI YUTMUYORUZ ──────────────────────────
+     * Buraya gelindiğinde ziyaret KAYDEDİLDİ. Yükleme patlarsa geri alma
+     * yapmıyoruz: kullanıcının asıl kaydettiği şey ziyaret, fotoğraf yan bilgi.
+     * Ama sessiz de kalmıyoruz — kaç tanesinin yüklenemediği açıkça
+     * söyleniyor. Sessiz bırakmak, bu projenin en çok ceza kestiği şey.
+     *
+     * Sheet yine de KAPANIYOR (`onSaved`) çünkü asıl işlem başarılı; uyarı
+     * `Alert` ile geliyor ve `Alert` bileşenin unmount olmasından etkilenmiyor.
+     * Sheet'i açık tutmak "ziyaret kaydedilmedi" izlenimi verirdi.
+     */
+    let failed = 0;
+
+    if (savedEntryId && photos.length > 0 && user?.id) {
+      setUploadingPhotos(true);
+
+      for (const photo of photos) {
+        try {
+          const { fullUri, thumbUri } = await makePhotoRenditions({
+            uri: photo.uri,
+            width: photo.width,
+            height: photo.height,
+          });
+
+          const { error: uploadError } = await uploadPlacePhoto({
+            placeId,
+            userId: user.id,
+            kind: photo.kind,
+            fullUri,
+            thumbUri,
+            entryId: savedEntryId,
+          });
+
+          if (uploadError) failed += 1;
+        } catch (e) {
+          console.error('[DiaryEntrySheet] fotoğraf yüklenemedi:', e);
+          failed += 1;
+        }
+      }
+
+      setUploadingPhotos(false);
+    }
+
+    setSaving(false);
     onSaved();
+
+    if (failed > 0) {
+      Alert.alert(
+        'Ziyaret kaydedildi',
+        failed === photos.length
+          ? 'Ama fotoğraflar yüklenemedi. Bağlantını kontrol edip mekan sayfasından tekrar deneyebilirsin.'
+          : `Ama ${failed} fotoğraf yüklenemedi.`
+      );
+    }
   };
 
   return (
@@ -153,7 +363,19 @@ export default function DiaryEntrySheet({
       transparent
       animationType="slide"
       // Android donanım/jest geri tuşu — Modal'da bu olmadan kapanmaz.
-      onRequestClose={onClose}
+      /**
+       * Geri tuşu KATMANI kapatıyorsa formu kapatmıyor. `PhotoKindSheet` bir
+       * `Modal` olmadığı için kendi geri tuşunu yakalayamıyor; onsuz geri
+       * tuşu tür seçiciyle birlikte formu da kapatır ve seçilen fotoğraf
+       * kaybolurdu.
+       */
+      onRequestClose={() => {
+        if (kindTarget) {
+          setKindTarget(null);
+          return;
+        }
+        onClose();
+      }}
       statusBarTranslucent
     >
       <View style={styles.root}>
@@ -343,6 +565,86 @@ export default function DiaryEntrySheet({
                 multiline
                 textAlignVertical="top"
               />
+
+              {/* ── Fotoğraflar (yalnızca EKLEME modunda) ──
+                  Gerekçe `photos` state'inin başında. */}
+              {!editing && (
+                <>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>Fotoğraflar</Text>
+                    {photos.length > 0 ? (
+                      <Text style={styles.counter}>{photos.length}</Text>
+                    ) : null}
+                  </View>
+
+                  {/* Yatay ScrollView DİKEY olanın içinde: eksenler farklı
+                      olduğu için iç içe sanallaştırma uyarısı doğmuyor
+                      (`FlatList` kullanılsaydı doğardı). */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.photoStrip}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <Pressable
+                      onPress={handleAddPhoto}
+                      style={({ pressed }) => [
+                        styles.photoAdd,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Fotoğraf ekle"
+                    >
+                      <Icon name="add" size={26} color={Colors.brandStrong} />
+                    </Pressable>
+
+                    {photos.map((photo) => (
+                      <View key={photo.id} style={styles.photoItem}>
+                        <Image
+                          source={{ uri: photo.uri }}
+                          style={styles.photoThumb}
+                        />
+
+                        {/* Kaldırma — küçük ve köşede; onay YOK çünkü henüz
+                            hiçbir yere yazılmadı, yıkıcı bir eylem değil. */}
+                        <Pressable
+                          onPress={() => removePendingPhoto(photo.id)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          style={({ pressed }) => [
+                            styles.photoRemove,
+                            pressed && styles.pressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Fotoğrafı çıkar"
+                        >
+                          <Icon name="close" size={12} color={Colors.textOnBrand} />
+                        </Pressable>
+
+                        {/* Tür rozeti — dokununca seçici açılıyor. */}
+                        <Pressable
+                          onPress={() =>
+                            setKindTarget({
+                              mode: 'edit',
+                              id: photo.id,
+                              kind: photo.kind,
+                            })
+                          }
+                          style={({ pressed }) => [
+                            styles.photoKind,
+                            pressed && styles.pressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Tür: ${PHOTO_KIND_TR[photo.kind]}`}
+                        >
+                          <Text style={styles.photoKindText} numberOfLines={1}>
+                            {PHOTO_KIND_TR[photo.kind]}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
             </ScrollView>
 
             {/**
@@ -374,7 +676,12 @@ export default function DiaryEntrySheet({
                 ]}
                 accessibilityRole="button"
               >
-                {saving ? (
+                {/* Yükleme AYRI bir metin alıyor: fotoğraf yükleme saniyeler
+                    sürebiliyor ve sessiz bir spinner "takıldı mı" hissi
+                    veriyordu. Kaydetmenin kendisi hızlı, orada spinner yeterli. */}
+                {uploadingPhotos ? (
+                  <Text style={styles.saveButtonText}>Fotoğraflar yükleniyor…</Text>
+                ) : saving ? (
                   <ActivityIndicator color={Colors.textOnBrand} />
                 ) : (
                   <Text style={styles.saveButtonText}>Kaydet</Text>
@@ -383,6 +690,15 @@ export default function DiaryEntrySheet({
             </View>
           </View>
         </KeyboardAvoidingView>
+
+        {/* Tür seçici — bu Modal'ın İÇİNDE, mutlak konumlu katman olarak.
+            İkinci bir `Modal` DEĞİL: gerekçe `PhotoKindSheet`'in başında.
+            En sonda duruyor ki formun üstüne çizilsin. */}
+        <PhotoKindSheet
+          value={kindTarget ? (kindTarget.mode === 'edit' ? kindTarget.kind : DEFAULT_KIND) : null}
+          onSelect={handleKindSelect}
+          onClose={() => setKindTarget(null)}
+        />
       </View>
     </Modal>
   );
@@ -392,6 +708,66 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.scrimMedium,
+  },
+
+  // ── Fotoğraf şeridi ──
+  photoStrip: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    // Son karenin sağında nefes payı — yatay kaydırmada kenara yapışmasın.
+    paddingRight: Spacing.sm,
+  },
+  photoAdd: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.brandSubtle,
+    borderWidth: 1,
+    borderColor: Colors.brandBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoItem: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+  },
+  photoThumb: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.canvasAlt,
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.textPrimary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  /**
+   * Tür rozeti karenin ALT kenarına oturuyor. Ayrı bir satır olarak yazmak
+   * şeridin yüksekliğini büyütürdü — bu sheet'in yerleşimi yazı tipi ölçeğine
+   * duyarlı ve her fazladan piksel sabit footer'ı sıkıştırıyor.
+   */
+  photoKind: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.scrimMedium,
+    borderBottomLeftRadius: Radius.md,
+    borderBottomRightRadius: Radius.md,
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
+  photoKindText: {
+    ...Type.micro,
+    color: Colors.textOnBrand,
   },
   // Dibe hizalama `root`'tan BURAYA taşındı: KAV artık araya giren tam ekran
   // katman, hizalamanın onun içinde olması gerekiyor.

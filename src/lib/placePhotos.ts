@@ -278,6 +278,31 @@ export async function uploadPlacePhoto(
 }
 
 /**
+ * Fotoğraf türlerinin Türkçe etiketleri — değerler İngilizce, arayüz Türkçe
+ * (`PHOTO_REPORT_REASON_TR` ile aynı sözleşme).
+ *
+ * ⚠️ `RestaurantDetailScreen`'de bu etiketler üç ayrı haritada daha duruyor
+ * (`PHOTO_TABS`, `PHOTO_ADD_LABEL`, `PHOTO_EMPTY_LABEL`) ve o üçü BİLİNÇLİ
+ * olarak dokunulmadan bırakıldı: onlar sekme/buton/boş durum metinleri, yani
+ * farklı cümleler. Burada gereken şey sadece türün ADI. Aşama 4'te o ekran
+ * zaten elden geçecek — yakınsatma orada değerlendirilir.
+ */
+export const PHOTO_KIND_TR: Record<PlacePhotoKind, string> = {
+  menu: 'Menü',
+  food: 'Yemek',
+  venue: 'Mekan',
+  other: 'Diğer',
+};
+
+/** Tür seçicide gösterim sırası — `RestaurantDetailScreen`'in sekmeleriyle aynı. */
+export const PHOTO_KINDS: ReadonlyArray<PlacePhotoKind> = [
+  'menu',
+  'food',
+  'venue',
+  'other',
+];
+
+/**
  * Storage nesnelerini siler — DB satırı GİTTİKTEN SONRA çağrılmalı.
  *
  * ── NEDEN AYRI FONKSİYON ─────────────────────────────────────────────────────
