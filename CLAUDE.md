@@ -43,7 +43,7 @@ işler · **Build 1** = native değişiklik isteyen paket.
   | 2 | **Deep link** (onay maili uygulamayı açsın) + PKCE | ✅ kodda · ⛔ **doğrulanamadı** |
   | 3 | **Google ile giriş** (tarayıcı tabanlı) | ✅ kodda · ⛔ **doğrulanamadı** |
   | 4 | **Kaydırmalı sekmeler** | ✅ *yalnızca* `FollowersList` |
-  | 5 | `react-native-keyboard-controller` | ⬜ sırada — **Expo Go'yu bitiriyor** |
+  | 5 | `react-native-keyboard-controller` | ✅ **yalnızca sağlayıcı** |
   | — | `fingerprint` `runtimeVersion` | ⏸️ **Build 1'DEN ÇIKARILDI** (karar A) |
 
   ⚠️ **`version` 1.2.0 olduğu için sahadaki APK'lara (runtime 1.1.0) OTA
@@ -2815,12 +2815,37 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   olarak, Reanimated 4 uyumluluğu düzgün araştırılarak ele alınacak.
 > - Bugün **iki ekranda his farklı** — bilinen ve kabul edilen bedel.
 >
-> ### ❓ BUILD'DEN ÖNCE CEVAPLANACAK: kamera izni
-> Fotoğraf akışının yeniden tasarımı (aşağıdaki park edilmiş iş) **build
-> gerektirmiyor** — ama "şimdi fotoğraf çek" özelliği isteniyorsa
-> `launchCameraAsync` **CAMERA iznini** gerektiriyor, o da manifest → native →
-> **ayrı bir build**. İzin bu build'e eklenirse bedava; sonra eklenirse yeni
-> build demek. Bugün kodda yalnızca `launchImageLibraryAsync` var.
+> ### ✅ KAMERA İZNİ — build'e bağlı DEĞİLMİŞ (düzeltme, 2026-08-11)
+> Bir dönem burada *"kamera CAMERA izni ister → manifest → ayrı build"*
+> yazıyordu. **YANLIŞ.** `expo-image-picker` **kendi AndroidManifest'inde**
+> `android.permission.CAMERA`'yı ilan ediyor
+> (`node_modules/expo-image-picker/android/src/main/AndroidManifest.xml`) ve
+> kütüphane autolink edildiği için izin **versionCode 4'ten beri APK'da**.
+> - **Sonuç:** kamera + galeri **"+" menüsü** (istek: 2026-08-11) tamamen
+>   **OTA ile gidebilir**, park edilen fotoğraf işinin parçası.
+> - **Yöntem notu:** izin ekleme bir **prebuild mod'u**, yani
+>   `npx expo config` çıktısında GÖRÜNMÜYOR. `expo config`'e bakıp "izin yok"
+>   sonucuna varmak yanlış olur — kanıt kütüphanenin kendi manifest'inde.
+> - `app.json`'a `expo-image-picker` plugin'i yine de kaydedildi, ama
+>   **kamera için değil**: kütüphane `RECORD_AUDIO`'yu ilan etmiyor ancak
+>   plugin `microphonePermission` verilmezse onu **ekliyor**. `false` yazmak
+>   `blockedPermissions`'a koyuyor — kütüphane sürümü değişse bile mikrofon
+>   izni sızmıyor. Yanında iOS izin metinleri Türkçe olarak yerleşiyor.
+>
+> ### 📦 PARK EDİLDİ: takipçi çıkarma + kullanıcı engelleme (2026-08-11)
+> **BUILD GEREKMİYOR** — migration + RLS + arayüz, OTA ile gider.
+> - **Takipçi çıkarma bugün İMKÂNSIZ ve sebebi tek satır**
+>   (`supabase_schema.sql:148-149`): DELETE politikası
+>   `using (auth.uid() = follower_id)`, yani yalnızca **kendi takibini**
+>   silebiliyorsun. Takipçi çıkarmak `following_id = auth.uid()` satırını
+>   silmek demek → politika genişletilmeli. Küçük migration.
+> - **Engellemenin maliyeti tabloda değil**, `blocks`'tan haberdar edilmesi
+>   gereken **her okuma yolunda**: aktivite akışı, profil, takipçi listeleri,
+>   beğeniler, fotoğraflar, leaderboard. Artı ürün kararları (engellenen
+>   profili görebilir mi · mevcut takip ne olacak · çift taraflı mı).
+> - 🚩 **`blocks` DÖRDÜNCÜ ARA TABLO olur** (`follows`, `entry_likes`,
+>   `photo_reports` ile birlikte): iki FK, ikisi de `profiles`'a, bileşik PK —
+>   tanıma birebir uyuyor. PGRST201 kuralı geçerli, ayrıştırma **aynı diff'te**.
 >
 > ### 📦 PARK EDİLDİ: fotoğrafların incelemeye bağlanması (2026-08-11)
 > İstek: fotoğraflar mekan sayfasından değil, **ziyaret/inceleme yazarken**
