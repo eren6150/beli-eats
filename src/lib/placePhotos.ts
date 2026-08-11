@@ -212,6 +212,17 @@ export interface UploadPlacePhotoInput {
   /** Küçük kopya yerel dosyası (adım 5'te 400px). */
   thumbUri: string;
   caption?: string | null;
+  /**
+   * Fotoğrafın bağlı olduğu ziyaret (migration 020). Verilmezse `null` —
+   * eski akıştan (mekan sayfasından) yüklenen fotoğraflar ve sahadaki eski
+   * APK'lardan gelenler böyle kalıyor, kolon bu yüzden nullable.
+   *
+   * ⚠️ Sunucu tarafında bu alan SERBEST DEĞİL: INSERT politikası, giriş
+   * verilmişse onun da `auth.uid()`'e ait olmasını şart koşuyor. Yani
+   * başkasının ziyaretine fotoğraf bağlamak istemciden engellenmiyor,
+   * veritabanında engelleniyor.
+   */
+  entryId?: string | null;
 }
 
 /**
@@ -249,6 +260,7 @@ export async function uploadPlacePhoto(
     storage_path: paths.full,
     thumb_path: paths.thumb,
     caption: input.caption?.trim() || null,
+    entry_id: input.entryId ?? null,
   });
 
   if (insertError) {
@@ -263,6 +275,36 @@ export async function uploadPlacePhoto(
   }
 
   return { transport: full.transport, error: null };
+}
+
+/**
+ * Storage nesnelerini siler — DB satırı GİTTİKTEN SONRA çağrılmalı.
+ *
+ * ── NEDEN AYRI FONKSİYON ─────────────────────────────────────────────────────
+ * İki çağıranı var ve ikisi de aynı sırayı izlemek zorunda:
+ *   · `usePlacePhotos.removePhoto` — tek fotoğrafı sil
+ *   · `useDiary.removeEntry`       — ziyaret silinince cascade'in götürdüğü
+ *                                     satırların dosyalarını topla
+ * Postgres `on delete cascade` yalnızca SATIRI siliyor; bucket'taki nesneler
+ * onun işi değil. Bu yüzden temizlik istemciye ait.
+ *
+ * ── HATA KULLANICIYA YANSITILMIYOR ───────────────────────────────────────────
+ * Kullanıcı açısından iş bitti: satır gitti, fotoğraf uygulamada görünmüyor.
+ * Kalan şey görünmez, küçük bir öksüz nesne. Konsola `warn` düşüyor — beklenen
+ * bir aksaklık, gerçek hata değil (projenin konsol seviyesi ayrımı).
+ */
+export async function removePhotoObjects(paths: string[]): Promise<void> {
+  const clean = paths.filter((p): p is string => !!p);
+  if (clean.length === 0) return;
+
+  const { error } = await supabase.storage.from('place-photos').remove(clean);
+
+  if (error) {
+    console.warn(
+      '[placePhotos] satırlar silindi ama nesneler kaldı (öksüz):',
+      error
+    );
+  }
 }
 
 /**

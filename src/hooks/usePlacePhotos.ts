@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { removePhotoObjects } from '../lib/placePhotos';
 import { PlacePhoto, PlacePhotoKind } from '../types';
 
 type MutationError = PostgrestError | Error;
@@ -98,16 +99,10 @@ export function usePlacePhotos(placeId: string | undefined) {
       return { error: deleteError };
     }
 
-    const { error: storageError } = await supabase.storage
-      .from('place-photos')
-      .remove([photo.storage_path, photo.thumb_path]);
-
-    if (storageError) {
-      console.warn(
-        '[usePlacePhotos] satır silindi ama nesneler kaldı (öksüz):',
-        storageError
-      );
-    }
+    // Paylaşılan yardımcı: aynı sıra ve aynı hata politikası `removeEntry`'de
+    // de gerekiyor (ziyaret silinince cascade satırları götürüyor ama
+    // nesneleri bırakıyor). İki kopya zamanla ayrışırdı.
+    await removePhotoObjects([photo.storage_path, photo.thumb_path]);
 
     setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
     return { error: null };

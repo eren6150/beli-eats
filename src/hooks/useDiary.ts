@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { removePhotoObjects } from '../lib/placePhotos';
 import { DiaryEntry } from '../types';
 
 /**
@@ -69,8 +70,8 @@ export interface DiaryEntryInput {
  */
 export async function logDiaryEntry(
   params: DiaryEntryInput
-): Promise<{ error: MutationError | null }> {
-  const { error } = await supabase.rpc('log_diary_entry', {
+): Promise<{ entryId: string | null; error: MutationError | null }> {
+  const { data, error } = await supabase.rpc('log_diary_entry', {
     p_place_id: params.placeId,
     p_visited_at: params.visitedAt ?? null,
     p_rating: params.rating ?? null,
@@ -84,10 +85,17 @@ export async function logDiaryEntry(
     // RPC'nin `raise exception` metinleri TEŞHİS içindir, kullanıcı metni
     // değil (hangi ön koşulun atlandığını yazıyorlar).
     console.error('[diary] giriş kaydedilemedi:', error);
-    return { error: new Error('Ziyaret kaydedilemedi, tekrar dene') };
+    return { entryId: null, error: new Error('Ziyaret kaydedilemedi, tekrar dene') };
   }
 
-  return { error: null };
+  /**
+   * ── DÖNÜŞ ŞEKLİ GENİŞLEDİ: `entryId` (2026-08-11) ─────────────────────────
+   * RPC `returns uuid` (migration 010) ve bu değeri BAŞTAN BERİ döndürüyordu —
+   * istemci onu okumuyordu. Fotoğrafı ziyarete bağlamak için gerekli:
+   * `place_photos.entry_id` bir FK, yani giriş satırı önce var olmalı.
+   * RPC'yi değiştirmek gerekmedi, yalnızca zaten dönen değeri almak yetti.
+   */
+  return { entryId: (data as string | null) ?? null, error: null };
 }
 
 /**
@@ -206,6 +214,31 @@ export function useDiary(userId: string | undefined) {
   const removeEntry = async (
     entryId: string
   ): Promise<{ error: MutationError | null }> => {
+    /**
+     * ── SIRA ZORUNLU: ÖNCE YOLLARI OKU ───────────────────────────────────────
+     * Migration 020 `place_photos.entry_id`'ye `on delete cascade` koydu, yani
+     * giriş silinince fotoğraf SATIRLARI kendiliğinden gidiyor. Ama Postgres
+     * bucket'taki NESNELERİ silmiyor — o temizlik bize ait.
+     *
+     * Yolları silmeden önce okumak zorundayız: satırlar gittikten sonra
+     * hangi dosyaları sileceğimizi söyleyen hiçbir kayıt kalmıyor.
+     *
+     * Ters sıra (önce Storage) DENENMEDİ ve denenmemeli: giriş silme
+     * patlarsa dosyasız satırlar kalırdı — ızgarada boş kare, tam ekranda
+     * hata durumu. Yani DB tutarlılığı önce, temizlik sonra. Temizlik
+     * patlarsa kalan şey görünmez bir öksüz nesne.
+     */
+    const { data: photoRows, error: pathError } = await supabase
+      .from('place_photos')
+      .select('storage_path, thumb_path')
+      .eq('entry_id', entryId);
+
+    if (pathError) {
+      // Silmeyi ENGELLEMİYOR: kullanıcının istediği şey girişin gitmesi.
+      // Yollar okunamadıysa yalnızca temizlik yapılamaz, öksüz nesne kalır.
+      console.warn('[useDiary] fotoğraf yolları okunamadı, temizlik atlanacak:', pathError);
+    }
+
     const { error: deleteError } = await supabase
       .from('diary_entries')
       .delete()
@@ -214,6 +247,12 @@ export function useDiary(userId: string | undefined) {
     if (deleteError) {
       console.error('[useDiary] giriş silinemedi:', deleteError);
       return { error: deleteError };
+    }
+
+    if (photoRows && photoRows.length > 0) {
+      await removePhotoObjects(
+        photoRows.flatMap((p) => [p.storage_path, p.thumb_path])
+      );
     }
 
     setEntries((prev) => prev.filter((e) => e.id !== entryId));
