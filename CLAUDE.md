@@ -68,6 +68,18 @@ işler · **Build 1** = native değişiklik isteyen paket.
     sonradan `EditProfile`'dan düzeltir. **Yeni ekran / soru akışı YOK** —
     kullanıcı kararı.
 
+**Build 1 sonrası ilk OTA turu da sahada (2026-08-11).** İki iş, ikisi de
+cihazda doğrulandı:
+- ✅ **Takipçi çıkarma** (migration 019) — takipçi listesinde uzun basış →
+  onay. "Takip Edilenler" sekmesinde aynı jest takibi bırakıyor. Detay ve
+  kalıcı ders (*RLS reddi hata değil, sessiz 0 satır*): Mimari Notlar →
+  **Takipçi çıkarma**.
+- ✅ **`ForgotPasswordScreen` → `KeyboardAwareScrollView`.** Klavye açıkken
+  "Kod gönder" alttan kırpılıyordu. keyboard-controller'ın **ilk gerçek
+  uygulaması**; sağlayıcı Build 1'de binary'ye girmişti, bu adaptasyon saf JS
+  olduğu için OTA ile gitti. **Diğer form ekranları bilinçli olarak
+  taşınmadı** — gerekçe Bilinen Açık İşler'de.
+
 **Engelleyici açık iş yok.** Sıradakiler için üç yere bak: Yol Haritası →
 **Faz 3'ün ertelenen dört maddesi** (üçü ölçek/veri koşulu bekliyor) ·
 **Bilinen Açık İşler** (bir sonraki build'in paketi orada, en üstte — Faz 4'ün
@@ -133,7 +145,8 @@ takip ettiği kişilerin aktivite akışı olacak.
   `008_move_list_items_copy` → `009_diary_entries` → `010_log_diary_entry` →
   `011_update_diary_entry` → `012_username_conflict` → `013_place_photos` →
   `014_place_photos_storage` → `015_public_diary` → `016_entry_likes` →
-  `017_optional_ranking_update` → `018_photo_moderation`.
+  `017_optional_ranking_update` → `018_photo_moderation` →
+  `019_remove_follower`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -1474,6 +1487,48 @@ teşhis için gereken kısımdı.
   > `'profiles!diary_entries_user_id_fkey', 'profiles!entry_likes'`
 - Teşhis yardımcısı **geçiciydi ve düzeltmeyle birlikte geri çekildi**; dosya
   tek `console.error` satırına döndü. Tekrar gerekirse deseni bu bölümden kur.
+
+### Takipçi çıkarma (migration 019, 2026-08-11, sahada DOĞRULANDI)
+Takipçi listesinde uzun basış → onay → o kişi artık seni takip etmiyor.
+"Takip Edilenler" sekmesinde aynı jest **takibi bırakıyor**.
+
+- **Neydi:** `follows` üzerindeki tek DELETE politikası
+  `using (auth.uid() = follower_id)` idi, yani kullanıcı yalnızca **kendi
+  takibini** silebiliyordu. Takipçi çıkarmak `following_id = auth.uid()` olan
+  satırı silmek demek ve o satırda `follower_id` başkasının id'si → politika
+  reddediyordu. Yani eksik arayüzde değil **veritabanındaydı**.
+- **Migration 019 politikayı DEĞİŞTİRMİYOR, İKİNCİSİNİ EKLİYOR.** Postgres
+  permissive politikaları OR'ladığı için sonuç aynı; ama değiştirmek
+  `drop policy` demekti — çalışan bir korumayı bir an ortadan kaldırmak ve
+  migration yarıda kalırsa `follows`'u delete'e tamamen kapatmak. Ekleme
+  **saf toplamalı**. Yan fayda: iki farklı niyet ("takibi bırakmak" ≠
+  "takipçiyi çıkarmak") ayrı isimlerle kayıtlı kalıyor.
+- **🔑 RLS REDDİ HATA DEĞİL, SESSİZ 0 SATIR.** Supabase bir DELETE'i politika
+  reddettiğinde **hata döndürmüyor** — yalnızca hiçbir satır etkilenmiyor.
+  Sadece `error`'a bakan bir istemci, migration çalıştırılmamışsa her çıkarmayı
+  **"başarılı"** gösterir ve kullanıcı çıkarmadığı birini çıkardım sanardı.
+  `removeUser` bu yüzden `.select()` ile **silinen satırları geri istiyor** ve
+  sayıya bakıyor.
+  - **0 satır iki anlama gelebilir** (politika reddetti / satır zaten yoktu) ve
+    ikisi istemciden **ayırt edilemez**. Çözüm iddiada bulunmamak: başarı
+    denmiyor, ama `fetchList()` ile liste yeniden okunuyor — satır gerçekten
+    gittiyse düşüyor, politika reddettiyse yerinde kalıyor. **Ekran her iki
+    durumda da gerçeği gösteriyor.**
+  - Bu, `useListItems`'ın Postgres hata kodlarını ayrıştırmasıyla aynı aile ama
+    farklı mekanizma: orada hata **var**, burada hatanın kendisi **yok**.
+- **Uzun basış → TEK ADIMLI onay**, `ListCard`'ın 3 seçenekli menüsü değil:
+  burada tek eylem var, tek maddelik menü gürültü olurdu. Onay yine de duruyor
+  (eylem yıkıcı), yani "silme iki adımlı" kuralı korunuyor — sadece ilk adım
+  menü değil doğrudan onay.
+- **Yalnızca `isSelf`.** Başkasının listesinde uzun basış hiçbir şey yapmıyor;
+  RLS zaten reddederdi ve "tıklanabilir görünüp reddedilmek, hiç tepki
+  vermemekten kötü".
+- **İki sekmede de var.** "Takip Edilenler"de takibi bırakmak **bedava**: o
+  kişiyi takip ettiğin zaten listede olmasından belli. CLAUDE.md'nin *"satırda
+  takip butonu yok — N ek sorgu"* gerekçesi burada geçerli değil.
+- ⚠️ **ÇIKARMAK ENGELLEMEK DEĞİL ve arayüz bunu SÖYLÜYOR** ("Dilerse tekrar
+  takip edebilir"). INSERT politikası değişmedi, değişmemeli de — o kontrol
+  herkesin kendi takibini kurmasının tek güvencesi. Instagram da böyle.
 
 ## 📓 OTURUM KAYDI — klavye/edge-to-edge teşhisi (2026-08-06/07)
 
@@ -2851,20 +2906,20 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   `blockedPermissions`'a koyuyor — kütüphane sürümü değişse bile mikrofon
 >   izni sızmıyor. Yanında iOS izin metinleri Türkçe olarak yerleşiyor.
 >
-> ### 📦 PARK EDİLDİ: takipçi çıkarma + kullanıcı engelleme (2026-08-11)
-> **BUILD GEREKMİYOR** — migration + RLS + arayüz, OTA ile gider.
-> - **Takipçi çıkarma bugün İMKÂNSIZ ve sebebi tek satır**
->   (`supabase_schema.sql:148-149`): DELETE politikası
->   `using (auth.uid() = follower_id)`, yani yalnızca **kendi takibini**
->   silebiliyorsun. Takipçi çıkarmak `following_id = auth.uid()` satırını
->   silmek demek → politika genişletilmeli. Küçük migration.
-> - **Engellemenin maliyeti tabloda değil**, `blocks`'tan haberdar edilmesi
->   gereken **her okuma yolunda**: aktivite akışı, profil, takipçi listeleri,
->   beğeniler, fotoğraflar, leaderboard. Artı ürün kararları (engellenen
->   profili görebilir mi · mevcut takip ne olacak · çift taraflı mı).
+> ### 📦 PARK EDİLDİ: kullanıcı engelleme (2026-08-11)
+> **Takipçi çıkarma kısmı KAPANDI** (migration 019, sahada doğrulandı) —
+> detay: Mimari Notlar → **Takipçi çıkarma**. Kalan iş engelleme.
+> - **BUILD GEREKMİYOR** — migration + RLS + arayüz, OTA ile gider.
+> - **Maliyeti tabloda değil**, `blocks`'tan haberdar edilmesi gereken **her
+>   okuma yolunda**: aktivite akışı, profil, takipçi listeleri, beğeniler,
+>   fotoğraflar, leaderboard. Artı ürün kararları (engellenen profili
+>   görebilir mi · mevcut takip ne olacak · çift taraflı mı).
 > - 🚩 **`blocks` DÖRDÜNCÜ ARA TABLO olur** (`follows`, `entry_likes`,
 >   `photo_reports` ile birlikte): iki FK, ikisi de `profiles`'a, bileşik PK —
 >   tanıma birebir uyuyor. PGRST201 kuralı geçerli, ayrıştırma **aynı diff'te**.
+> - ⚠️ **Takipçi çıkarma engellemenin YERİNE GEÇMİYOR** ve arayüz bunu açıkça
+>   söylüyor ("Dilerse tekrar takip edebilir"). Engelleme geldiğinde o metin
+>   yeniden değerlendirilmeli.
 >
 > ### 📦 PARK EDİLDİ: fotoğrafların incelemeye bağlanması (2026-08-11)
 > İstek: fotoğraflar mekan sayfasından değil, **ziyaret/inceleme yazarken**
@@ -2901,13 +2956,18 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > politikasını değiştirdiği için sahadaki kurulumları OTA'dan koparır.
 >
 > ### 🚀 OTA İLE GİDEBİLECEK BİRİKMİŞ İŞLER (build beklemiyor)
-> Build 1 sonrası sıradakilerin hepsi saf JS ve/veya migration:
-> - **keyboard-controller'ın ekranlara uygulanması** — sağlayıcı binary'de,
->   ekran taşımaları OTA. Ölçüm build sonrası yapıldı: regresyon yok.
+> Sıradakilerin hepsi saf JS ve/veya migration:
 > - **Fotoğraf akışının yeniden tasarımı + kamera/galeri "+" menüsü**
->   (bu listede, park edilmiş).
-> - **Takipçi çıkarma + kullanıcı engelleme** (bu listede, park edilmiş).
+>   (bu listede, park edilmiş). **Sıradaki en büyük kullanıcı değeri.**
+> - **Kullanıcı engelleme** (bu listede, park edilmiş — kendi planını istiyor).
 > - **`ProfileScreen`'de kaydırmalı sekme** (bu listede, ertelenmiş).
+> - **keyboard-controller'ın KALAN ekranlara uygulanması** — ⚠️ *ölçülmüş
+>   sorunu olan ekran kalmadı.* `ForgotPassword` taşındı çünkü orada gerçek
+>   bir kırpılma vardı; `Login`/`Register`/`EditProfile`/`ListForm`/
+>   `DiaryEntrySheet` gerçek APK'da tek tek kontrol edildi ve **sağlamdı**.
+>   Sorunu olmayan ekrana dokunmak bu projede bir kez ekranı tamamen
+>   boşaltmıştı — **tetikleyici yeni bir ölçüm olmalı**, tutarlılık isteği
+>   değil.
 > - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
 >
 > ### 🎨 Marka işi: neyin OTA gittiği, neyin build istediği (tespit: 2026-08-08)
