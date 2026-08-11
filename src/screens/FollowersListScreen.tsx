@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, FlatList, StyleSheet } from 'react-native';
+import { View, Text, Image, Pressable, FlatList, StyleSheet, Alert } from 'react-native';
 import PagerView from 'react-native-pager-view';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -82,6 +82,32 @@ interface FollowPageProps {
 }
 
 /**
+ * Uzun basış menüsünün metinleri — iki sekmede AYRI eylemler.
+ *
+ * ⚠️ "Takipçiyi çıkarmak" ONU ENGELLEMİYOR ve bunu açıkça yazıyoruz. Aynı kişi
+ * bir saniye sonra tekrar takip edebilir (migration 019 yalnızca DELETE'i
+ * açtı, INSERT politikası değişmedi ve değişmemeli). Instagram'ın davranışı da
+ * bu. Kalıcı çözüm `blocks` tablosu ve o ayrı bir iş — arayüzde vermediğimiz
+ * bir sözü ima etmiyoruz.
+ */
+const REMOVE_COPY: Record<
+  FollowTab,
+  { title: string; body: (username: string) => string; action: string }
+> = {
+  followers: {
+    title: 'Takipçiyi çıkar',
+    body: (u) =>
+      `@${u} artık seni takip etmeyecek. Dilerse tekrar takip edebilir.`,
+    action: 'Çıkar',
+  },
+  following: {
+    title: 'Takibi bırak',
+    body: (u) => `@${u} kullanıcısını takip etmeyi bırakacaksın.`,
+    action: 'Takibi bırak',
+  },
+};
+
+/**
  * Tek bir sekmenin içeriği. Kendi `useFollowList` örneğini ve kendi odak
  * tazelemesini taşıyor — gerekçesi dosyanın başındaki "her sayfa kendi
  * verisini çekiyor" notunda.
@@ -97,7 +123,37 @@ function FollowPage({
   username,
   onOpenUser,
 }: FollowPageProps) {
-  const { users, loading, error, fetchList } = useFollowList(userId, type);
+  const { users, loading, error, fetchList, removeUser } = useFollowList(
+    userId,
+    type
+  );
+
+  /**
+   * Uzun basış → tek adımlı onay. `ListCard`'daki gibi 3 seçenekli bir menü
+   * AÇILMIYOR: burada tek eylem var, tek maddelik menü gürültü olur. Onay yine
+   * de duruyor çünkü eylem yıkıcı — projenin "silme iki adımlı" kuralı korunmuş
+   * oluyor, sadece ilk adım menü değil doğrudan onay.
+   *
+   * YALNIZCA KENDİ LİSTENDE (`isSelf`). Başkasının takipçi listesinde uzun
+   * basış hiçbir şey yapmıyor: o satırlar üzerinde bir yetkin yok ve RLS de
+   * zaten reddederdi — tıklanabilir görünüp reddedilmek, hiç tepki
+   * vermemekten kötü.
+   */
+  const confirmRemove = (item: FollowUser) => {
+    const copy = REMOVE_COPY[type];
+
+    Alert.alert(copy.title, copy.body(item.username), [
+      { text: 'İptal', style: 'cancel' },
+      {
+        text: copy.action,
+        style: 'destructive',
+        onPress: async () => {
+          const { error: removeError } = await removeUser(item.id);
+          if (removeError) Alert.alert('Olmadı', removeError.message);
+        },
+      },
+    ]);
+  };
 
   /**
    * Odakta tazeleme: kullanıcı bir profile gidip takibi bırakıp geri
@@ -172,6 +228,7 @@ function FollowPage({
         return (
           <Pressable
             onPress={() => onOpenUser(item)}
+            onLongPress={isSelf ? () => confirmRemove(item) : undefined}
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             accessibilityRole="button"
           >

@@ -228,9 +228,60 @@ export function useFollowList(
     setLoading(false);
   }, [userId, type]);
 
+  /**
+   * Listeden bir kişiyi çıkarır. Hangi satırın silineceğini `type` belirliyor:
+   *   followers → `follower_id = o kişi,  following_id = liste sahibi`
+   *               ("beni takip etmesin" — migration 019'un açtığı yol)
+   *   following → `follower_id = liste sahibi, following_id = o kişi`
+   *               ("takibi bırak" — baştan beri mümkündü)
+   *
+   * ⚠️ SATIR SAYISI KONTROL EDİLİYOR, `error` YETMİYOR. RLS bir satırı
+   * reddettiğinde Supabase HATA DÖNDÜRMÜYOR — sessizce 0 satır etkiliyor.
+   * Yalnızca `error`'a bakan bir kod, migration 019 çalıştırılmamışsa her
+   * çıkarmayı "başarılı" gösterir ve kullanıcı çıkarmadığı birini çıkardım
+   * sanır. `.select()` silinen satırları geri getiriyor, sayı da kanıt oluyor.
+   *
+   * 0 satır iki anlama gelebilir (politika reddetti / satır zaten yoktu) ve
+   * ikisi istemciden AYIRT EDİLEMEZ. Bu yüzden başarı iddia etmiyoruz ama
+   * listeyi de `fetchList()` ile yeniden okuyoruz: satır gerçekten gitmişse
+   * kendiliğinden düşüyor, politika reddettiyse yerinde kalıyor — ekran her
+   * iki durumda da GERÇEĞİ gösteriyor.
+   */
+  const removeUser = useCallback(
+    async (otherUserId: string) => {
+      if (!userId) return { error: new Error('Oturum açık değil') };
+
+      const base = supabase.from('follows').delete();
+      const scoped =
+        type === 'followers'
+          ? base.eq('follower_id', otherUserId).eq('following_id', userId)
+          : base.eq('follower_id', userId).eq('following_id', otherUserId);
+
+      const { data, error: deleteError } = await scoped.select('follower_id');
+
+      if (deleteError) {
+        console.error('[useFollowList] satır silinemedi:', deleteError);
+        return { error: new Error('İşlem tamamlanamadı. Bağlantını kontrol et.') };
+      }
+
+      if (!data || data.length === 0) {
+        console.error(
+          '[useFollowList] silme 0 satır etkiledi — RLS reddetmiş ya da satır ' +
+            'zaten yok olabilir. Migration 019 çalıştırıldı mı?'
+        );
+        await fetchList();
+        return { error: new Error('Çıkarılamadı, tekrar dene.') };
+      }
+
+      setUsers((prev) => prev.filter((u) => u.id !== otherUserId));
+      return { error: null };
+    },
+    [userId, type, fetchList]
+  );
+
   useEffect(() => {
     fetchList();
   }, [fetchList]);
 
-  return { users, loading, error, fetchList };
+  return { users, loading, error, fetchList, removeUser };
 }

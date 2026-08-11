@@ -1,0 +1,86 @@
+-- ====================================================
+-- Migration 019 — takipçiyi listeden çıkarabilme
+-- Supabase SQL Editor'a kopyalayıp çalıştır.
+-- Bağımlılık: yalnızca schema.sql'deki `follows` tablosu.
+-- ====================================================
+--
+-- ── ÇÖZÜLEN EKSİK ───────────────────────────────────────────────────────────
+-- Bugün `follows` üzerindeki TEK delete politikası şu (supabase_schema.sql:148):
+--     using (auth.uid() = follower_id)
+-- Yani kullanıcı yalnızca KENDİ TAKİBİNİ silebiliyor (birini takipten çıkmak).
+-- "Bu kişi beni takip etmesin" demek ise `following_id = auth.uid()` olan satırı
+-- silmek demek ve o satırda `follower_id` BAŞKASININ id'si — mevcut politika
+-- reddediyor. Sonuç: takipçi çıkarmanın arayüzde değil, VERİTABANINDA yolu
+-- yoktu.
+--
+-- ── NEDEN YENİ POLİTİKA, MEVCUDU DEĞİŞTİRMEK DEĞİL ──────────────────────────
+-- Mevcut politikayı `using (auth.uid() = follower_id or auth.uid() =
+-- following_id)` yapmak da çalışırdı. Tercih edilmedi:
+--
+--   (a) Postgres'te aynı komut için birden çok PERMISSIVE politika OR'lanıyor,
+--       yani iki ayrı politika ile tek birleşik politika AYNI sonucu veriyor.
+--       Ek bir esneklik kaybı yok.
+--   (b) Politika "değiştirmek" `drop policy` + `create policy` demek. Çalışan
+--       ve doğrulanmış bir korumayı bir an için ortadan kaldırıyor; migration
+--       yarıda kalırsa `follows` delete'e tamamen kapalı kalır. Bu migration
+--       ise SAF TOPLAMALI: patlarsa hiçbir şey kaybedilmiyor.
+--   (c) İki farklı kullanıcı niyeti ayrı isimlerle kayıtlı kalıyor:
+--       "takibi bırakmak" ≠ "takipçiyi çıkarmak". Tek satırda birleştirmek
+--       ikisini de anlatan bir isim bulmayı gerektirirdi.
+--
+-- ── KAPSAM — BU POLİTİKANIN VERMEDİĞİ ŞEY ───────────────────────────────────
+-- Takipçiyi çıkarmak onu ENGELLEMİYOR: aynı kişi bir saniye sonra tekrar takip
+-- edebilir (INSERT politikası değişmedi ve değişmemeli — o `follower_id`
+-- kontrolü herkesin kendi takibini kurmasının tek güvencesi). Instagram'ın
+-- davranışı da bu. Kalıcı çözüm ayrı bir iş: `blocks` tablosu.
+-- ⚠️ `blocks` eklenirse DÖRDÜNCÜ ara tablo olur (`follows`, `entry_likes`,
+-- `photo_reports` ile birlikte) — PGRST201 kuralı geçerli, ayrıştırma aynı
+-- diff'te gitmeli. Gerekçe: CLAUDE.md → PGRST201.
+--
+-- ── DAĞITIM SIRASI: MIGRATION ÖNCE, OTA SONRA ───────────────────────────────
+-- Bu politika sahadaki APK'yı BOZMUYOR (o istemci bu silmeyi hiç denemiyor),
+-- yani migration'ı önce çalıştırmak güvenli. Ters sıra kırardı: istemci
+-- gelir, silme sessizce 0 satır etkiler ve kullanıcı "çıkardım" sanır.
+-- Migration 017'de öğrenilen sıra kuralının aynısı.
+
+-- ----------------------------------------------------
+-- 1. Politika
+-- ----------------------------------------------------
+-- `if not exists` YOK: Postgres `create policy` için desteklemiyor. Migration
+-- ikinci kez çalıştırılırsa "policy already exists" hatası verir — zararsız ve
+-- açıklayıcı, sessizce geçmesinden iyi.
+create policy "Users can remove own followers"
+  on follows for delete using (auth.uid() = following_id);
+
+-- ----------------------------------------------------
+-- 2. DOĞRULAMA — panelde çalıştır
+-- ----------------------------------------------------
+--
+-- (a) İki delete politikası da yerinde mi? İki satır dönmeli:
+--     "Users can delete own follows"   → qual: (auth.uid() = follower_id)
+--     "Users can remove own followers" → qual: (auth.uid() = following_id)
+--
+-- select polname,
+--        polpermissive,
+--        pg_get_expr(polqual, polrelid) as using_expr
+-- from pg_policy
+-- where polrelid = 'public.follows'::regclass
+--   and polcmd = 'd';
+--
+-- (b) Gerçek silme denemesi — ⚠️ SQL Editor'da `auth.uid()` NULL döner, yani
+--     politikaya dayanan her kontrol boşa çalışır. Geçici oturum simüle et
+--     (CLAUDE.md'de kayıtlı yöntem; <ben> yerine KENDİ uuid'in):
+--
+-- begin;
+--   set local role authenticated;
+--   set local request.jwt.claim.sub = '<ben>';
+--   -- Beni takip eden birini çıkarmayı dene:
+--   delete from follows where following_id = '<ben>' returning *;
+-- rollback;   -- ⚠️ ROLLBACK: bu bir test, gerçekten silme
+--
+--     Politika çalışıyorsa satır(lar) döner. 0 satır dönüyorsa ya gerçekten
+--     takipçin yok ya da politika uygulanmamış — (a) ile ayır.
+--
+-- (c) "Başkasının takipçisini çıkaramamalıyım" senaryosu SQL Editor'dan
+--     GÜVENİLİR şekilde test EDİLEMEZ (orada kimlik biziz). Gerçek kanıt
+--     ikinci bir hesapla uygulamadan denemek — test listesinde var.
