@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, Image, Pressable, FlatList, StyleSheet } from 'react-native';
+import PagerView from 'react-native-pager-view';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -39,6 +40,24 @@ import SegmentedTabs, { SegmentedTab } from '../components/ui/SegmentedTabs';
  * `HomeScreen`'in leaderboard satırı benziyor ama aynı değil (sıra numarası +
  * mekan sayısı taşıyor). Projenin eşiği "ikiden fazla yerde aynı eşleşme";
  * üçüncü bir kullanıcı listesi doğduğunda (ör. beğenenler) çıkarılır.
+ *
+ * ── KAYDIRMALI GEÇİŞ (2026-08-11) ────────────────────────────────────────────
+ * Sekmeler arası sağa/sola kaydırma `react-native-pager-view` ile eklendi.
+ *
+ * Bu ekran bu iş için PROJEDEKİ EN UCUZ yerdi: başlık şeridi ve `SegmentedTabs`
+ * zaten listenin DIŞINDA, sabit duruyor — yani yalnızca alttaki listeyi
+ * sayfalamak yetti. `ProfileScreen`'de aynı şey pahalı, çünkü orada
+ * `ProfileHeader` `ListHeaderComponent` olarak veriliyor ve içerikle birlikte
+ * kayıyor (bilinçli Instagram davranışı); yan yana üç bağımsız liste kurmak
+ * "çöken başlık" problemini doğuruyor ve o da `collapsible-tab-view` demek —
+ * onun Reanimated 4 desteği doğrulanamadı (bkz. Bilinen Açık İşler).
+ *
+ * ── HER SAYFA KENDİ VERİSİNİ ÇEKİYOR ─────────────────────────────────────────
+ * Eskiden tek `useFollowList` vardı ve `activeTab` değişince sorgu
+ * tekrarlanıyordu. Kaydırmada bu YETMEZ: parmak sayfayı sürüklerken komşu
+ * sayfa çoktan görünür oluyor, verisi o an gelmeye başlarsa kullanıcı boş bir
+ * sayfayı sürüklemiş oluyor. Bu yüzden iki `FollowPage` kendi hook örneğini
+ * kuruyor. Bedeli bir ek sorgu; karşılığı kaydırmanın dolu hissetmesi.
  */
 
 type RouteType = RouteProp<
@@ -53,22 +72,32 @@ const TABS: ReadonlyArray<SegmentedTab<FollowTab>> = [
   { key: 'following', label: 'Takip Edilenler' },
 ];
 
-export default function FollowersListScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const route = useRoute<RouteType>();
-  const { userId, username, initialType } = route.params;
+interface FollowPageProps {
+  userId: string;
+  /** Bu SAYFANIN türü — ekranın aktif sekmesi değil. */
+  type: FollowTab;
+  isSelf: boolean;
+  username: string;
+  onOpenUser: (item: FollowUser) => void;
+}
 
-  const { user } = useAuth();
-  const isSelf = user?.id === userId;
-
-  /**
-   * Parametre yalnızca AÇILIŞ sekmesini belirliyor. `ProfileScreen`'deki gibi
-   * `setParams` ile temizlemeye gerek yok: bu ekran her seferinde push edilip
-   * geri dönüşte unmount oluyor, yani bayat bir istek geride kalmıyor.
-   */
-  const [activeTab, setActiveTab] = useState<FollowTab>(initialType);
-
-  const { users, loading, error, fetchList } = useFollowList(userId, activeTab);
+/**
+ * Tek bir sekmenin içeriği. Kendi `useFollowList` örneğini ve kendi odak
+ * tazelemesini taşıyor — gerekçesi dosyanın başındaki "her sayfa kendi
+ * verisini çekiyor" notunda.
+ *
+ * ⚠️ Boş durum metinleri `activeTab`'e DEĞİL `type`'a bakıyor. Aktif sekmeye
+ * baksalardı, kullanıcı kaydırırken komşu sayfada bir an YANLIŞ metin
+ * görünürdü ("kimse takip etmiyor" yerine "kimseyi takip etmiyor").
+ */
+function FollowPage({
+  userId,
+  type,
+  isSelf,
+  username,
+  onOpenUser,
+}: FollowPageProps) {
+  const { users, loading, error, fetchList } = useFollowList(userId, type);
 
   /**
    * Odakta tazeleme: kullanıcı bir profile gidip takibi bırakıp geri
@@ -79,16 +108,6 @@ export default function FollowersListScreen() {
       fetchList();
     }, [fetchList])
   );
-
-  const openUser = (item: FollowUser) => {
-    // Kendine dokununca `UserProfile` yerine kendi sekmene — `HomeScreen`'in
-    // leaderboard kararıyla aynı, en az sürpriz.
-    if (item.id === user?.id) {
-      navigation.getParent()?.navigate('ProfileTab', { screen: 'MyProfile' });
-      return;
-    }
-    navigation.navigate('UserProfile', { userId: item.id, username: item.username });
-  };
 
   const renderEmpty = () => {
     if (loading) {
@@ -125,18 +144,108 @@ export default function FollowersListScreen() {
         <EmptyState
           icon="person"
           title={
-            activeTab === 'followers'
+            type === 'followers'
               ? `${who} henüz kimse takip etmiyor`
               : whoFollows
           }
           subtitle={
-            activeTab === 'followers'
+            type === 'followers'
               ? 'Puanladıkça ve günlük tuttukça takipçiler gelecek.'
               : 'Ana Sayfa’daki listeden birine dokunup profilinden takip edebilirsin.'
           }
         />
       </View>
     );
+  };
+
+  return (
+    <FlatList
+      data={users}
+      keyExtractor={(item) => item.id}
+      ListEmptyComponent={renderEmpty}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      renderItem={({ item }) => {
+        const primary = item.full_name?.trim() || `@${item.username}`;
+        const initial = primary.replace('@', '').charAt(0).toUpperCase() || '?';
+
+        return (
+          <Pressable
+            onPress={() => onOpenUser(item)}
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            accessibilityRole="button"
+          >
+            {item.avatar_url ? (
+              <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.avatarLetter}>{initial}</Text>
+              </View>
+            )}
+
+            <View style={styles.info}>
+              <Text style={styles.primaryName} numberOfLines={1}>
+                {primary}
+              </Text>
+              {/* İkinci satır yalnızca ad varsa: yoksa `@kullanici` zaten
+                  üstte, aynı metni iki kez yazmıyoruz. */}
+              {item.full_name?.trim() ? (
+                <Text style={styles.username} numberOfLines={1}>
+                  @{item.username}
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
+        );
+      }}
+    />
+  );
+}
+
+export default function FollowersListScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const route = useRoute<RouteType>();
+  const { userId, username, initialType } = route.params;
+
+  const { user } = useAuth();
+  const isSelf = user?.id === userId;
+
+  /**
+   * Parametre yalnızca AÇILIŞ sekmesini belirliyor. `ProfileScreen`'deki gibi
+   * `setParams` ile temizlemeye gerek yok: bu ekran her seferinde push edilip
+   * geri dönüşte unmount oluyor, yani bayat bir istek geride kalmıyor.
+   */
+  const [activeTab, setActiveTab] = useState<FollowTab>(initialType);
+  const pagerRef = useRef<PagerView>(null);
+
+  const initialPage = Math.max(
+    0,
+    TABS.findIndex((t) => t.key === initialType)
+  );
+
+  /**
+   * ── İKİ YÖNLÜ SENKRON, AMA TEK DOĞRULUK KAYNAĞI PAGER ────────────────────
+   * Sekmeye dokunmak sayfayı kaydırıyor; kaydırma da sekmeyi güncelliyor.
+   * `setPage` sonrası `onPageSelected` yine ateşleniyor ve `setActiveTab`'i
+   * AYNI değerle çağırıyor — döngü değil, etkisiz bir tekrar.
+   *
+   * `setPage` (animasyonlu) tercih edildi, `setPageWithoutAnimation` değil:
+   * dokunma ile kaydırma aynı hareketi üretmezse iki giriş yolu birbirine
+   * yabancı hissettirir.
+   */
+  const handleTabChange = (key: FollowTab) => {
+    setActiveTab(key);
+    pagerRef.current?.setPage(TABS.findIndex((t) => t.key === key));
+  };
+
+  const openUser = (item: FollowUser) => {
+    // Kendine dokununca `UserProfile` yerine kendi sekmene — `HomeScreen`'in
+    // leaderboard kararıyla aynı, en az sürpriz.
+    if (item.id === user?.id) {
+      navigation.getParent()?.navigate('ProfileTab', { screen: 'MyProfile' });
+      return;
+    }
+    navigation.navigate('UserProfile', { userId: item.id, username: item.username });
   };
 
   return (
@@ -158,48 +267,31 @@ export default function FollowersListScreen() {
         <View style={styles.iconBtn} />
       </View>
 
-      <SegmentedTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
+      <SegmentedTabs tabs={TABS} active={activeTab} onChange={handleTabChange} />
 
-      <FlatList
-        data={users}
-        keyExtractor={(item) => item.id}
-        ListEmptyComponent={renderEmpty}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => {
-          const primary = item.full_name?.trim() || `@${item.username}`;
-          const initial = primary.replace('@', '').charAt(0).toUpperCase() || '?';
-
-          return (
-            <Pressable
-              onPress={() => openUser(item)}
-              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              accessibilityRole="button"
-            >
-              {item.avatar_url ? (
-                <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={styles.avatarLetter}>{initial}</Text>
-                </View>
-              )}
-
-              <View style={styles.info}>
-                <Text style={styles.primaryName} numberOfLines={1}>
-                  {primary}
-                </Text>
-                {/* İkinci satır yalnızca ad varsa: yoksa `@kullanici` zaten
-                    üstte, aynı metni iki kez yazmıyoruz. */}
-                {item.full_name?.trim() ? (
-                  <Text style={styles.username} numberOfLines={1}>
-                    @{item.username}
-                  </Text>
-                ) : null}
-              </View>
-            </Pressable>
-          );
+      <PagerView
+        ref={pagerRef}
+        style={styles.pager}
+        initialPage={initialPage}
+        onPageSelected={(e) => {
+          const next = TABS[e.nativeEvent.position];
+          if (next) setActiveTab(next.key);
         }}
-      />
+      >
+        {/* PagerView'ın çocukları DOĞRUDAN View olmalı ve `key` taşımalı —
+            native taraf sayfaları bu sırayla eşliyor. */}
+        {TABS.map((t) => (
+          <View key={t.key} style={styles.page}>
+            <FollowPage
+              userId={userId}
+              type={t.key}
+              isSelf={isSelf}
+              username={username}
+              onOpenUser={openUser}
+            />
+          </View>
+        ))}
+      </PagerView>
     </SafeAreaView>
   );
 }
@@ -226,6 +318,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pressed: { opacity: 0.7 },
+
+  // `flex: 1` PagerView'da ŞART: native sayfalayıcı kendi yüksekliğini
+  // içerikten türetmiyor, ölçüsü verilmezse hiç görünmüyor.
+  pager: { flex: 1 },
+  page: { flex: 1 },
 
   content: { paddingBottom: Spacing['2xl'] },
 
