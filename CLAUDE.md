@@ -34,11 +34,27 @@ işler · **Build 1** = native değişiklik isteyen paket.
 - ✅ **Aşama 0 — şifre sıfırlama (OTP).** Giriş ekranında "Şifreni mi
   unuttun?" → e-posta → mailde gelen kod → yeni şifre. Saf JS, OTA ile
   sahada. Detay ve iki kalıcı ders: Mimari Notlar → **Şifre sıfırlama**.
-- ⬜ **Build 1 — sırada.** İçeriği: **deep link** (onay maili uygulamayı
-  açsın) · **Google ile giriş** · `react-native-keyboard-controller` ·
-  kaydırmalı sekmeler · `expo` yama farkı · `fingerprint` `runtimeVersion`'a
-  dönüş. Paketin tamamı Bilinen Açık İşler → **"Bir sonraki build'in
-  paketi"** altında.
+- 🔨 **Build 1 — BAŞLADI (2026-08-11), 5 adımın 4'ü kodda bitti.**
+  `version` **1.2.0** / versionCode **5**, `scheme: "belieats"`.
+
+  | # | İş | Durum |
+  |---|---|---|
+  | 1 | scheme + sürüm ritüeli + `expo`→54.0.36 + deep link paketleri | ✅ kodda |
+  | 2 | **Deep link** (onay maili uygulamayı açsın) + PKCE | ✅ kodda · ⛔ **doğrulanamadı** |
+  | 3 | **Google ile giriş** (tarayıcı tabanlı) | ✅ kodda · ⛔ **doğrulanamadı** |
+  | 4 | **Kaydırmalı sekmeler** | ✅ *yalnızca* `FollowersList` |
+  | 5 | `react-native-keyboard-controller` | ⬜ sırada — **Expo Go'yu bitiriyor** |
+  | — | `fingerprint` `runtimeVersion` | ⏸️ **Build 1'DEN ÇIKARILDI** (karar A) |
+
+  ⚠️ **`version` 1.2.0 olduğu için sahadaki APK'lara (runtime 1.1.0) OTA
+  GÖNDERİLEMEZ.** Acil hotfix gerekirse `version` geçici olarak 1.1.0'a
+  çekilip OTA atılmalı, sonra geri alınmalı.
+  - **Karar: `fingerprint` Build 1'e ALINMADI.** §9'da bir kez build'i
+    patlatmıştı; kanıtlanmamış "Fark 2" **New Architecture codegen kullanan
+    RN kütüphanelerinden** geliyor ve bu build tam o kategoriden iki paket
+    ekliyor (keyboard-controller, pager-view). Teşhis edilmemiş bir değişkeni,
+    onu besleyen değişkeni değiştirirken çözmeye çalışmak olurdu. Arkadaş
+    testi bitince kendi başına ele alınacak.
   - **Karar (2026-08-10): Google girişi TARAYICI TABANLI yol** olacak
     (`expo-web-browser` + `scheme` + `Linking` dinleyicisi), native seçici
     değil — altyapıyı **deep link ile paylaşıyor**, yani iki iş aynı
@@ -2737,6 +2753,90 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
   OTA turu + tek bir build** şeklinde ilerleyecek.
 
 ## Bilinen Açık İşler (teknik borç)
+
+> ### ⛔ BUILD'DE DOĞRULANACAK — deep link + Google girişi (2026-08-11)
+> Kod tarafı **bitti ve typecheck temiz**, ama **Expo Go'da doğrulanamadı**.
+> Kovalamak bırakıldı; bu bölüm aynı üç turun tekrar edilmemesi için var.
+>
+> **Semptom:** onay bağlantısı da Google girişi de Supabase'in **Site URL'ine**
+> (GitHub Pages iniş sayfası) düşüyor, uygulamaya hiç dönmüyor.
+>
+> **TEŞHİS — kanıtlanan ve elenen:**
+> - Site URL'e düşmek, Supabase'in `redirect_to`'yu **kullanmadığı** anlamına
+>   geliyor: ya adres mailde yok ya da allowlist reddediyor.
+> - **AYIRT EDİCİ TEST (işe yarayan yöntem):** Google girişi **aynı allowlist'i**
+>   kullanıyor ama adresi tamamen farklı bir yoldan iletiyor (mail değil,
+>   doğrudan istek). Google da düştü → **mail şablonu ve e-posta yolu ELENDİ**,
+>   sorun allowlist'te.
+> - Üç desen denendi, **üçü de** başarısız: `exp://*/--/auth-callback` ·
+>   `exp://**` · ve **jokersiz birebir adres**
+>   (`exp://192.168.1.21:8081/--/auth-callback`). Sonuncusunun da tutmaması
+>   sorunun **joker sözdiziminde olmadığını** gösteriyor.
+> - **Muhtemel sebep (kanıtlanmadı):** Supabase'in Expo Go'nun ürettiği URL
+>   biçimini kabul etmemesi — `exp://IP:PORT/--/yol`'da hem port hem tuhaf
+>   `--` segmenti var. Supabase'in mobil örnekleri `com.example.app://yol`
+>   biçiminde: **portsuz, sade** — yani bizim gerçek adresimizle (
+>   `belieats://auth-callback`) aynı şekilde.
+> - **Bu yüzden durduk:** doğrulamaya çalıştığımız şey **üretimde hiç
+>   karşımıza çıkmayacak bir URL biçimiydi.** CLAUDE.md'nin iki kez yazdığı
+>   ders ("Expo Go'daki ölçüm kanıt değildir") üçüncü kez geçerli oldu.
+>
+> **BUILD'DE İLK YAPILACAK:** `belieats://auth-callback` ile onay maili ve
+> Google girişi. Kodda değişecek bir şey yok; allowlist tamamen sunucu tarafı
+> ve o adres zaten Redirect URLs listesinde kayıtlı.
+> - Yine düşerse bakılacak yer **allowlist'in kendisi**, kod değil.
+> - `src/lib/authRedirect.ts`'te **geçici bir `console.log` duruyor**
+>   (gönderilen adresi basıyor). Doğrulama bitince **silinecek**.
+> - ⚠️ Supabase Redirect URLs'teki **`exp://…` satırları GEÇİCİ**, yalnızca
+>   geliştirme için. Genel yayından önce silinmeli.
+>
+> **YAN BULGU — PKCE `plain`'e düşüyor.** Konsolda her auth çağrısında:
+> `WebCrypto API is not supported. Code challenge method will default to use
+> plain instead of sha256.` RN'de `crypto.subtle` yok. **Akışı bozmuyor** ve
+> asıl korumayı da kaldırmıyor (yönlendirmeyi yakalayanın eline yalnızca
+> `code` geçiyor, doğrulayıcı o kanaldan hiç geçmiyor); zayıflattığı senaryo
+> saldırganın **ilk isteği de** görebildiği durum. `expo-crypto` ile polyfill
+> edilebilir — **ayrı ve düşük öncelikli** bir iş.
+>
+> ### ⏸️ ProfileScreen'de kaydırmalı sekme — ERTELENDİ (2026-08-11)
+> `FollowersList` kaydırmalı oldu (`react-native-pager-view` 6.9.1, **Expo
+> Go'da var**). `ProfileScreen` bugünkü haliyle kaldı.
+> - **Sebep, ekranların yapısal farkı:** `FollowersList`'te başlık ve sekmeler
+>   zaten listenin dışında sabit. `ProfileScreen`'de TEK bir `FlatList` var ve
+>   `ProfileHeader` `ListHeaderComponent` olarak **içerikle birlikte kayıyor**
+>   (bilinçli Instagram davranışı) — yan yana üç bağımsız liste "çöken başlık"
+>   problemini doğuruyor.
+> - **Yeni bilgi:** o problemin kütüphanesi `react-native-collapsible-tab-view`
+>   ve **ana deponun Reanimated 4 desteği DOĞRULANAMADI** (bizde `~4.1.1`).
+>   v4'ü açıkça destekleyen tek şey tek kişilik bir topluluk fork'u
+>   (`@mstfmedeni/collapsible-tab-view`).
+> - **Karar:** build'in hemen öncesinde, zaten doğrulanmamış iki özellik
+>   varken en çok kullanılan ekranı riske atmıyoruz. Build'den sonra kendi işi
+>   olarak, Reanimated 4 uyumluluğu düzgün araştırılarak ele alınacak.
+> - Bugün **iki ekranda his farklı** — bilinen ve kabul edilen bedel.
+>
+> ### ❓ BUILD'DEN ÖNCE CEVAPLANACAK: kamera izni
+> Fotoğraf akışının yeniden tasarımı (aşağıdaki park edilmiş iş) **build
+> gerektirmiyor** — ama "şimdi fotoğraf çek" özelliği isteniyorsa
+> `launchCameraAsync` **CAMERA iznini** gerektiriyor, o da manifest → native →
+> **ayrı bir build**. İzin bu build'e eklenirse bedava; sonra eklenirse yeni
+> build demek. Bugün kodda yalnızca `launchImageLibraryAsync` var.
+>
+> ### 📦 PARK EDİLDİ: fotoğrafların incelemeye bağlanması (2026-08-11)
+> İstek: fotoğraflar mekan sayfasından değil, **ziyaret/inceleme yazarken**
+> eklensin; mekanın fotoğraf sekmesinde görünsün, dokununca ilgili inceleme
+> açılsın (Hepsiburada deseni).
+> - **BUILD GEREKMİYOR** — doğrulandı: `expo-image-picker` (17.0.11),
+>   `expo-image-manipulator` (14.0.8), `expo-file-system` (19.0.23) **zaten
+>   kurulu ve binary'de**. İş = migration (`place_photos`'a `entry_id`) + JS
+>   yeniden bağlama. OTA ile gider.
+> - 🚩 **Planlarken İLK bakılacak yer PGRST201.** `entry_id` eklemek `places`
+>   ile `diary_entries` arasında ikinci bir yol açıyor. `place_photos`'ın kendi
+>   `id` PK'sı olduğu için "ara tablo" tanımına birebir uymuyor (muhtemelen
+>   tetiklenmez) ama bu sınıf sahada **iki kez** kırdı — kontrol zorunlu:
+>   `grep -rn "from('diary_entries')" src/ | grep "places("`
+>   Şüpheliler: `useDiary`, `useActivityFeed`, `usePlaceVisits`. Migration ile
+>   istemci düzeltmesi **aynı diff'te** gitmeli.
 
 > ### 📦 BİR SONRAKİ BUILD'İN PAKETİ
 > Aşağıdaki dördü **build gerektirdiği için** biriktiriliyor; tek bir özellik
