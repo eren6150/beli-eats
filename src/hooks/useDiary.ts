@@ -148,14 +148,18 @@ export function useDiary(userId: string | undefined) {
     setLoading(true);
     setError(null);
 
-    // `places(*)` gömülü kaynağı FK üzerinden çözülüyor (migration 009).
+    // `places` gömülü kaynağı FK üzerinden çözülüyor (migration 009).
     // Bu yolda Google'a HİÇ gidilmiyor — mekan bilgisi cache'ten.
+    //
+    // ⚠️ FK ADI (`!diary_entries_place_fk`) SADELEŞTİRİLMEMELİ (2026-08-11):
+    // migration 020 `place_photos.entry_id` ile `places` ↔ `diary_entries`
+    // arasında ikinci bir yol açtı. Tam gerekçe `useActivityFeed.ts`'te.
     //
     // İkinci sıralama anahtarı `created_at`: `visited_at` bir TARİH (saat yok),
     // aynı güne birden çok giriş girilebiliyor. O durumda son yazılan üstte.
     const { data, error: queryError } = await supabase
       .from('diary_entries')
-      .select('*, places(*)')
+      .select('*, places!diary_entries_place_fk(*)')
       .eq('user_id', userId)
       .order('visited_at', { ascending: false })
       .order('created_at', { ascending: false });

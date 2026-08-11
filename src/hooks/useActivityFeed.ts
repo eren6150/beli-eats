@@ -106,12 +106,19 @@ export function useActivityFeed(userId: string | undefined) {
     // (junction) tanımına birebir uyuyor, ilişkiyi otomatik ilan ediyor.
     // Aynı desen `useFollow`'da iki yön için zaten kullanılıyor.
     //
-    // `places(*)` ve `entry_likes(count)` ayrıştırma İSTEMİYOR: o ikisine giden
-    // tek yol var. Kırılan tek gömülü kaynak `profiles`'tı.
+    // ⚠️ `places!diary_entries_place_fk` — bu da SADELEŞTİRİLMEMELİ (2026-08-11).
+    // Migration 020 `place_photos`'a `entry_id` ekleyerek `places` ile
+    // `diary_entries` arasında İKİNCİ bir yol açtı (doğrudan FK +
+    // `place_photos` üzerinden). `place_photos`'ın kendi `id` PK'sı olduğu için
+    // PostgREST'in ara tablo tanımına uymuyor, yani tetiklenmesi BEKLENMİYOR —
+    // ama bu sınıf sahada iki kez kırdı ve tahmine dayanmanın karşılığı yok.
+    // Ayrıştırma tek yol varken de geçerli, bedeli sıfır.
+    //
+    // `entry_likes(count)` ayrıştırma İSTEMİYOR: ona giden tek yol var.
     const { data, error: feedError } = await supabase
       .from('diary_entries')
       .select(
-        '*, places(*), profiles!diary_entries_user_id_fkey(id, username, avatar_url), entry_likes(count)'
+        '*, places!diary_entries_place_fk(*), profiles!diary_entries_user_id_fkey(id, username, avatar_url), entry_likes(count)'
       )
       .in('user_id', followingIds)
       .order('created_at', { ascending: false })
