@@ -1,14 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ScrollView,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -180,15 +172,36 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.flex}
+      {/**
+        * ── `KeyboardAvoidingView` + `ScrollView` YERİNE bu ──────────────────
+        * Sahada ölçülen sorun: klavye açıkken "Kod gönder" butonunun altından
+        * bir miktar kırpılıyordu (basılabiliyordu ama tam görünmüyordu).
+        *
+        * Sebep, CLAUDE.md'de kayıtlı olan şey: SDK 54'te edge-to-edge zorunlu
+        * ve o modda pencere klavye için yeniden BOYUTLANMIYOR, yani
+        * `KeyboardAvoidingView`'ın dayandığı varsayım gerçek APK'da geçerli
+        * değil. `KeyboardAwareScrollView` IME yüksekliğini `WindowInsets`'ten
+        * DOĞRUDAN okuyup odaklı alanın altında gerçek boşluk bırakıyor —
+        * ölçüye değil olguya dayanıyor.
+        *
+        * ⚠️ BİLİNÇLİ OLARAK SADECE BU EKRAN. `Login`, `Register`,
+        * `EditProfile`, `ListForm` ve `DiaryEntrySheet` bugünkü halleriyle
+        * kalıyor: hepsi gerçek APK'da tek tek kontrol edildi ve sağlamdı,
+        * ölçülmüş sorunu olmayan bir ekrana dokunmak bu projede bir kez
+        * ekranı tamamen boşaltmıştı. Ayrıca burası kanıt için en güvenli yer —
+        * `ForgotPassword` giriş yolunun ÜZERİNDE değil. Sahada iyi çalışırsa
+        * diğerleri de taşınır.
+        *
+        * `bottomOffset`: odaklı alan ile klavye arasında bırakılan nefes payı.
+        * Buton alanın hemen altında olduğu için tek satır yüksekliği kadarı
+        * yetiyor; daha büyüğü kısa ekranlarda gereksiz kaydırma üretirdi.
+        */}
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bottomOffset={Spacing['3xl']}
       >
-        <ScrollView
-          contentContainerStyle={styles.inner}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           <View style={styles.logoArea}>
             <View style={styles.logoCircle}>
               <Icon name="restaurant" size={40} color={Colors.brandStrong} />
@@ -297,15 +310,15 @@ export default function ForgotPasswordScreen() {
               </TouchableOpacity>
             </View>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.canvas },
-  flex: { flex: 1 },
+  // `flex` stili SİLİNDİ: `KeyboardAvoidingView` ile birlikte gitti, tek
+  // kullanıcısı oydu.
   inner: {
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
