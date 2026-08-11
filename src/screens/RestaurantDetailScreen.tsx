@@ -43,6 +43,9 @@ import DiaryRow from '../components/diary/DiaryRow';
 import SegmentedTabs from '../components/ui/SegmentedTabs';
 import PhotoGrid from '../components/photos/PhotoGrid';
 import ReportPhotoSheet from '../components/photos/ReportPhotoSheet';
+import PendingPhotoStrip from '../components/photos/PendingPhotoStrip';
+import PhotoKindSheet from '../components/photos/PhotoKindSheet';
+import { usePendingPhotos } from '../hooks/usePendingPhotos';
 import { usePlacePhotos } from '../hooks/usePlacePhotos';
 import { usePlaceVisits } from '../hooks/usePlaceVisits';
 import { makePhotoRenditions, uploadPlacePhoto } from '../lib/placePhotos';
@@ -138,6 +141,14 @@ export default function RestaurantDetailScreen() {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+
+  /**
+   * "Puanı Kaydet" formunun fotoğrafları. `DiaryEntrySheet` ile AYNI hook —
+   * iki akış aynı şeridi, aynı tür seçicisini ve aynı yükleme mantığını
+   * paylaşıyor. Farkları tek noktada: burada `upload`'a `entryId`
+   * GÖNDERİLMİYOR (bu yol ziyaret kaydı üretmiyor).
+   */
+  const pendingPhotos = usePendingPhotos();
   const [saving, setSaving] = useState(false);
 
   /** "Listeye Ekle" seçicisi ve onu açmadan önceki cache hazırlığı. */
@@ -403,14 +414,50 @@ export default function RestaurantDetailScreen() {
       reviewText: reviewText || undefined,
     });
 
-    setSaving(false);
     if (error) {
+      setSaving(false);
       // Hook artık kısa Türkçe metin döndürüyor; ham Postgres/ağ mesajı
       // console'da kalıyor.
       Alert.alert('Hata', error.message);
-    } else {
-      Alert.alert('Kaydedildi', 'Puanın sıralamana işlendi.');
+      return;
     }
+
+    /**
+     * ── FOTOĞRAFLAR: `entryId` GÖNDERİLMİYOR ─────────────────────────────────
+     * Bu yol bir `diary_entries` satırı ÜRETMİYOR ve üretmemeli — "sessiz
+     * puanlama" bilinçli bir ürün kararı (CLAUDE.md → Puanlama ile günlük
+     * arasındaki İŞ BÖLÜMÜ); giriş üretmek bu puanlamaları aktivite akışına
+     * düşürürdü.
+     *
+     * Fotoğraf `entry_id = null` ile yazılıyor ama BAĞSIZ KALMIYOR:
+     * `user_rankings`'te `unique(user_id, place_id)` olduğu için fotoğrafın
+     * `user_id` + `place_id` ikilisi o kişinin puan kaydını TEK olarak
+     * belirliyor. Bu yüzden `ranking_id` diye bir kolon EKLENMEDİ — zaten
+     * türetilebilen bir bağı ikinci kez saklamak olurdu.
+     */
+    const total = pendingPhotos.photos.length;
+    let failedPhotos = 0;
+
+    if (total > 0 && user?.id) {
+      failedPhotos = await pendingPhotos.upload({ placeId, userId: user.id });
+      pendingPhotos.reset();
+      // Yeni fotoğraflar ızgarada görünsün.
+      await fetchPhotos();
+    }
+
+    setSaving(false);
+
+    if (failedPhotos > 0) {
+      Alert.alert(
+        'Puanın kaydedildi',
+        failedPhotos === total
+          ? 'Ama fotoğraflar yüklenemedi. Bağlantını kontrol edip tekrar dene.'
+          : `Ama ${failedPhotos} fotoğraf yüklenemedi.`
+      );
+      return;
+    }
+
+    Alert.alert('Kaydedildi', 'Puanın sıralamana işlendi.');
   };
 
   /**
@@ -652,6 +699,22 @@ export default function RestaurantDetailScreen() {
               onChangeText={setReviewText}
               textAlignVertical="top"
             />
+
+            {/* ── Fotoğraflar ──
+                "Ziyaret Ekle" ile AYNI şerit (`PendingPhotoStrip`). Yorum
+                alanının hemen altında duruyor çünkü ikisi de aynı kaydın
+                parçası: puan + görüş + kareler tek "Puanı Kaydet"le gidiyor.
+
+                Buradan yüklenen fotoğrafların `entry_id`'si BOŞ kalıyor —
+                gerekçe `handleSave` içinde. Dokunulduğunda kişinin puan
+                kaydına çözümleniyorlar. */}
+            <PendingPhotoStrip
+              photos={pendingPhotos.photos}
+              onAdd={pendingPhotos.promptAdd}
+              onRemove={pendingPhotos.remove}
+              onEditKind={pendingPhotos.editKind}
+              disabled={saving}
+            />
           </View>
 
           {/* ── Kaydet ──
@@ -800,6 +863,16 @@ export default function RestaurantDetailScreen() {
         currentUserId={user?.id}
         onClose={() => setReportingPhoto(null)}
         onDone={(message) => Alert.alert('Bildirim', message)}
+      />
+
+      {/* Tür seçici — EKRANIN KÖKÜNDE, ScrollView'ın içinde DEĞİL.
+          `PhotoKindSheet` bir `Modal` olmadığı için ekranı ancak buradan
+          kaplayabiliyor; kaydırılan içeriğin içine konsaydı onunla birlikte
+          kayardı. Gerekçenin tamamı o dosyanın başında. */}
+      <PhotoKindSheet
+        value={pendingPhotos.kindSheetValue}
+        onSelect={pendingPhotos.selectKind}
+        onClose={pendingPhotos.closeKindSheet}
       />
     </View>
   );
