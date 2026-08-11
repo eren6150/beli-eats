@@ -1442,7 +1442,10 @@ yazarken** doğuyor ve kırdığı şey **zaten çalışan eski sorgular**.
 > **hangi mevcut sorguları belirsizleştirdiği tek tek yazılmalı.** Kontrol
 > tek komut:
 > ```
-> grep -rn "from('<TABLO_A>')" src/ | grep -n "<TABLO_B>("
+> # ⚠️ -A6 ŞART: .from(...) ile .select(...) AYRI SATIRLARDA.
+> # Bağlamsız tek satırlık grep hiçbir şey bulmaz ve SAHTE BİR "TEMİZ"
+> # raporu verir — 2026-08-11'de tam olarak bu oldu.
+> grep -rn -A6 "from('<TABLO_A>')" src/ | grep "<TABLO_B>("
 > ```
 > Ara tabloyu eklemekle o sorguları ayrıştırmak **AYNI DİFF'TE** gitmeli;
 > migration önce çalıştığı için arada kırık bir pencere kalıyor.
@@ -2933,7 +2936,8 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   ile `diary_entries` arasında ikinci bir yol açıyor. `place_photos`'ın kendi
 >   `id` PK'sı olduğu için "ara tablo" tanımına birebir uymuyor (muhtemelen
 >   tetiklenmez) ama bu sınıf sahada **iki kez** kırdı — kontrol zorunlu:
->   `grep -rn "from('diary_entries')" src/ | grep "places("`
+>   `grep -rn -A6 "from('diary_entries')" src/ | grep "places("`
+>   (**`-A6` şart** — bağlamsız grep sahte "temiz" verir, bkz. PGRST201 bölümü)
 >   Şüpheliler: `useDiary`, `useActivityFeed`, `usePlaceVisits`. Migration ile
 >   istemci düzeltmesi **aynı diff'te** gitmeli.
 
