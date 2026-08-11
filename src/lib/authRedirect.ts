@@ -14,27 +14,19 @@ import * as Linking from 'expo-linking';
  * `createURL` çalıştığı ORTAMA göre farklı adres üretiyor:
  *   Expo Go       → exp://192.168.x.x:8081/--/auth-callback
  *   Gerçek APK    → belieats://auth-callback
- * İkisi de Supabase panelindeki Redirect URLs listesinde kayıtlı. Modül
- * seviyesinde sabitlemek, adresi import anında dondurmak olurdu; fonksiyon
- * çağrıldığı anda doğru değeri veriyor.
+ * Modül seviyesinde sabitlemek, adresi import anında dondurmak olurdu;
+ * fonksiyon çağrıldığı anda doğru değeri veriyor.
  *
- * ⚠️ `exp://` kaydı GEÇİCİ ve yalnızca geliştirme içindir; genel yayından önce
- * Supabase panelinden silinmeli (Bilinen Açık İşler'de kayıtlı).
+ * ⚠️ EXPO GO BİÇİMİ SUPABASE TARAFINDAN KABUL EDİLMİYOR — kanıtlandı.
+ * `exp://IP:PORT/--/auth-callback` üç ayrı Redirect URL deseniyle denendi
+ * (joker, çift joker ve **jokersiz birebir adres**) ve üçünde de Supabase
+ * adresi yok sayıp Site URL'e düştü. Gerçek APK'daki `belieats://auth-callback`
+ * ise **ilk denemede çalıştı** (2026-08-11, versionCode 5).
+ * Yani bu yolda Expo Go ile doğrulama yapılamaz; deneyen bir sonraki kişi
+ * aynı üç turu tekrar etmesin. Tam teşhis: CLAUDE.md → Bilinen Açık İşler.
  */
 export const AUTH_REDIRECT_PATH = 'auth-callback';
 
 export function authRedirectUrl(): string {
-  const url = Linking.createURL(AUTH_REDIRECT_PATH);
-
-  /**
-   * ⚠️ GEÇİCİ TEŞHİS — Supabase Redirect URLs deseni doğrulanınca SİLİNECEK.
-   *
-   * Onay bağlantısı Site URL'e düşüyordu, yani Supabase bu adresi listeyle
-   * eşleştiremiyordu. Hangi adresin gönderildiğini tahmin etmek yerine
-   * ölçüyoruz. Metro terminali (npx expo start) satırı KIRPMIYOR — LogBox'ın
-   * kırmızı ekranı kırpıyor, oraya değil terminale bakılmalı.
-   */
-  console.log('[authRedirect] gönderilen adres:', url);
-
-  return url;
+  return Linking.createURL(AUTH_REDIRECT_PATH);
 }

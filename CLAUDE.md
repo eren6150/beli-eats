@@ -34,21 +34,25 @@ işler · **Build 1** = native değişiklik isteyen paket.
 - ✅ **Aşama 0 — şifre sıfırlama (OTP).** Giriş ekranında "Şifreni mi
   unuttun?" → e-posta → mailde gelen kod → yeni şifre. Saf JS, OTA ile
   sahada. Detay ve iki kalıcı ders: Mimari Notlar → **Şifre sıfırlama**.
-- 🔨 **Build 1 — BAŞLADI (2026-08-11), 5 adımın 4'ü kodda bitti.**
-  `version` **1.2.0** / versionCode **5**, `scheme: "belieats"`.
+- ✅ **Build 1 TAMAMLANDI ve SAHADA (2026-08-11).** `version` **1.2.0** /
+  versionCode **5**, `scheme: "belieats"`. **16 testin hepsi gerçek APK'da
+  geçti.**
 
   | # | İş | Durum |
   |---|---|---|
-  | 1 | scheme + sürüm ritüeli + `expo`→54.0.36 + deep link paketleri | ✅ kodda |
-  | 2 | **Deep link** (onay maili uygulamayı açsın) + PKCE | ✅ kodda · ⛔ **doğrulanamadı** |
-  | 3 | **Google ile giriş** (tarayıcı tabanlı) | ✅ kodda · ⛔ **doğrulanamadı** |
+  | 1 | scheme + sürüm ritüeli + `expo`→54.0.36 + deep link paketleri | ✅ |
+  | 2 | **Deep link** (onay maili uygulamayı açıyor) + PKCE | ✅ **doğrulandı** |
+  | 3 | **Google ile giriş** (tarayıcı tabanlı) | ✅ **doğrulandı** |
   | 4 | **Kaydırmalı sekmeler** | ✅ *yalnızca* `FollowersList` |
   | 5 | `react-native-keyboard-controller` | ✅ **yalnızca sağlayıcı** |
   | — | `fingerprint` `runtimeVersion` | ⏸️ **Build 1'DEN ÇIKARILDI** (karar A) |
 
-  ⚠️ **`version` 1.2.0 olduğu için sahadaki APK'lara (runtime 1.1.0) OTA
-  GÖNDERİLEMEZ.** Acil hotfix gerekirse `version` geçici olarak 1.1.0'a
-  çekilip OTA atılmalı, sonra geri alınmalı.
+  ⚠️ **OTA RUNTIME'I ARTIK 1.2.0.** Kendi cihazında yeni APK kurulu, yani OTA
+  akıyor. **Arkadaşındaki APK hâlâ versionCode 4 / runtime 1.1.0** — ona
+  gönderilecek OTA'lar ulaşmaz, **yeni APK'yı kurması gerekiyor.**
+  - **keyboard-controller'ın ekranlara UYGULANMASI yapılmadı** — yalnızca
+    sağlayıcı kuruldu. Ekran taşımaları **saf JS, yani OTA ile gidebilir**;
+    build'e girmesi gereken tek şey paketin native tarafıydı.
   - **Karar: `fingerprint` Build 1'e ALINMADI.** §9'da bir kez build'i
     patlatmıştı; kanıtlanmamış "Fark 2" **New Architecture codegen kullanan
     RN kütüphanelerinden** geliyor ve bu build tam o kategoriden iki paket
@@ -2754,12 +2758,25 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 
 ## Bilinen Açık İşler (teknik borç)
 
-> ### ⛔ BUILD'DE DOĞRULANACAK — deep link + Google girişi (2026-08-11)
-> Kod tarafı **bitti ve typecheck temiz**, ama **Expo Go'da doğrulanamadı**.
-> Kovalamak bırakıldı; bu bölüm aynı üç turun tekrar edilmemesi için var.
+> ### ✅ KAPANDI — deep link + Google girişi (2026-08-11, gerçek APK'da DOĞRULANDI)
+> **`belieats://auth-callback` ilk denemede çalıştı** (versionCode 5): onay
+> maili uygulamayı açıyor ve oturum kendiliğinden kuruluyor, Google girişi de
+> uçtan uca çalışıyor. Aşağısı **tarihsel kayıt** — hipotez doğrulandığı için
+> siliniyor değil, aynı üç turun tekrar edilmemesi için duruyor.
 >
-> **Semptom:** onay bağlantısı da Google girişi de Supabase'in **Site URL'ine**
-> (GitHub Pages iniş sayfası) düşüyor, uygulamaya hiç dönmüyor.
+> **🔑 ONAYLANAN HİPOTEZ:** sorun kodda ya da allowlist deseninde değil,
+> **Expo Go'nun ürettiği URL BİÇİMİNDEYDİ.** `exp://IP:PORT/--/yol` (portlu,
+> `--` segmentli) Supabase tarafından hiçbir desenle kabul edilmedi;
+> `belieats://auth-callback` (portsuz, sade — Supabase'in mobil örnekleriyle
+> aynı biçim) sorunsuz geçti.
+>
+> **⚠️ ÇIKARIM:** auth yönlendirme ekseninde **Expo Go ile doğrulama
+> YAPILAMAZ**. Bu, "Expo Go'daki ölçüm kanıt değildir" dersinin **üçüncü**
+> tekrarı (öncekiler: klavye/pencere davranışı ve arka plandan dönüş).
+>
+> **Semptom (o gün):** onay bağlantısı da Google girişi de Supabase'in
+> **Site URL'ine** (GitHub Pages iniş sayfası) düşüyor, uygulamaya hiç
+> dönmüyordu.
 >
 > **TEŞHİS — kanıtlanan ve elenen:**
 > - Site URL'e düşmek, Supabase'in `redirect_to`'yu **kullanmadığı** anlamına
@@ -2781,14 +2798,16 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   karşımıza çıkmayacak bir URL biçimiydi.** CLAUDE.md'nin iki kez yazdığı
 >   ders ("Expo Go'daki ölçüm kanıt değildir") üçüncü kez geçerli oldu.
 >
-> **BUILD'DE İLK YAPILACAK:** `belieats://auth-callback` ile onay maili ve
-> Google girişi. Kodda değişecek bir şey yok; allowlist tamamen sunucu tarafı
-> ve o adres zaten Redirect URLs listesinde kayıtlı.
-> - Yine düşerse bakılacak yer **allowlist'in kendisi**, kod değil.
-> - `src/lib/authRedirect.ts`'te **geçici bir `console.log` duruyor**
->   (gönderilen adresi basıyor). Doğrulama bitince **silinecek**.
-> - ⚠️ Supabase Redirect URLs'teki **`exp://…` satırları GEÇİCİ**, yalnızca
->   geliştirme için. Genel yayından önce silinmeli.
+> **Geçici teşhis logu** (`src/lib/authRedirect.ts`) doğrulamadan sonra
+> **silindi**; dosyada yalnızca bulgunun yorumu kaldı.
+>
+> ### 🧹 YAPILACAK (küçük, panel işi): `exp://` satırlarını sil
+> Supabase → Authentication → URL Configuration → Redirect URLs'te
+> **`exp://…` ile başlayan satırlar** duruyor. Artık **tamamen ölü**:
+> hiçbiri çalışmadı ve `react-native-keyboard-controller` eklendiğinden beri
+> proje Expo Go'da zaten açılmıyor. Silinmeli — geliştirmeye özel bir
+> allowlist deliğini açık bırakmanın karşılığı yok.
+> **Kalması gereken tek satır:** `belieats://auth-callback`.
 >
 > **YAN BULGU — PKCE `plain`'e düşüyor.** Konsolda her auth çağrısında:
 > `WebCrypto API is not supported. Code challenge method will default to use
@@ -2863,31 +2882,33 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   Şüpheliler: `useDiary`, `useActivityFeed`, `usePlaceVisits`. Migration ile
 >   istemci düzeltmesi **aynı diff'te** gitmeli.
 
-> ### 📦 BİR SONRAKİ BUILD'İN PAKETİ
-> Aşağıdaki dördü **build gerektirdiği için** biriktiriliyor; tek bir özellik
-> uğruna 20-25 dakikalık build + arkadaşa yeniden kurulum maliyeti kabul
-> edilmiyor. Build alınacağı gün hepsi birlikte değerlendirilmeli.
-> 1. **`react-native-keyboard-controller`** — klavye/edge-to-edge sınıfının
->    doğru cevabı (detay bu listede, "Klavye/edge-to-edge katmanı" maddesi).
-> 2. **Kaydırmalı sekmeler** (`pager-view` / `collapsible-tab-view`) — bir
->    sonraki madde.
-> 3. **`expo` yama farkı** 54.0.35 → `~54.0.36` (Dağıtım §8'de ertelendi).
-> 4. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9; `.fingerprintignore`
->    hazır ve kanıtlı, kalan iş Fark 2'nin bir build ile teşhisi).
-> 5. **Faz 4 marka görsellerinin NATIVE tarafı** — aşağıdaki tabloda.
-> 6. **E-posta onayı için DEEP LINK + otomatik giriş.** Bugün onay bağlantısı
->    uygulamayı açmıyor, web sayfasına iniyor (`docs/index.html`) ve kullanıcı
->    elle giriş yapıyor. Çalışıyor ama iki adım fazla. Gerekenler:
->    `app.json` → `"scheme": "belieats"` (**native alan → build**) ·
->    `signUp`'a `emailRedirectTo` · panelde **Redirect URLs**'e ekleme ·
->    ⚠️ **ve kod:** `supabaseClient` `detectSessionInUrl: false` (RN için doğru
->    ayar), yani token'lar URL'in `#` parçasından ELLE ayrıştırılıp
->    `supabase.auth.setSession()` çağrılmalı; `Linking` dinleyicisi de yok.
->    Yani "yönlendirmeyi düzeltmek" değil, **yeni bir özellik**.
+> ### 📦 BUILD 2'NİN PAKETİ — Build 1 ile altı maddenin dördü kapandı
+> Build 1'de gitti: **keyboard-controller** (native taraf) · **kaydırmalı
+> sekmeler** · **`expo` yama farkı** · **deep link + Google girişi**.
+>
+> **Kalan iki madde, ikisi de acil değil:**
+> 1. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9). `.fingerprintignore`
+>    hazır ve kanıtlı (Fark 1); kalan iş **Fark 2'nin bir build ile teşhisi**.
+>    Build 1'e bilinçli alınmadı — o build Fark 2'yi besleyen kategoriden
+>    (New Architecture codegen) **iki paket ekliyordu**. Arkadaş testi bitince
+>    kendi başına ele alınacak.
+> 2. **Faz 4 marka görsellerinin NATIVE tarafı** — aşağıdaki tabloda
+>    (ikon, native splash, uygulama adı, `adaptiveIcon` rengi).
 >
 > ⚠️ Build alınırken **§2'deki sürüm yükseltme ritüeli** ihmal edilmemeli:
-> `versionCode` +1 her zaman, `version` +1 native değişiklik varsa — ve
-> bu paketin 1., 2., 4., 5. ve 6. maddesi native değişiklik.
+> `versionCode` +1 her zaman, `version` +1 native değişiklik varsa. Kalan iki
+> maddenin **ikisi de** native değişiklik. Ayrıca 1. madde `runtimeVersion`
+> politikasını değiştirdiği için sahadaki kurulumları OTA'dan koparır.
+>
+> ### 🚀 OTA İLE GİDEBİLECEK BİRİKMİŞ İŞLER (build beklemiyor)
+> Build 1 sonrası sıradakilerin hepsi saf JS ve/veya migration:
+> - **keyboard-controller'ın ekranlara uygulanması** — sağlayıcı binary'de,
+>   ekran taşımaları OTA. Ölçüm build sonrası yapıldı: regresyon yok.
+> - **Fotoğraf akışının yeniden tasarımı + kamera/galeri "+" menüsü**
+>   (bu listede, park edilmiş).
+> - **Takipçi çıkarma + kullanıcı engelleme** (bu listede, park edilmiş).
+> - **`ProfileScreen`'de kaydırmalı sekme** (bu listede, ertelenmiş).
+> - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
 >
 > ### 🎨 Marka işi: neyin OTA gittiği, neyin build istediği (tespit: 2026-08-08)
 > `app.json` ve `app.config.js` okunarak çıkarıldı, tahmin değil. Faz 4'e
