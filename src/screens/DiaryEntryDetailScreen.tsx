@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -18,13 +18,16 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../hooks/useAuth';
 import { usePlacePhotos } from '../hooks/usePlacePhotos';
+import { usePlaceRankings } from '../hooks/usePlaceRankings';
 import { useEntryLikes } from '../hooks/useEntryLikes';
-import { DiaryEntryDetailParams } from '../types';
+import { DiaryEntryDetailParams, PlacePhoto } from '../types';
 import { photoUrl } from '../lib/places';
 import { photoPublicUrl } from '../lib/placePhotos';
+import { buildPhotoInfo } from '../lib/photoInfo';
 import { formatVisitDate } from '../lib/date';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
 import Icon from '../components/ui/Icon';
+import PhotoViewer from '../components/photos/PhotoViewer';
 import StarRating from '../components/ui/StarRating';
 import ErrorBanner from '../components/ui/ErrorBanner';
 
@@ -107,11 +110,39 @@ export default function DiaryEntryDetailScreen() {
    */
   const authorPhotos = photos.filter((p) => p.user_id === authorId);
 
+  /**
+   * Şeritteki kareler artık TAM EKRAN AÇILIYOR.
+   *
+   * Öncesinde düz `<Image>`'lardı — dokunuşun hiçbir karşılığı yoktu ve sahada
+   * "dokunuyorum, hiçbir şey olmuyor" olarak bildirildi. Projenin *"tıklanabilir
+   * görünüp tepki vermemek, hiç tıklanabilir görünmemekten kötü"* ilkesinin
+   * karşılığı; fotoğraf zaten dokunulası bir yüzey.
+   *
+   * `PhotoViewer` mekan sayfasındakiyle AYNI bileşen — zaten bu ikinci yüzey
+   * için `PhotoGrid`'den çıkarılmıştı. Açık fotoğraf state'i HER YÜZEYDE KENDİ
+   * içinde duruyor.
+   */
+  const [viewing, setViewing] = useState<PlacePhoto | null>(null);
+
+  /**
+   * Şeritlerdeki puan bilgisinin kaynağı.
+   *
+   * `entry_id`'si olan kareler için GEREKMİYOR — ziyaret verisi fotoğraf
+   * sorgusunda zaten gömülü. Yalnızca `entry_id`'si boş kareler (yazarın bu
+   * mekana doğrudan yüklediği fotoğraflar) için lazım.
+   *
+   * ⚠️ Mekan sayfasındaki "kendi kaydım kazanır" istisnası BURADA YOK ve
+   * gerekmiyor: o istisna kaydetme akışının tazelik sorunundan doğuyordu, bu
+   * ekranda kaydetme yok.
+   */
+  const { rankingOf, fetchPlaceRankings } = usePlaceRankings(placeId);
+
   useFocusEffect(
     useCallback(() => {
       fetchLikes();
       fetchPhotos();
-    }, [fetchLikes, fetchPhotos])
+      fetchPlaceRankings();
+    }, [fetchLikes, fetchPhotos, fetchPlaceRankings])
   );
 
   const heroUrl = photoUrl(photoReference, PLACE_PHOTO_WIDTH);
@@ -226,9 +257,16 @@ export default function DiaryEntryDetailScreen() {
               {authorPhotos.map((photo) => {
                 // Küçük kopya (`thumb_path`) — ücretsiz katmanda egress hesabı
                 // buna dayanıyor, ızgara/şerit ASLA tam boyu kullanmamalı.
+                // Tam boy YALNIZCA `PhotoViewer`'da iniyor.
                 const uri = photoPublicUrl(photo.thumb_path);
                 return uri ? (
-                  <Image key={photo.id} source={{ uri }} style={styles.photoTile} />
+                  <Pressable
+                    key={photo.id}
+                    onPress={() => setViewing(photo)}
+                    style={({ pressed }) => pressed && styles.photoTilePressed}
+                  >
+                    <Image source={{ uri }} style={styles.photoTile} />
+                  </Pressable>
                 ) : null;
               })}
             </ScrollView>
@@ -272,6 +310,45 @@ export default function DiaryEntryDetailScreen() {
           {count === 0 ? 'Henüz beğeni yok' : `${count} beğeni`}
         </Text>
       </View>
+
+      {/* Tam ekran görüntüleyici — mekan sayfasındakiyle AYNI bileşen, aynı üç
+          katmanlı jest yapısı. Şeritlerin içeriğini `buildPhotoInfo` üretiyor,
+          yani iki yüzey tek kuralı paylaşıyor. */}
+      <PhotoViewer
+        photo={viewing}
+        info={viewing ? buildPhotoInfo(viewing, rankingOf) : null}
+        onClose={() => setViewing(null)}
+        /**
+         * Kullanıcı adına dokunuş → yükleyicinin profili.
+         *
+         * KENDİ FOTOĞRAFINDA callback HİÇ verilmiyor (ad düz metin olur) —
+         * `PhotoGrid`'in aynı kararı, gerekçe `PhotoViewer.onPressAuthor`'da.
+         * Bu ekranın kendi başlığındaki yazar adı da aynı kuralla çalışıyor
+         * (`goToAuthor`), yani iki yüzey tutarlı.
+         *
+         * ⚠️ Görüntüleyici ÖNCE kapatılıyor: açık bir `Modal` hedef ekranın
+         * önünde kalır.
+         *
+         * NOT: bu şeritteki kareler yazarın kendi fotoğrafları olduğu için
+         * hedef pratikte her zaman `authorId`; yine de `photo.user_id`
+         * kullanılıyor — filtre bir gün değişirse (bilinen bayat filtre işi)
+         * burası kendiliğinden doğru kalsın.
+         */
+        onPressAuthor={
+          viewing && viewing.user_id !== user?.id && viewing.profiles?.username
+            ? () => {
+                const target = viewing;
+                const username = target.profiles?.username;
+                if (!username) return;
+                setViewing(null);
+                navigation.navigate('UserProfile', {
+                  userId: target.user_id,
+                  username,
+                });
+              }
+            : undefined
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -391,6 +468,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   photoStrip: { gap: Spacing.xs },
+  /** Basılı geri bildirimi — uygulamanın geri kalanıyla aynı 0.7 opaklık. */
+  photoTilePressed: { opacity: 0.7 },
   photoTile: {
     width: PHOTO_TILE,
     height: PHOTO_TILE,

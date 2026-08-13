@@ -2,10 +2,8 @@ import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   Animated,
   Pressable,
-  Modal,
   StyleSheet,
   useWindowDimensions,
   ActivityIndicator,
@@ -14,16 +12,23 @@ import { PlacePhoto } from '../../types';
 import { photoPublicUrl } from '../../lib/placePhotos';
 import { Colors, Radius, Spacing, Type } from '../../constants/theme';
 import Icon from '../ui/Icon';
+import PhotoViewer, { PhotoViewerInfo } from './PhotoViewer';
 
 /**
- * Mekan fotoğrafları ızgarası + tam boy görüntüleyici.
+ * Mekan fotoğrafları ızgarası.
  *
  * ── ⚠️ IZGARA YALNIZCA `thumb_path` KULLANIR ─────────────────────────────────
  * Bu bir optimizasyon değil, ücretsiz katmana sığmanın koşulu. Hesap:
  * listelerde tam boy servis edilirse aylık egress ~11 GB (sınır 5 GB),
  * küçük kopyayla ~1,6 GB. Tam boy YALNIZCA kullanıcı bir kareye dokununca
- * indiriliyor — yani egress kullanıcının gerçek ilgisiyle orantılı.
- * Buraya `storage_path` yazmak sınırı sessizce aşmanın en kolay yolu.
+ * indiriliyor (`PhotoViewer`) — yani egress kullanıcının gerçek ilgisiyle
+ * orantılı. Buraya `storage_path` yazmak sınırı sessizce aşmanın en kolay yolu.
+ *
+ * ── GÖRÜNTÜLEYİCİ ARTIK AYRI BİLEŞEN ────────────────────────────────────────
+ * Tam ekran görünüm `PhotoViewer`'a taşındı (üç katmanlı jest yapısı ve ileride
+ * ziyaret detayındaki yatay şeritten de açılabilmesi için). AÇIK/KAPALI STATE'İ
+ * BURADA KALDI: mekan sayfası tarafında hiçbir şey değişmesin diye — her yüzey
+ * kendi açık fotoğrafını kendi tutuyor.
  *
  * Üç sütun sabit değil, ekran genişliğinden hesaplanıyor: `DiaryEntrySheet`
  * dersinden sonra sabit piksel varsayımı yapmıyoruz.
@@ -50,6 +55,34 @@ export interface PhotoGridProps {
    * kötü" ilkesi.
    */
   onReport?: (photo: PlacePhoto) => void;
+  /**
+   * Tam ekran görüntüleyicinin şeritlerinde ne yazacağı.
+   *
+   * ── ⚠️ BU PROP BİR TASARIM KARARININ TERSİNE ÇEVRİLMESİ ─────────────────
+   * Bir dönem burada `onPhotoPress: (photo) => boolean` vardı ve dokunuş
+   * fotoğrafı HİÇ GÖSTERMEDEN doğrudan ziyaret detayına / puan yorumuna
+   * gidiyordu. Karar tersine çevrildi: dokunuş artık HER ZAMAN fotoğrafı tam
+   * ekran açıyor, ziyaret/puan bilgisi fotoğrafın ÜSTÜNDEKİ şeritlere taşındı.
+   *
+   * `null` döndürmek geçerli: o fotoğrafın anlatacak bir hikâyesi yok, şeritler
+   * hiç açılmıyor, fotoğraf yine tam ekran görünüyor.
+   *
+   * ── NEDEN KARAR BU BİLEŞENDE DEĞİL ──────────────────────────────────────
+   * Bilgi iki ayrı kaynaktan geliyor (`diary_entries` gömülü satırı ve
+   * `user_rankings`) ve ikincisi çağıranın elinde. Izgara bunları bilseydi tek
+   * işi olan "kareleri çiz"in dışına çıkardı.
+   */
+  infoOf?: (photo: PlacePhoto) => PhotoViewerInfo | null;
+  /**
+   * Tam ekran görüntüleyicide kullanıcı adına dokunulunca — çağıran kendi
+   * stack'inde push ediyor.
+   *
+   * ⚠️ KENDİ FOTOĞRAFINDA HİÇ KURULMUYOR; kararı burası veriyor çünkü sahiplik
+   * bilgisi (`currentUserId`) zaten burada, uzun basış dalı için. Gerekçe
+   * `PhotoViewer.onPressAuthor`'ın yorumunda (kendi profiline gitmek "en az
+   * sürpriz" kuralına aykırı).
+   */
+  onPressAuthor?: (photo: PlacePhoto) => void;
   emptyLabel: string;
   /**
    * Uçuştaki yükleme sayısı — her biri için spinner'lı bir yer tutucu kare.
@@ -157,25 +190,17 @@ export default function PhotoGrid({
   currentUserId,
   onDelete,
   onReport,
+  infoOf,
+  onPressAuthor,
   emptyLabel,
   pending = 0,
 }: PhotoGridProps) {
   const { width } = useWindowDimensions();
-  const [viewing, setViewing] = useState<PlacePhoto | null>(null);
-  const [fullLoading, setFullLoading] = useState(false);
   /**
-   * Tam boy görsel indirilemedi mi.
-   *
-   * ⚠️ BU DURUM SONSUZ SPINNER ÜRETİYORDU. Spinner'ı kapatan tek şey
-   * `onLoadEnd`'di ve `onError` HİÇ YOKTU; görsel 404 dönünce `onLoadEnd`
-   * Android'de güvenilir biçimde tetiklenmiyor, dolayısıyla dönen ikon
-   * sonsuza kadar kalıyor ve kullanıcı ne olduğunu anlamıyordu. Sahada
-   * görüldü (Storage'daki dosyalar silinip satırlar kalınca).
-   *
-   * Durum GEÇİCİ bir veri kazasına özgü DEĞİL: moderasyonla silinen bir
-   * dosya, elle temizlik veya kopan ağ aynı sonucu üretiyor.
+   * Açık olan fotoğraf. Yükleme/hata/şerit durumları `PhotoViewer`'ın kendi
+   * içinde — ızgaranın onları bilmesi gerekmiyor.
    */
-  const [fullError, setFullError] = useState(false);
+  const [viewing, setViewing] = useState<PlacePhoto | null>(null);
 
   const size = (width - horizontalPadding * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 
@@ -223,64 +248,35 @@ export default function PhotoGrid({
               key={photo.id}
               photo={photo}
               size={size}
-              onPress={() => {
-                setFullLoading(true);
-                // Hata durumu her açılışta sıfırlanıyor: önceki fotoğrafın
-                // hatası yenisinde asılı kalmamalı.
-                setFullError(false);
-                setViewing(photo);
-              }}
+              // Dokunuş HER FOTOĞRAFTA aynı: tam ekran aç. Ziyaret/puan
+              // bilgisi oraya, fotoğrafın üstündeki şeritlere taşındı.
+              onPress={() => setViewing(photo)}
               onLongPress={longPress || undefined}
             />
           );
         })}
       </View>
 
-      {/* Tam boy görüntüleyici — `storage_path` yalnızca BURADA okunuyor. */}
-      <Modal
-        visible={viewing !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setViewing(null)}
-        statusBarTranslucent
-      >
-        <Pressable style={styles.viewerRoot} onPress={() => setViewing(null)}>
-          {fullLoading && !fullError && (
-            <ActivityIndicator color={Colors.textOnBrand} />
-          )}
-
-          {fullError ? (
-            <View style={styles.viewerError}>
-              <Icon name="alert" size={32} color={Colors.textOnBrand} />
-              <Text style={styles.viewerErrorText}>Fotoğraf yüklenemedi.</Text>
-              <Text style={styles.viewerErrorHint}>
-                Dosya kaldırılmış olabilir.
-              </Text>
-            </View>
-          ) : (
-            viewing && (
-              <Image
-                source={{ uri: photoPublicUrl(viewing.storage_path) ?? undefined }}
-                style={styles.full}
-                resizeMode="contain"
-                onLoadEnd={() => setFullLoading(false)}
-                // ⚠️ ONSUZ SPINNER SONSUZA KADAR DÖNÜYORDU: 404'te `onLoadEnd`
-                // Android'de güvenilir tetiklenmiyor.
-                onError={() => {
-                  setFullLoading(false);
-                  setFullError(true);
-                }}
-              />
-            )
-          )}
-          <View style={styles.viewerClose}>
-            <Icon name="close" size={24} color={Colors.textOnBrand} />
-          </View>
-          {viewing?.caption ? (
-            <Text style={styles.viewerCaption}>{viewing.caption}</Text>
-          ) : null}
-        </Pressable>
-      </Modal>
+      {/* Tam boy görüntüleyici — `storage_path` yalnızca ORADA okunuyor.
+          `infoOf` verilmezse şeritler hiç açılmaz, saf fotoğraf görünümü. */}
+      <PhotoViewer
+        photo={viewing}
+        info={viewing && infoOf ? infoOf(viewing) : null}
+        onClose={() => setViewing(null)}
+        // Kendi karende callback HİÇ verilmiyor → ad düz metin olarak çiziliyor.
+        onPressAuthor={
+          viewing && onPressAuthor && viewing.user_id !== currentUserId
+            ? () => {
+                // ⚠️ GÖRÜNTÜLEYİCİ ÖNCE KAPANIYOR: açık bir RN `Modal` hedef
+                // ekranın ÖNÜNDE kalır ve kullanıcı siyah bir katmana bakardı
+                // (`MapSummarySheet`/`RankingReviewSheet` aynı sebeple önce
+                // kapanıyor). State burada olduğu için kapatma da burada.
+                setViewing(null);
+                onPressAuthor(viewing);
+              }
+            : undefined
+        }
+      />
     </>
   );
 }
@@ -337,42 +333,5 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.textMuted,
     paddingVertical: Spacing.md,
-  },
-
-  viewerRoot: {
-    flex: 1,
-    backgroundColor: Colors.scrimStrong,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  full: { width: '100%', height: '80%' },
-  viewerError: {
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.xl,
-  },
-  viewerErrorText: {
-    ...Type.bodyStrong,
-    color: Colors.textOnBrand,
-    textAlign: 'center',
-  },
-  viewerErrorHint: {
-    ...Type.caption,
-    color: Colors.textOnBrand,
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-  viewerClose: {
-    position: 'absolute',
-    top: Spacing['3xl'],
-    right: Spacing.lg,
-  },
-  viewerCaption: {
-    ...Type.body,
-    color: Colors.textOnBrand,
-    position: 'absolute',
-    bottom: Spacing['3xl'],
-    paddingHorizontal: Spacing.lg,
-    textAlign: 'center',
   },
 });

@@ -45,10 +45,13 @@ import PhotoGrid from '../components/photos/PhotoGrid';
 import ReportPhotoSheet from '../components/photos/ReportPhotoSheet';
 import PendingPhotoStrip from '../components/photos/PendingPhotoStrip';
 import PhotoKindSheet from '../components/photos/PhotoKindSheet';
+import type { PhotoViewerInfo } from '../components/photos/PhotoViewer';
 import { usePendingPhotos } from '../hooks/usePendingPhotos';
 import { usePlacePhotos } from '../hooks/usePlacePhotos';
+import { usePlaceRankings } from '../hooks/usePlaceRankings';
 import { usePlaceVisits } from '../hooks/usePlaceVisits';
 import { makePhotoRenditions, uploadPlacePhoto } from '../lib/placePhotos';
+import { buildPhotoInfo } from '../lib/photoInfo';
 
 // Ekran üç stack'te birden kayıtlı; route tipi bu yüzden tek bir stack'in
 // param listesine değil, paylaşılan tipe bağlı.
@@ -185,6 +188,13 @@ export default function RestaurantDetailScreen() {
   /** "Senin Ziyaretlerin" — bu kullanıcının BU mekana ait günlük girişleri. */
   const { visits, fetchVisits } = usePlaceVisits(user?.id, placeId);
 
+  /**
+   * Bu mekanı puanlamış HERKESİN kaydı — fotoğraf dokunmasını çözümlemek için.
+   * Yalnızca BAŞKALARININ kareleri için kullanılıyor; kendi karemde ekranın
+   * zaten taze olan `existingRanking`'i kazanıyor (gerekçe `handlePhotoPress`).
+   */
+  const { rankingOf, fetchPlaceRankings } = usePlaceRankings(placeId);
+
   const existingRanking = rankings.find((r) => r.place_id === placeId);
 
   // Fotoğraf URL'leri cache satırından türetiliyor — ayrı state tutmak iki
@@ -251,7 +261,10 @@ export default function RestaurantDetailScreen() {
       // Ziyaretler de: kullanıcı bir satırdan detaya gidip orada bir şey
       // değiştirdiyse (ya da profilinden sildiyse) geri dönüşte bayat kalmasın.
       fetchVisits();
-    }, [fetchRankings, fetchPhotos, fetchVisits])
+      // Başkalarının puanları da: aradan geçen sürede biri bu mekanı
+      // puanlamış olabilir, fotoğrafı çözümlenemez kalmasın.
+      fetchPlaceRankings();
+    }, [fetchRankings, fetchPhotos, fetchVisits, fetchPlaceRankings])
   );
 
   useEffect(() => {
@@ -384,6 +397,52 @@ export default function RestaurantDetailScreen() {
         },
       },
     ]);
+  };
+
+  /**
+   * Tam ekran görüntüleyicinin şeritlerinde ne yazacağı.
+   *
+   * ── ⚠️ BU YOL BİR TASARIM KARARININ TERSİNE ÇEVRİLMESİ ──────────────────
+   * Bir dönem burada `handlePhotoPress` vardı ve NAVİGASYON yapıyordu:
+   * `entry_id` doluysa doğrudan `DiaryEntryDetail`'e, puan varsa doğrudan
+   * `RankingReviewSheet`'e gidiyor, fotoğrafı büyütüp GÖSTERMİYORDU BİLE.
+   * Karar tersine çevrildi (kullanıcı kararı): dokunuş artık her zaman
+   * fotoğrafı tam ekran açıyor, bilgi fotoğrafın ÜSTÜNDEKİ şeritlere taşındı.
+   * İşi bu yüzden "nereye gideyim" değil "ne yazayım".
+   *
+   * KURALIN KENDİSİ `buildPhotoInfo`'da, çünkü ziyaret detayının fotoğraf
+   * şeridi de aynı kararı veriyor. Burada kalan tek şey PUANIN KAYNAĞI:
+   *
+   * ── KENDİ KAREMDE `existingRanking` KAZANIYOR ────────────────────────────
+   * `rankingOf` odakta çekilen bir anlık görüntü. "Puanı Kaydet" ile puan +
+   * fotoğraf birlikte kaydedildiğinde kare ızgarada ANINDA beliriyor ama o
+   * anlık görüntü henüz eski — yeni kaydedilmiş bir karenin şeridi boş kalırdı.
+   * `existingRanking` kaydetmeden sonra zaten tazeleniyor. Bu tazelik sorunu
+   * bu ekrana özgü (kaydetme akışı burada), o yüzden yardımcıya girmedi.
+   */
+  const photoInfoOf = (photo: PlacePhoto): PhotoViewerInfo | null =>
+    buildPhotoInfo(photo, (userId) =>
+      userId === user?.id ? (existingRanking ?? null) : rankingOf(userId)
+    );
+
+  /**
+   * Fotoğrafın üst şeridindeki kullanıcı adına dokunuş → yükleyicinin profili.
+   *
+   * ⚠️ ÖNCE `PhotoGrid` GÖRÜNTÜLEYİCİYİ KAPATIYOR, sonra buraya geliyor: açık
+   * bir RN `Modal` hedef ekranın önünde kalırdı (`MapSummarySheet` ve
+   * `RankingReviewSheet` aynı sebeple önce kapanıyor). Sonucu kabul edildi —
+   * profilden geri gelince ızgaraya dönülüyor, tam ekran fotoğrafa değil.
+   *
+   * ⚠️ ROTA TUZAĞI: bu ekran DÖRT stack'te kayıtlı, `UserProfile` ise yalnızca
+   * ikisinde kayıtlıydı (Home + Profile). Ara ve Harita sekmelerinden gelen
+   * kullanıcıda bu satır çalışma anında patlardı; ikisine de eklendi
+   * (ve `RestaurantDetailStackParamList` artık `UserProfile`'ı ilan ettiği
+   * için benzer bir eksik bir daha derleme anında yakalanır).
+   */
+  const handlePressPhotoAuthor = (photo: PlacePhoto) => {
+    const username = photo.profiles?.username;
+    if (!username) return;
+    navigation.navigate('UserProfile', { userId: photo.user_id, username });
   };
 
   const handleSave = async () => {
@@ -672,6 +731,8 @@ export default function RestaurantDetailScreen() {
               currentUserId={user?.id}
               onDelete={handleDeletePhoto}
               onReport={setReportingPhoto}
+              infoOf={photoInfoOf}
+              onPressAuthor={handlePressPhotoAuthor}
               emptyLabel={PHOTO_EMPTY_LABEL[photoTab]}
               // Yer tutucu YALNIZCA yüklemenin hedeflendiği sekmede.
               pending={uploadingKind === photoTab ? 1 : 0}

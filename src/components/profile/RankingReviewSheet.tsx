@@ -69,7 +69,15 @@ export interface RankingReviewSheetProps {
    */
   ranking: UserRanking | null;
   onClose: () => void;
-  /** "Mekan sayfasına git" — çağıran kendi stack'inde push ediyor. */
+  /**
+   * "Mekan sayfasına git" — çağıran kendi stack'inde push ediyor.
+   *
+   * ZORUNLU. Bir dönem opsiyonel yapılmıştı (mekan sayfasının fotoğraf
+   * ızgarasından açılınca satır gizlensin diye) ama o çağrı yeri kaldırıldı:
+   * fotoğraf dokunuşu artık tam ekran görüntüleyiciye gidiyor, bu sheet'e
+   * değil. Opsiyonel bırakmak, bugün kimsenin kullanmadığı bir dalı ayakta
+   * tutmak olurdu — "bugün kullanılanı inşa et".
+   */
   onPressPlace: (ranking: UserRanking) => void;
 }
 
