@@ -46,10 +46,25 @@ export function usePlacePhotos(placeId: string | undefined) {
      * genelleştirilmiş bir kural olarak yazıldı ama 018 yazılırken MEVCUT
      * SORGULARA KARŞI TARANMADI. Bu sorgu 018'den önce yazılmıştı ve
      * çalışıyordu — kuralın "çalışan eskisi de bozulur" kısmı tam olarak bu.
+     *
+     * ── `diary_entries!place_photos_entry_fk` — DOKUNMA ÇÖZÜMLEMESİ İÇİN ─────
+     * `entry_id` tek başına yetmiyor: `DiaryEntryDetail` rotası ziyaretin
+     * tarihini, puanını ve notunu ZORUNLU istiyor (anlık görüntü kuralı).
+     * Dokunma anında ayrı bir sorgu atmak, kareye basıp birkaç yüz ms hiçbir
+     * şey olmaması demekti — projenin harita POI'sinde reddettiği desen
+     * ("önce karar, sonra aç"). Gömülü almanın ek tur maliyeti YOK.
+     *
+     * FK adı burada da ŞART. Migration 020 `place_photos` ile `diary_entries`
+     * arasında FK açtı ve `places` ↔ `diary_entries` arasında ikinci bir yol
+     * doğurdu; `place_photos`'ın PK'sı kendi `id`'si olduğu için ara tablo
+     * sayılmıyor, yani PGRST201'in tetiklenmesi BEKLENMİYOR — ama bu sınıf
+     * sahada iki kez kırdı ve ayrıştırmanın bedeli sıfır.
      */
     const { data, error: queryError } = await supabase
       .from('place_photos')
-      .select('*, profiles!place_photos_user_id_fkey(*)')
+      .select(
+        '*, profiles!place_photos_user_id_fkey(*), diary_entries!place_photos_entry_fk(id, visited_at, rating, note)'
+      )
       .eq('place_id', placeId)
       .order('created_at', { ascending: false });
 
@@ -57,7 +72,29 @@ export function usePlacePhotos(placeId: string | undefined) {
       console.error('[usePlacePhotos] fotoğraflar okunamadı:', queryError);
       setError('Fotoğraflar yüklenemedi. Bağlantını kontrol et.');
     } else {
-      setPhotos((data ?? []) as PlacePhoto[]);
+      /**
+       * Gömülü kaynak normalizasyonu — `usePlaceVisits` / `useActivityFeed` ile
+       * aynı gerekçe: tekil (many-to-one) ilişkiler çalışma anında NESNE
+       * dönüyor ama dizi olarak da gelebiliyor. İki şekli de karşılıyoruz;
+       * `profiles` için bu zaten tüketici tarafında yapılıyordu.
+       */
+      type PhotoRow = Omit<PlacePhoto, 'diary_entries'> & {
+        diary_entries?:
+          | PlacePhoto['diary_entries']
+          | NonNullable<PlacePhoto['diary_entries']>[]
+          | null;
+      };
+
+      const rows = (data ?? []) as unknown as PhotoRow[];
+
+      setPhotos(
+        rows.map((row) => ({
+          ...(row as PlacePhoto),
+          diary_entries: Array.isArray(row.diary_entries)
+            ? (row.diary_entries[0] ?? null)
+            : (row.diary_entries ?? null),
+        }))
+      );
     }
 
     setLoading(false);

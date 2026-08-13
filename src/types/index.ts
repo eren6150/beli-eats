@@ -191,9 +191,33 @@ export interface PlacePhoto {
    * onsuz fotoğrafı sessizce kaybolmuş görünür ve bir hata sanırdı.
    */
   hidden: boolean;
-  created_at: string;
+  /**
+   * Bağlı olduğu ziyaret (migration 020). NULLABLE ve öyle kalacak.
+   *
+   * Dokunma çözümlemesinin BİRİNCİ dalı: doluysa kare bir Ziyaret'e ait, dokunuş
+   * `DiaryEntryDetail`'e gider. Boşsa fotoğraf ya "Puanı Kaydet" akışından ya da
+   * ızgaranın kendi "Menü/Yemek ekle" butonundan gelmiştir — o dalın kararı
+   * `user_rankings`'ten TÜRETİLİYOR (yeni kolon eklenmedi, bkz. "Karar E").
+   */
+  entry_id: string | null;
   /** `select '*, profiles(*)'` ile gelen join — "kim yükledi" için. */
   profiles?: Profile | null;
+  /**
+   * `diary_entries!place_photos_entry_fk(...)` ile gelen join.
+   *
+   * `DiaryEntryDetail` rotası ziyaretin tarihini/puanını/notunu ZORUNLU
+   * istiyor (anlık görüntü kuralı) ve tek başına `entry_id` onu karşılamıyor.
+   * Gömülü almak, dokunma anında ikinci bir sorgu atmayı önlüyor — projenin
+   * "önce karar, sonra aç" kararı (harita POI'si) burada da geçerli.
+   *
+   * `user_id` GEREKMİYOR: migration 020'nin INSERT politikası bir kullanıcının
+   * fotoğrafını yalnızca KENDİ ziyaretine bağlamasına izin veriyor, yani
+   * ziyaretin yazarı fotoğrafın yükleyicisidir (`photo.user_id`).
+   */
+  diary_entries?: Pick<
+    DiaryEntry,
+    'id' | 'visited_at' | 'rating' | 'note'
+  > | null;
 }
 
 export interface Follow {
