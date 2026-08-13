@@ -325,6 +325,20 @@ export type RestaurantDetailParams = {
 export type RestaurantDetailStackParamList = {
   RestaurantDetail: RestaurantDetailParams;
   DiaryEntryDetail: DiaryEntryDetailParams;
+  /**
+   * Fotoğrafın tam ekran görüntüleyicisinde kullanıcı adına dokunmanın hedefi
+   * (2026-08-13).
+   *
+   * ⚠️ BU TİPE BİR ROTA EKLEMEK, DÖRT STACK'İN DÖRDÜNDE BİRDEN KAYIT İSTER.
+   * `UserProfile` eklendiğinde `SearchStack` ve `MapStack`'te KAYITLI DEĞİLDİ —
+   * yani mekan sayfası o iki sekmeden açıldığında dokunuş çalışma anında
+   * patlayacaktı. İkisine de eklendi.
+   *
+   * Kuralı bu tip zorluyor: burada ilan edilen her hedef dördünde de kayıtlı
+   * olmalı, yoksa eksiklik derleme anında değil kullanıcının elinde ortaya
+   * çıkar.
+   */
+  UserProfile: UserProfileParams;
 };
 
 /**
@@ -470,6 +484,23 @@ export type SearchStackParamList = {
    * eşlikçilerindeki tuzağın aynısı.
    */
   DiaryEntryDetail: DiaryEntryDetailParams;
+  /**
+   * `RestaurantDetail`'in İKİNCİ ZORUNLU EŞLİKÇİSİ (2026-08-13): fotoğrafın tam
+   * ekran görüntüleyicisinde kullanıcı adına dokunmak buraya geliyor.
+   *
+   * ⚠️ Fotoğraf ızgarası HERKESİN karesini gösteriyor, yani hedef çoğunlukla
+   * BAŞKA bir kullanıcı — "Senin Ziyaretlerin"in aksine burada kendi kaydımla
+   * sınırlı bir kaçış yok. Kayıt eksikken Ara sekmesinden gelen kullanıcıda
+   * dokunuş çalışma anında patlardı.
+   */
+  UserProfile: UserProfileParams;
+  /**
+   * Aşağıdaki ikisi `UserProfile`'ın kendi eşlikçileri ("Listeler" sekmesi ve
+   * takipçi sayaçları). `UserProfile` BİR STACK'E YALNIZ GİRMİYOR — onu
+   * eklerken hedefleri de eklenmeli.
+   */
+  ListDetail: ListDetailParams;
+  FollowersList: FollowersListParams;
 };
 
 export type MapStackParamList = {
@@ -487,6 +518,13 @@ export type MapStackParamList = {
    * `SearchStackParamList`'teki kayıtla birebir aynı.
    */
   DiaryEntryDetail: DiaryEntryDetailParams;
+  /**
+   * `RestaurantDetail`'in İKİNCİ ZORUNLU EŞLİKÇİSİ (2026-08-13) — gerekçesi
+   * `SearchStackParamList`'teki kayıtla birebir aynı.
+   */
+  UserProfile: UserProfileParams;
+  /** `UserProfile`'ın sayaçlarının hedefi. `ListDetail` yukarıda zaten var. */
+  FollowersList: FollowersListParams;
 };
 
 /**

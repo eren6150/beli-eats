@@ -5,6 +5,8 @@ import MapScreen from '../screens/MapScreen';
 import RestaurantDetailScreen from '../screens/RestaurantDetailScreen';
 import ListDetailScreen from '../screens/lists/ListDetailScreen';
 import DiaryEntryDetailScreen from '../screens/DiaryEntryDetailScreen';
+import UserProfileScreen from '../screens/UserProfileScreen';
+import FollowersListScreen from '../screens/FollowersListScreen';
 import {
   baseStackScreenOptions,
   restaurantDetailScreenOptions,
@@ -41,6 +43,24 @@ export default function MapStack() {
       <Stack.Screen
         name="DiaryEntryDetail"
         component={DiaryEntryDetailScreen}
+        options={{ headerShown: false }}
+      />
+      {/* `RestaurantDetail`'in İKİNCİ zorunlu eşlikçisi (2026-08-13): mekan
+          sayfasındaki fotoğrafın tam ekran görüntüleyicisinde kullanıcı adına
+          dokunmak buraya geliyor. Bu stack'te KAYITLI DEĞİLDİ; ızgaradaki
+          fotoğraflar HERKESE ait olduğu için Harita sekmesinden gelen
+          kullanıcıda dokunuş çalışma anında patlardı. */}
+      <Stack.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
+        options={{ headerShown: false }}
+      />
+      {/* `UserProfile`'ın takipçi/takip sayaçlarının hedefi. Onun diğer iki
+          eşlikçisi (`ListDetail`, `DiaryEntryDetail`) bu stack'te zaten
+          kayıtlıydı — başka gerekçelerle. */}
+      <Stack.Screen
+        name="FollowersList"
+        component={FollowersListScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
