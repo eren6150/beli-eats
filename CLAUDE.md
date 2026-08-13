@@ -20,7 +20,21 @@ dokunuşunu yutuyor** (çözüm: katmanı `Pressable` yap) ve **`UserProfile` d�
 stack'in ikisinde kayıtlı değildi** (Ara/Harita'da uyuyan bir çökme).
 İkisi de Mimari Notlar → **`PhotoViewer`** bölümünde.
 
-⚠️ **Commit atılmadı** — çalışma ağacında 3 yeni + 8 değişmiş dosya duruyor.
+**Beş commit atıldı** (`c0a5163` üstüne), çalışma ağacı temiz, üç ara
+commit'in her biri tek başına typecheck'ten geçiyor:
+
+| Commit | Kapsam |
+|---|---|
+| `88c795b` | Veri katmanı — gömülü ziyaret + `usePlaceRankings` |
+| `e77ea60` | `UserProfile`'ın eksik rota kayıtları (Ara + Harita) |
+| `016c690` | `PhotoViewer` — tam ekran + bilgi şeritleri + ziyaret şeridi |
+| `3bab756` | docs — `box-none` dersi ve eksik rota dersi |
+| `c942109` | Ziyaret detayı yalnızca o ziyaretin fotoğraflarını gösteriyor |
+
+Sıra derlenebilirliğe göre: **veri → rota → görüntüleyici**. Görüntüleyici
+`UserProfile`'a `navigate` ettiği için rota commit'i ondan önce gelmek
+zorundaydı. ⚠️ **Push edilmedi** — içerikler OTA ile zaten sahada ve
+doğrulandı, push yalnızca tarihsel kaydı senkronlar.
 
 **Faz 3'ün sosyal katmanı KAPANDI ve tamamen sahada.** Döngünün tamamı
 push + OTA + gerçek APK'da doğrulandı, arkadaşla çapraz hesap testi de geçti:
