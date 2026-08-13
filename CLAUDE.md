@@ -2,7 +2,25 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-10
+## 📍 Nerede kaldık — 2026-08-13
+
+**Fotoğraf akışının yeniden tasarımı BİTTİ ve sahada** (hepsi OTA, migration
+020 dışında yeni migration yok, native değişiklik yok). Sırayla:
+
+1. ✅ `usePendingPhotos` + `PendingPhotoStrip` çıkarıldı (`37f4343`)
+2. ✅ "Puanı Kaydet" akışından da fotoğraf eklenebiliyor (`c0a5163`)
+3. ✅ **Dokunma çözümlemesi** — sonra **tersine çevrildi** (aşağıda)
+4. ✅ **`PhotoViewer`**: tam ekran fotoğraf + üst/alt bilgi şeritleri, üç
+   katmanlı jest yapısı, açılışta 2 sn görünüp sönme
+5. ✅ Ziyaret detayındaki fotoğraf şeridi de tam ekran açıyor
+6. ✅ Şeritteki **kullanıcı adı profile gidiyor** — dört sekmede de doğrulandı
+
+Bu turun iki kalıcı dersi: **`pointerEvents="box-none"` iç `Pressable`'ın
+dokunuşunu yutuyor** (çözüm: katmanı `Pressable` yap) ve **`UserProfile` dört
+stack'in ikisinde kayıtlı değildi** (Ara/Harita'da uyuyan bir çökme).
+İkisi de Mimari Notlar → **`PhotoViewer`** bölümünde.
+
+⚠️ **Commit atılmadı** — çalışma ağacında 3 yeni + 8 değişmiş dosya duruyor.
 
 **Faz 3'ün sosyal katmanı KAPANDI ve tamamen sahada.** Döngünün tamamı
 push + OTA + gerçek APK'da doğrulandı, arkadaşla çapraz hesap testi de geçti:
@@ -1533,6 +1551,131 @@ Takipçi listesinde uzun basış → onay → o kişi artık seni takip etmiyor.
   takip edebilir"). INSERT politikası değişmedi, değişmemeli de — o kontrol
   herkesin kendi takibini kurmasının tek güvencesi. Instagram da böyle.
 
+### `PhotoViewer` — tam ekran fotoğraf, üç katman (2026-08-13, sahada DOĞRULANDI)
+Fotoğrafa dokunma akışının **yeniden tasarımı**. Bileşen:
+`src/components/photos/PhotoViewer.tsx`, iki yüzeyden çağrılıyor
+(`PhotoGrid` → mekan sayfası, `DiaryEntryDetailScreen` → yatay fotoğraf şeridi).
+
+**Üç katman:** dokunuş → fotoğraf tam ekran · fotoğrafa dokunuş → üst/alt yarı
+saydam şeritler (yazar, ziyaret tarihi, puan, not/yorum) · tekrar dokunuş →
+şeritler söner. Şeritler **açılışta 2 sn görünüp sönüyor** — varsayılan gizli
+olsalardı kullanıcı bilginin VARLIĞINI hiç öğrenemezdi.
+
+#### ⚠️ BU BİR TASARIM KARARININ TERSİNE ÇEVRİLMESİ
+Aynı gün önce **"dokunma çözümlemesi"** yazıldı: `entry_id` doluysa doğrudan
+`DiaryEntryDetail`'e, puan varsa doğrudan `RankingReviewSheet`'e gidiliyordu —
+**fotoğrafı büyütüp göstermeden bile**. Kullanıcı kararıyla tersine çevrildi.
+- **Veri katmanı AYNEN KALDI**, yalnızca hedefi değişti: gömülü
+  `diary_entries!place_photos_entry_fk` ve `usePlaceRankings`'in ikisi de
+  kullanılıyor. Fonksiyonun işi "nereye gideyim" değil **"ne yazayım"** oldu.
+- Kural tek yerde: **`src/lib/photoInfo.ts` → `buildPhotoInfo`**. İki ekran aynı
+  kararı verdiği için ikinci kopya yazılmadı (`getPhotoUrl` bir kez tam olarak
+  böyle iki ekrana dağılmıştı). Ekranlarda kalan tek fark **puanın kaynağı**:
+  mekan sayfası kendi kaydı için taze `existingRanking`'i önceliyor (kaydetme
+  akışının tazelik sorunu yalnızca orada var).
+- **Puan kaynaklı fotoğrafta TARİH YOK ve olmamalı:** bir puanın ziyaret tarihi
+  yoktur (`user_rankings` bir DURUM, `diary_entries` bir OLAY).
+- Bilgisi olmayan fotoğrafta **şeritler hiç açılmıyor** (boş şerit çizmek
+  yerine); çıkış her koşulda görünür çünkü çarpı şeritlerden bağımsız.
+
+#### 🔑 `pointerEvents="box-none"` İÇ `Pressable`'IN DOKUNUŞUNU YUTUYOR (kalıcı ders)
+**Sahada doğrulanan hata sınıfı — "iç öğe tıklanmıyor" şikayetinde İLK bakılacak yer.**
+
+**Neydi:** üst şerit `<View pointerEvents="box-none">` idi ("kendim hedef
+olmam, çocuklarım olabilir") ve içindeki kullanıcı adı `Pressable`'ı **hiç
+dokunuş almıyordu**. Basılı tutunca **solma efekti bile görünmüyordu** — yani
+sorun `onPress`'in yanlış çalışması değil, hedefin **hiç kurulmaması**.
+Dokunuş kök katmana düşüp şeritleri kapatıyordu.
+
+**AYIRT EDİCİ KANIT (teşhisi tek turda kapatan şey):** aynı ekrandaki **çarpı
+butonu ÇALIŞIYORDU** ve o, kök `Pressable`'ın **doğrudan çocuğu**. Kullanıcı
+adı ise `box-none` ilan etmiş bir View'ın **içindeydi**. İkisi arasındaki tek
+yapısal fark buydu.
+- **Şüpheli "iç içe `Pressable`" DEĞİLDİ** — o desen `RankRow`'da (satırın
+  içindeki ok/çöp kutusu) bu projede zaten cihazda doğrulanmıştı. Şüpheli,
+  kendini "hedef değilim" ilan eden bir katmanın çocuklarını hedef
+  yapabilmesiydi.
+- **Bayat OTA bundle'ı ihtimali ÖNCE elendi**, tahminle geçilmedi:
+  `eas update:list --branch preview` ile güncellemenin yayınlandığı (doğru
+  branch, runtime 1.2.0) doğrulandı; kullanıcının **şeritleri görüyor olması**
+  da runtime uyuşmazlığını ve "arkadaşın eski APK'sı" ihtimalini eledi
+  (şeritler zaten bir önceki OTA ile gelmişti).
+
+**Düzeltme — mekanizmayı AYARLAMAK değil, değişkeni KALDIRMAK:**
+`pointerEvents` tamamen silindi, **şerit `View` yerine `Pressable` oldu**
+(`onPress={toggleBars}`). Yapı böylece `RankRow`'un birebir aynısına döndü —
+dış `Pressable` (şerit → kapat) + iç `Pressable` (ad → profil) — ve RN iç içe
+dokunmada **en içteki** hedefi seçiyor. `ListPicker`'da sanallaştırmanın
+kaldırılmasıyla aynı şekildeki karar: mekanizmayı ayarlamak yerine ortadan
+kaldırmak.
+- Yerleşim, boşluklar, güvenli alan payları ve yazı tipi ölçeği davranışı
+  **hiç değişmedi** — `Pressable` da bir `View`.
+- **Alt şerit `pointerEvents="none"` KALDI:** orada tıklanacak bir şey yok ve o
+  yol sahada çalışıyor (dokunuş ATAYA, yani kök `Pressable`'a düşüyor).
+  ⚠️ Ayrım burada: `none` → **ata** yakalar, çalışıyor. `box-none` → **çocuk**
+  yakalayacaktı, çalışmadı.
+- **Kural:** bir katmanın içindeki öğe tıklanabilir olacaksa, o katmanı
+  `box-none` ile "delmeye" çalışma — katmanın kendisini `Pressable` yap.
+
+#### Jest dağılımı — eski "her yere dokun = kapat" gitti
+Görüntüleyicinin tamamı bir dönem tek `Pressable` ile sarılıydı ve **her yere
+dokunmak kapatıyordu**; istenen "dokun → şeritler" tam olarak aynı jestti.
+
+| Jest | Eski | Yeni |
+|---|---|---|
+| Fotoğrafa / boşluğa | Kapatır | **Şeritleri aç/kapat** |
+| Şeridin boş alanı, tarih | Kapatır | Şeritleri kapat |
+| **Kullanıcı adı** | — | **Profile git** |
+| Sağ üst çarpı | **Sahte** (kök yutuyordu) | **Gerçek buton**, hep görünür |
+| Android geri | Kapatır | Kapatır (değişmedi) |
+
+⚠️ Çarpı eskiden bir `View`'dı, kendi `onPress`'i YOKTU; yalnızca kök Pressable
+dokunuşu yuttuğu için çalışıyor görünüyordu. Kökün işi değişince ölü bir ikona
+dönerdi. **Şeritlere bağlı DEĞİL, hep görünür** — yoksa şeritler kapalıyken tek
+çıkış geri tuşu olurdu.
+
+#### ⚠️ Profile giderken görüntüleyici KAPANMAK ZORUNDA
+Açık bir RN `Modal` hedef ekranın önünde kalır (`MapSummarySheet` ve
+`RankingReviewSheet` aynı sebeple önce kapanıyor). Bu yüzden **önce
+`setViewing(null)`, sonra `navigate`**. Sonucu kabul edildi: profilden geri
+gelince ızgaraya dönülüyor, tam ekran fotoğrafa değil. `reopenSummaryRef`
+deseni (işaretle, odakta yeniden aç) **bilinçli olarak yapılmadı** — iki ekrana
+birden kurulması gerekirdi, kullanıcıya maliyeti tek dokunuş.
+
+**Kendi fotoğrafında kullanıcı adı DÜZ METİN**, `disabled` bir `Pressable`
+bırakılmadı: `UserProfile` salt okunur ve kendi profilinde ayarlar/düzenleme
+beklenir (`DiaryEntryDetailScreen.goToAuthor`'ın kararı, "en az sürpriz").
+
+#### 🔑 `UserProfile` DÖRT STACK'İN İKİSİNDE YOKTU — uyuyan çökme
+Kullanıcı adına dokunma eklenirken çıktı ve **isteğin asıl maliyeti buydu**.
+`RestaurantDetail` dört stack'te birden kayıtlı, `UserProfile` ise yalnızca
+`HomeStack` + `ProfileStack`'te. Yani **Ara** veya **Harita** sekmesinden
+girilen mekanda dokunuş **çalışma anında patlayacaktı**.
+- **`UserProfile` bir stack'e YALNIZ GİRMİYOR:** kendi sekmeleri ve sayaçları
+  `ListDetail` · `DiaryEntryDetail` · `FollowersList`'e gidiyor. Toplam **5
+  rota kaydı** eklendi (SearchStack'e üçü, MapStack'e ikisi + iki param listesi).
+- **Koruma artık tipte:** `RestaurantDetailStackParamList`'e `UserProfile`
+  eklendi. O tipe yazılan her hedef dördünde de kayıtlı olmak zorunda ve ekranın
+  navigasyon tipi bu listeye bağlı olduğu için eksik kayıt **derleme anında**
+  yakalanıyor.
+- **Reddedilen alternatif:** adı yalnızca rotanın kayıtlı olduğu sekmelerde
+  tıklanabilir yapmak — aynı görünen şey iki sekmede farklı davranırdı
+  (`RankingReviewSheet`'in "İKİ PROFİLDE DE AYNI DAVRANIŞ" kararına aykırı).
+
+#### Ziyaret detayındaki fotoğraf şeridi de artık tıklanabilir
+Kareler düz `<Image>`'dı, dokunuşun **hiçbir karşılığı yoktu** ve sahada
+"dokunuyorum, hiçbir şey olmuyor" olarak bildirildi. Aynı `PhotoViewer`'a
+bağlandı — görüntüleyicinin `PhotoGrid`'den ayrı bileşene çıkarılmasının ikinci
+sebebi buydu (o yüzey ızgara değil, yatay şerit).
+- ⚠️ **`authorPhotos` filtresi BAYAT ve bilinçli olarak dokunulmadı:**
+  `user_id === authorId` ile süzüyor, yani **yazarın o mekana yüklediği tüm
+  fotoğraflar** — o ziyaretinkiler değil. Ekranın kendi yorumu hâlâ *"doğru
+  çözüm nullable bir giriş kolonu eklemek"* diyor; **migration 020 o kolonu
+  ekledi.** Şeritler geldiği için tutarsızlık artık GÖRÜNÜR: başka bir
+  ziyaretten gelen karede üstte farklı bir tarih yazıyor. Ayrı bir ürün kararı
+  (yalnızca bu ziyaretinkiler mi, yoksa ikiye ayrılmış mı) — Bilinen Açık
+  İşler'de.
+
 ## 📓 OTURUM KAYDI — klavye/edge-to-edge teşhisi (2026-08-06/07)
 
 > **Bu bir "oturum devri" DEĞİL, tarihsel kayıt** — güncel durum dosyanın
@@ -2924,7 +3067,24 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   söylüyor ("Dilerse tekrar takip edebilir"). Engelleme geldiğinde o metin
 >   yeniden değerlendirilmeli.
 >
-> ### 📦 PARK EDİLDİ: fotoğrafların incelemeye bağlanması (2026-08-11)
+> ### ✅ KAPANDI: fotoğrafların incelemeye bağlanması (2026-08-13)
+> Aşağıdaki park kaydı **tarihsel**; iş bitti ve sahada. Sonuç ilk istekten
+> FARKLI ve daha iyi: dokunuş "ilgili incelemeyi açmak" yerine **fotoğrafı tam
+> ekran açıyor, bilgi fotoğrafın üstündeki şeritlerde** duruyor (kullanıcı
+> kararıyla tersine çevrildi). Detay: Mimari Notlar → **`PhotoViewer`**.
+>
+> **Bu turdan kalan TEK açık iş — `authorPhotos` filtresi bayat.**
+> `DiaryEntryDetailScreen`, yazarın o mekana yüklediği **tüm** fotoğrafları
+> gösteriyor (`user_id === authorId`), o ziyaretinkileri değil. Migration 020
+> `entry_id`'yi ekledi, yani artık süzülebilir. Şeritler geldiği için
+> tutarsızlık **görünür** hale geldi (başka ziyaretten gelen karede farklı
+> tarih yazıyor). **Ürün kararı gerekiyor:** yalnızca bu ziyaretinkiler mi,
+> yoksa iki grup mu ("bu ziyaretten" + "bu mekandan")? Ekranın kendi yorumu da
+> bayat, birlikte düzeltilmeli. Kod tarafı küçük, sahada doğrulanmış bir ekranın
+> içeriğini değiştirdiği için bilinçli olarak ertelendi.
+>
+> ---
+> **(Tarihsel) 📦 PARK EDİLDİ: fotoğrafların incelemeye bağlanması (2026-08-11)**
 > İstek: fotoğraflar mekan sayfasından değil, **ziyaret/inceleme yazarken**
 > eklensin; mekanın fotoğraf sekmesinde görünsün, dokununca ilgili inceleme
 > açılsın (Hepsiburada deseni).
