@@ -3073,15 +3073,52 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > ekran açıyor, bilgi fotoğrafın üstündeki şeritlerde** duruyor (kullanıcı
 > kararıyla tersine çevrildi). Detay: Mimari Notlar → **`PhotoViewer`**.
 >
-> **Bu turdan kalan TEK açık iş — `authorPhotos` filtresi bayat.**
-> `DiaryEntryDetailScreen`, yazarın o mekana yüklediği **tüm** fotoğrafları
-> gösteriyor (`user_id === authorId`), o ziyaretinkileri değil. Migration 020
-> `entry_id`'yi ekledi, yani artık süzülebilir. Şeritler geldiği için
-> tutarsızlık **görünür** hale geldi (başka ziyaretten gelen karede farklı
-> tarih yazıyor). **Ürün kararı gerekiyor:** yalnızca bu ziyaretinkiler mi,
-> yoksa iki grup mu ("bu ziyaretten" + "bu mekandan")? Ekranın kendi yorumu da
-> bayat, birlikte düzeltilmeli. Kod tarafı küçük, sahada doğrulanmış bir ekranın
-> içeriğini değiştirdiği için bilinçli olarak ertelendi.
+> **✅ `authorPhotos` filtresi de KAPANDI (2026-08-13).** Ziyaret detayı artık
+> `entry_id === entryId` ile süzüyor, başlık **"Bu ziyaretten fotoğraflar"**,
+> boşsa bölüm hiç çizilmiyor, `usePlaceRankings` o ekrandan kalktı (ziyaret
+> detayı başına bir sorgu eksildi). Migration gerekmedi.
+>
+> **🔑 KARARIN GEREKÇESİ SAYIYA DEĞİL ÜRÜN NİYETİNE DAYANDI — ve bu bir
+> yöntem dersi.** Önce "bağsız fotoğraf oranı yüksekse iki grup göster"
+> şeklinde sayı bazlı bir kural önerilmişti; kullanıcı veritabanındaki 14
+> fotoğrafın neredeyse tamamının **test verisi** olduğunu söyleyince kural
+> geçersiz kaldı — dayanağı gerçek kullanım oranıydı ve eldeki veri onu
+> temsil etmiyordu. Daha kötüsü, kural **iki yorumda zıt sonuç veriyordu**:
+> bağsız fotoğraflar *eski veri* ise oran yükseldikçe "iki grup" doğrulanır,
+> ama *kalıcı bir kategori* ise oran yükseldikçe "iki grup" KÖTÜLEŞİR.
+> - **Belirleyici oldu: bağsız fotoğraf KALICI bir kategori.** "Puanı Kaydet"
+>   ve ızgaranın "Menü/Yemek ekle" yolları onu üretmeye devam ediyor ve
+>   etmeli. Menü fotoğrafı bir ziyaret anısı değil **mekana yapılan katkı** —
+>   fotoğraf özelliğinin varlık sebebi de bu (Faz 2: *"Beli'deki en beğenilen
+>   özellik kullanıcı çekimi menü fotoğrafları"*). Tür taksonomisi de söylüyor:
+>   `food`/`venue` bir ziyarete oturur, **`menu` oturmaz**.
+> - Ayrıca "Puanlama ile günlük arasındaki iş bölümü" kararı puanlamayı **asıl
+>   ve daha sık** yol ilan ediyor; bu oturumda "Puanı Kaydet"e fotoğraf
+>   eklenmesi de bağsız yolu bilerek genişletti.
+> - **Reddedilen "Bu ziyaretten / Bu mekandan diğerleri" ikili gruplaması:**
+>   yanlış değil, **yanlış ekran**. İkinci grubun evi mekan sayfasının dört
+>   sekmeli ızgarası; ziyaret sayfasına sekmesiz bir kopya olarak taşımak o
+>   sayfanın tek konusunu boğardı ve oran yükseldikçe kötüleşirdi.
+> - **Reddedilen kaçış yolu:** *"bu ziyaretin fotoğrafı varsa onları göster,
+>   yoksa mekandakilere düş."* Aynı bölüm bazen bir şeyi bazen başkasını
+>   gösterirdi — migration 011'de "kullanıcıya açıklanamaz" diye reddedilen
+>   sınıfın aynısı.
+> - **Backfill YAPILMADI ve yapılmamalı:** hangi eski fotoğrafın hangi
+>   ziyarete ait olduğu bilinemez; `created_at` yakınlığı tahmin olurdu (aynı
+>   güne birden çok ziyaret girilebiliyor).
+>
+> **⬜ YENİ AÇIK İŞ — puan kaydının fotoğrafları hiçbir okuma görünümünde yok.**
+> "Puanı Kaydet" ile yüklenen kareler (`entry_id` boş) yalnızca mekan
+> sayfasının ızgarasında yaşıyor; puanın okuma görünümü olan
+> `RankingReviewSheet` **fotoğraf göstermiyor**. Ziyaret tarafında simetrisi
+> var (ziyaret detayı kendi fotoğraflarını gösteriyor), puan tarafında yok.
+> - **Bugün bir hata üretmiyor** — fotoğraflar kayıp değil, mekan sayfasında
+>   duruyorlar. Bu yüzden kapsam dışı bırakıldı.
+> - Yapılırsa: sheet'e `place_photos`'tan `user_id + place_id` eşleşen ve
+>   `entry_id`'si BOŞ kareler; `usePlacePhotos` zaten bu veriyi getiriyor ama
+>   sheet'in elinde yok (parametreyle besleniyor, sorgu atmıyor) — yani asıl
+>   soru "sheet sorgu atmalı mı" ve bu onun **anlık görüntü kuralını** deler.
+>   Küçük ama düşünülmesi gereken bir tasarım kararı.
 >
 > ---
 > **(Tarihsel) 📦 PARK EDİLDİ: fotoğrafların incelemeye bağlanması (2026-08-11)**

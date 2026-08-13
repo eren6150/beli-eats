@@ -18,7 +18,6 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../hooks/useAuth';
 import { usePlacePhotos } from '../hooks/usePlacePhotos';
-import { usePlaceRankings } from '../hooks/usePlaceRankings';
 import { useEntryLikes } from '../hooks/useEntryLikes';
 import { DiaryEntryDetailParams, PlacePhoto } from '../types';
 import { photoUrl } from '../lib/places';
@@ -96,19 +95,38 @@ export default function DiaryEntryDetailScreen() {
   const { photos, fetchPhotos } = usePlacePhotos(placeId);
 
   /**
-   * ⚠️ YAKLAŞIK EŞLEŞME — bilinçli ve v1 kararı.
+   * BU ZİYARETİN fotoğrafları — tam eşleşme (2026-08-13).
    *
-   * `place_photos` fotoğrafı MEKANA + KULLANICIYA bağlıyor, GİRİŞE DEĞİL.
-   * Yani "bu ziyaretin fotoğrafları" diye bir şey şemada yok; buradakiler
-   * yazarın o mekana yüklediği fotoğraflar ve BAŞKA BİR ZİYARETTEN olabilir.
-   * Başlık bu yüzden "bu ziyaretin" demiyor, "bu mekandan" diyor — kullanıcıya
-   * olmayan bir kesinlik vaat etmiyoruz.
+   * ── ESKİDEN YAKLAŞIK EŞLEŞMEYDİ ─────────────────────────────────────────
+   * Filtre `user_id === authorId` idi, yani yazarın o mekana yüklediği TÜM
+   * fotoğraflar; başlık da bu yüzden "bu ziyaretin" değil "bu mekandan"
+   * diyordu. Kod yorumu *"doğru çözüm `place_photos`'a nullable bir giriş
+   * kolonu eklemek"* diye not düşmüştü — **migration 020 o kolonu ekledi**
+   * (`entry_id`, FK + `idx_place_photos_entry_id`), ama filtre eski mantıkta
+   * kalmıştı.
    *
-   * Doğru çözüm `place_photos`'a nullable `diary_entry_id` eklemek, ama o
-   * fotoğraf YÜKLEME akışının da girişi bilmesini gerektiriyor — ayrı ve daha
-   * büyük iş. Nullable kolon olduğu için sonradan eklemek ucuz.
+   * Tutarsızlık `PhotoViewer`'ın bilgi şeritleri gelene kadar GÖRÜNMÜYORDU:
+   * başka bir ziyaretten gelen kareye dokununca üst şeritte sayfanın
+   * tarihiyle çelişen bir tarih çıkıyordu. Sahada bu şekilde fark edildi.
+   *
+   * ── NEDEN "SADECE BU ZİYARET", NEDEN İKİ GRUP DEĞİL ─────────────────────
+   * `entry_id`'si BOŞ fotoğraf geçici değil KALICI bir kategori: "Puanı
+   * Kaydet" ve ızgaranın "Menü/Yemek ekle" yolları onu üretmeye devam ediyor
+   * ve etmeli — menü fotoğrafı bir ziyaret anısı değil, MEKANA yapılan bir
+   * katkı (fotoğraf özelliğinin varlık sebebi de tam olarak bu, bkz. Faz 2).
+   * Dolayısıyla onların evi mekan sayfasının dört sekmeli ızgarası; ziyaret
+   * sayfasına ikinci kez, sekmesiz bir kopya olarak taşımak bu sayfanın tek
+   * konusunu (bir ziyaret) boğardı. Değerlendirilen "Bu ziyaretten / Bu
+   * mekandan diğerleri" ikili gruplaması bu yüzden REDDEDİLDİ.
+   *
+   * Ziyarette fotoğraf yoksa bölüm HİÇ ÇİZİLMİYOR (aşağıda) — bu eksik bir
+   * cevap değil, doğru cevap.
+   *
+   * ⚠️ `authorId` KONTROLÜ GEREKMİYOR: migration 020'nin INSERT politikası bir
+   * kullanıcının fotoğrafını yalnızca KENDİ ziyaretine bağlamasına izin
+   * veriyor, yani `entry_id` eşleşmesi yazarı da garanti ediyor.
    */
-  const authorPhotos = photos.filter((p) => p.user_id === authorId);
+  const entryPhotos = photos.filter((p) => p.entry_id === entryId);
 
   /**
    * Şeritteki kareler artık TAM EKRAN AÇILIYOR.
@@ -125,24 +143,26 @@ export default function DiaryEntryDetailScreen() {
   const [viewing, setViewing] = useState<PlacePhoto | null>(null);
 
   /**
-   * Şeritlerdeki puan bilgisinin kaynağı.
+   * ⚠️ `usePlaceRankings` BU EKRANDA YOK — ve FİLTREYE BAĞLI.
    *
-   * `entry_id`'si olan kareler için GEREKMİYOR — ziyaret verisi fotoğraf
-   * sorgusunda zaten gömülü. Yalnızca `entry_id`'si boş kareler (yazarın bu
-   * mekana doğrudan yüklediği fotoğraflar) için lazım.
+   * O hook, `entry_id`'si BOŞ bir karenin şeridini doldurmak için gerekiyor
+   * (`buildPhotoInfo`'nun ikinci dalı). Filtre `entry_id === entryId` olduğu
+   * için bu şeritte öyle bir kare **olamaz**: her karenin `entry_id`'si dolu,
+   * yani `buildPhotoInfo` her zaman BİRİNCİ dala giriyor ve ziyaret verisini
+   * fotoğraf sorgusundan gömülü olarak alıyor. Hook burada ölü koddu ve
+   * ziyaret detayı başına bir sorgu yakıyordu; kaldırıldı.
    *
-   * ⚠️ Mekan sayfasındaki "kendi kaydım kazanır" istisnası BURADA YOK ve
-   * gerekmiyor: o istisna kaydetme akışının tazelik sorunundan doğuyordu, bu
-   * ekranda kaydetme yok.
+   * 🔗 FİLTRE GEVŞETİLİRSE GERİ GELMELİ. Bu şeride `entry_id`'si boş bir kare
+   * girdiği an (ör. "bu mekandan diğerleri" grubu eklenirse) puan/yorum
+   * şeritleri SESSİZCE boş kalır — hata vermez, sadece bilgi kaybolur.
+   * `rankingOf` o zaman tekrar `buildPhotoInfo`'ya verilmeli.
    */
-  const { rankingOf, fetchPlaceRankings } = usePlaceRankings(placeId);
 
   useFocusEffect(
     useCallback(() => {
       fetchLikes();
       fetchPhotos();
-      fetchPlaceRankings();
-    }, [fetchLikes, fetchPhotos, fetchPlaceRankings])
+    }, [fetchLikes, fetchPhotos])
   );
 
   const heroUrl = photoUrl(photoReference, PLACE_PHOTO_WIDTH);
@@ -243,18 +263,24 @@ export default function DiaryEntryDetailScreen() {
           <Text style={styles.noteEmpty}>Bu ziyarete not eklenmemiş.</Text>
         )}
 
-        {/* ── Fotoğraflar ── başlık kasıtlı olarak "bu ziyaretin" demiyor. */}
-        {authorPhotos.length > 0 && (
+        {/* ── Fotoğraflar ──
+            Başlık artık gerçeği söylüyor: bunlar TAM OLARAK bu ziyaretin
+            kareleri (gerekçe `entryPhotos`'un yorumunda). İsim/davranış
+            uyumsuzluğu bu projede dört kez pahalıya patladı.
+
+            BOŞSA HİÇ ÇİZİLMİYOR: `EmptyState` bu ölçekte orantısız ve ekran
+            salt okunur — "fotoğraf ekle" çağrısı da konmuyor, yükleme yolu
+            ziyaret formunda. Liste açıklamasının ve "Senin Ziyaretlerin"in
+            aynı kararı. */}
+        {entryPhotos.length > 0 && (
           <View style={styles.photoSection}>
-            <Text style={styles.photoTitle}>
-              @{authorUsername} · bu mekandan fotoğraflar
-            </Text>
+            <Text style={styles.photoTitle}>Bu ziyaretten fotoğraflar</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.photoStrip}
             >
-              {authorPhotos.map((photo) => {
+              {entryPhotos.map((photo) => {
                 // Küçük kopya (`thumb_path`) — ücretsiz katmanda egress hesabı
                 // buna dayanıyor, ızgara/şerit ASLA tam boyu kullanmamalı.
                 // Tam boy YALNIZCA `PhotoViewer`'da iniyor.
@@ -316,7 +342,10 @@ export default function DiaryEntryDetailScreen() {
           yani iki yüzey tek kuralı paylaşıyor. */}
       <PhotoViewer
         photo={viewing}
-        info={viewing ? buildPhotoInfo(viewing, rankingOf) : null}
+        // `rankingOf` yerine hep-null: bu şeritteki her karenin `entry_id`'si
+        // dolu, yani `buildPhotoInfo` ikinci dala HİÇ girmiyor. Gerekçe ve
+        // filtreye bağımlılık uyarısı yukarıda.
+        info={viewing ? buildPhotoInfo(viewing, () => null) : null}
         onClose={() => setViewing(null)}
         /**
          * Kullanıcı adına dokunuş → yükleyicinin profili.
