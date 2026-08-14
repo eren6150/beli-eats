@@ -4,6 +4,18 @@
 
 ## 📍 Nerede kaldık — 2026-08-13
 
+**GÖRSEL KİMLİK YENİLEMESİ BİTTİ ve sahada** (altı tur, hepsi OTA, migration
+yok, native değişiklik yok). Marka rengi **zeytin yeşili `#5F7527`**, zemin
+sıcak krem, font **Google Sans Flex**, tipografi ölçeğinin kontrastı açıldı,
+`RankRow`/`ProfileHeader`/puanlama bloğu/segment sekmeler yenilendi.
+Kararlar, FireVibe'ın nasıl kullanıldığı ve çıkarılan dersler:
+**Yol Haritası → Faz 4 → "Görsel kimlik yenilemesi tamamlandı"**.
+
+⚠️ **Faz 4'ün NATIVE tarafı duruyor ve İSİM KARARINI bekliyor** — ikon, native
+splash, `adaptiveIcon` rengi ve **uygulama adı**. Rebrand ("Sofra") için tam
+teşhis + plan çıkarıldı ama **kullanıcı kararıyla ertelendi**; ayrıntı Bilinen
+Açık İşler → **Rebrand**.
+
 **Fotoğraf akışının yeniden tasarımı BİTTİ ve sahada** (hepsi OTA, migration
 020 dışında yeni migration yok, native değişiklik yok). Sırayla:
 
@@ -2940,10 +2952,73 @@ PGRST201 dersi: Mimari Notlar → **Aktivite akışı**.
 İsim ve logo. Bilinçli olarak en sona bırakıldı: ürün netleştikten sonra isim bulmak,
 boşluğa isim uydurmaktan kolay.
 
-#### 📌 BACKLOG — görsel kimlik için FireVibe (not: 2026-08-07, ŞU AN YAPILMIYOR)
-Kullanıcının değerlendirdiği araç: **FireVibe** (firevibe.ai) — prompttan mobil
-uygulama ekranı / marka / renk / font üretiyor, React Native'e export edebiliyor.
-Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düşüldü.
+### ✅ GÖRSEL KİMLİK YENİLEMESİ TAMAMLANDI (2026-08-13, altı tur, hepsi OTA)
+Faz 4'ün **OTA tarafı bitti**; kalan yalnızca native taraf (aşağıda). Sıra
+bilinçliydi: her tur tek başına gönderildi ve cihazda doğrulandı, çünkü iki
+değişkeni aynı anda değiştirip hangisinin ne yaptığını kaybetmek istemedik.
+
+| # | Tur | Commit |
+|---|---|---|
+| ① | Zeytin yeşili ramp + sıcak zemin + yeni puanlama sarısı | `1ee3dbb` |
+| ② | Tipografi ölçeği (display 32 / title 24 / heading 18) | `ff9ac86` |
+| ③ | `RankRow` `01/02/03` + ok · `ProfileHeader` yeni dizilim + bio | `58123ed` |
+| ④ | Puanlama bloğu · segment çip · ızgara köşeleri · "Tümü ›" | `997f45f` |
+| ⑤ | Google Sans Flex fontu | `ff9ac86` |
+
+⚠️ ② ve ⑤ **aynı commit'te**: ölçek değişikliğiyle `fontFamily` eklemesi
+`Type`'ın aynı satırlarına düştü, hunk bazında ayrılamıyorlardı.
+
+#### 🎨 Kalıcı kararlar
+- **Marka `#5F7527` (zeytin).** 500 adımı ELLE seçildi, ara adımlar HSL ile
+  ondan türetildi; hesaplanan `#607728`'e yuvarlanmadı. Beş marka token'ı
+  ramp'ten otomatik dönüyor.
+- **Kontrast tesadüfen düzeldi:** beyaz metin birincil butonun üstünde eski
+  yeşilde **2.3:1** (WCAG AA eşiği 4.5) idi, zeytinde **5.2:1**.
+- ⚠️ **RAMP'E BAĞLI OLMAYAN İKİ DEĞER VAR** ve marka değişiminde **elle**
+  güncellenmeli: `Colors.brandShadow` (`rgba()` gerektiriyor) ve
+  `MapScreen`'in `pinColor`'ı. İkisi de bu turda kaçmıştı, yakalandı.
+- **Zemin sıcak nötr (`sand`), metin/kenarlık grileri NÖTR kaldı** — onları da
+  ısıtmak metni çamurlaştırır.
+- **Font: Google Sans Flex.** ⚠️ Bu font bir dönem kullanılamazdı ("Google
+  Sans" tescilliydi); **2025'te OFL-1.1 ile açık kaynağa çevrildi**. Eski
+  bilgiyle karşılaşan biri `theme.ts`'teki lisans notunu okusun.
+- ⚠️ **Android özel fontta `fontWeight` sentezlemiyor** → her rol kendi yüz
+  adına bağlı. Ve **`fontWeight` silinmedi**: 11 yer onu tek tek okuyor (hepsi
+  `TextInput`, çünkü `...Type.X` spread etmek bu projede yasak). Silinseydi
+  bütün form alanları sessizce ağırlığını kaybederdi.
+
+#### 📌 FireVibe — NASIL KULLANILDI (2026-08-13)
+Araç: **FireVibe** (firevibe.ai) — prompttan mobil ekran/marka/renk/font
+üretiyor. **Kod hiç aktarılmadı**, plandaki gibi yalnızca görsel referans
+alındı. Sırası gelirse tekrar kullanmak için çıkarılan dersler:
+
+- **⚠️ EN PAHALI HATA: BRIEF'İ FAZLA KISITLAMAK.** İlk prompt mevcut tasarım
+  sistemini hex hex, rol rol tarif edip *"bunu evrimleştir"* dedi — çıktı
+  **uygulamanın %95 aynısı** oldu. Araca cevabı verip cevabı geri aldık.
+  Düzeltme: mevcut değerlerden yalnızca **semantik zorunluluk** olanları
+  bırakmak (marka rengi + yıldız amber'ı, çünkü çakışmamaları gerekiyor),
+  tipografi/boşluk/köşe ölçeklerini **tamamen araca bırakmak**, ve mevcut hali
+  *"hedef değil, kaçınılacak nokta"* olarak konumlandırmak.
+- **"Daha farklı yap" DEME.** O cümle aracı doğrudan premium/lüks estetiğe
+  savuruyor. Değişimi **somut eksenlere** kanalize et (tipografi, ritim/
+  yoğunluk, köşe dili, fotoğraf çerçeveleme, puanlama anı, satır hiyerarşisi).
+- **Anti-premium bloğu ve yapısal ilkeler korkuluktur**, kısaltırken en son
+  onlara dokun: "gölge yerine 1px kenarlık", "dekoratif renk yok",
+  "fotoğraflar en renkli şey olsun, arayüz sessiz kalsın".
+- **5000 karakter sınırı var.** Kesim sırası: önce his referansları, sonra
+  teslimat paragrafı, sonra ekran tarifleri. Hazır metinler scratchpad'de
+  değil, gerekirse bu bölümden yeniden kurulur.
+- **Araç ara sorular soruyor** (aksan rengi, hedef kitle). İkisinde de doğru
+  cevap koddan geldi: aksan **yeşil ailesinde kalmalı** çünkü amber yıldızlar
+  13 dosyada ve marka onlara karışmamalı; hedef kitle **"ziyaretlerini özenle
+  kaydeden düzenli yiyiciler"** çünkü ürünün omurgası kişisel kayıt
+  (`user_rankings` + `diary_entries`), sosyallik üstüne binen katman.
+- **Sonuç dürüstçe:** araç işe yaradı ama **yönlendirme maliyeti yüksek**.
+  Değerli çıktısı renk yönü (zeytin) ve birkaç yerleşim fikriydi; kalan her
+  şey elle kararlaştırıldı.
+
+#### 📌 (Tarihsel) BACKLOG notu — 2026-08-07
+Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düşülmüştü.
 
 - **Öncelik DEĞİL.** Mevcut işlevsellik tamamlandıktan **sonra** ele alınacak.
 - **Kod AKTARILMAYACAK — yalnızca görsel referans.** FireVibe'ın ürettiği
@@ -3152,6 +3227,47 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   Şüpheliler: `useDiary`, `useActivityFeed`, `usePlaceVisits`. Migration ile
 >   istemci düzeltmesi **aynı diff'te** gitmeli.
 
+> ### 🏷️ REBRAND — teşhis + plan HAZIR, isim kararı ERTELENDİ (2026-08-13)
+> "Beli-Eats" → **"Sofra"** kararı verilmiş, tam envanter ve sıralı plan
+> çıkarılmış, sonra **kullanıcı kararıyla park edilmişti** ("şimdilik bir
+> kenara bırakıyoruz, geri döneceğiz"). Yeniden başlarken sıfırdan teşhis
+> gerekmesin diye özet:
+>
+> **Kozmetik (A):** dört ekrandaki görünen ad (splash + üç auth ekranı, saf JS
+> → OTA) · `app.json`'daki `name` ve üç izin metni (**native → build**) ·
+> `theme.ts`/`types` başlıkları · `docs/index.html` · `package.json`.
+>
+> **Kimlik (B) — hepsi kullanıcıya GÖRÜNMEZ:**
+> `android.package` + `ios.bundleIdentifier` (`com.eren.belieats`) · `scheme`
+> (`belieats`) · `slug` · EAS `projectId` (UUID, isim taşımıyor) · Supabase
+> URL (**isimle bağı yok**, doğrulandı) · GitHub repo adı · Google Cloud.
+>
+> **⚠️ ÜÇ GİZLİ BAĞ — plan yapılırken ortaya çıktı:**
+> 1. **Paket adı Google Maps anahtarının kısıtına bağlı** (SHA-1 + paket).
+>    Console'da güncellenmezse harita **sessizce boş** gelir.
+> 2. **`scheme` Supabase Redirect URLs'te kayıtlı** (`belieats://auth-callback`)
+>    — e-posta onayı ve Google girişi oradan geçiyor.
+> 3. **GitHub repo adı → GitHub Pages URL → Supabase Site URL.** Repo yeniden
+>    adlandırılırsa onay maili iniş sayfası kırılır; ikisi **aynı oturumda**
+>    yapılmalı.
+>
+> **Panel işlerinin sırası:** EAS projesi yeniden adlandır → SHA-1'i al →
+> Google Cloud'a **yeni paketi EKLE** (eskisini SİLME) → Supabase'e **yeni
+> scheme'i EKLE** (eskisini SİLME) → kod → build → **önce yeni APK'yı kur ve
+> doğrula, SONRA eskisini sil** → temizlik (eski kayıtları sil, repo adı +
+> Site URL birlikte).
+>
+> ⚠️ Paket adı değişirse yeni APK eskisinin **üstüne yüklenmez** (farklı paket
+> = farklı uygulama); herkesin kaldırıp yeniden kurması gerekir. **`fingerprint`
+> runtimeVersion işi tam bu build'e binmeli** — onun tek maliyeti de sahadaki
+> kurulumları OTA'dan koparmak ve o bedel zaten ödenmiş olacak.
+>
+> ⚠️ **İsim riski kayıt altında:** "Sofra" yeme-içme sektöründe dolu — [Sofra
+> Grup](https://sofragrup.com/) (1987'den beri, Compass Group Türkiye),
+> `sofra.com.tr` alınmış, Play Store'da bir düzine "Sofra*" uygulaması var.
+> Keşfedilebilirlik sorunu kesin, marka tarafı değerlendirilmedi. Alan adı
+> müsaitliği **kayıt şirketinden kontrol edilmeli** (arama sonuçları yetersiz).
+>
 > ### 📦 BUILD 2'NİN PAKETİ — Build 1 ile altı maddenin dördü kapandı
 > Build 1'de gitti: **keyboard-controller** (native taraf) · **kaydırmalı
 > sekmeler** · **`expo` yama farkı** · **deep link + Google girişi**.
@@ -3169,6 +3285,23 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > `versionCode` +1 her zaman, `version` +1 native değişiklik varsa. Kalan iki
 > maddenin **ikisi de** native değişiklik. Ayrıca 1. madde `runtimeVersion`
 > politikasını değiştirdiği için sahadaki kurulumları OTA'dan koparır.
+>
+> ### 🔧 GÖRSEL KİMLİK TURUNDAN KALAN ÜÇ KÜÇÜK NOT (2026-08-13)
+> Üçü de bugün bir hata üretmiyor; unutulmasın diye.
+> 1. **`RankRow`'un yorum önizlemesi `fontStyle: 'italic'` kullanıyor ama
+>    yüklediğimiz font paketinde italik yüz YOK.** Android eğik hâli taklit
+>    edebilir ya da düz çizebilir. Figtree'de de aynı durumdaydı (o pakette
+>    italik vardı ama yüklemiyorduk), yani bir gerileme değil. Rahatsız
+>    ederse çözüm italiği kaldırıp ayrımı renk/ağırlıkla yapmak — italik yüz
+>    yüklemek OTA'ya ~130 KB daha ekler.
+> 2. **`review_text`'in şemada hâlâ CHECK kısıtı yok.** İstemciye 1000
+>    karakter sınırı ve sayaç kondu (`REVIEW_MAX`), ama bu bir savunma;
+>    gerçek tavan için ayrı bir migration gerekiyor. Daha uzun bir kayıt
+>    sunucudan gelirse kırpılmıyor, yalnızca uzatılamıyor.
+> 3. **Google Sans Flex'in tabular rakam desteği doğrulanmadı.** `RankRow`'un
+>    sıra sütunu ve puan değeri `fontVariant: ['tabular-nums']` kullanıyor;
+>    font desteklemiyorsa rakamlar oynayabilir. Sütun genişliği sabit olduğu
+>    için **yerleşim bozulmaz**, yalnızca hizalar kayar.
 >
 > ### 🚀 OTA İLE GİDEBİLECEK BİRİKMİŞ İŞLER (build beklemiyor)
 > Sıradakilerin hepsi saf JS ve/veya migration:
