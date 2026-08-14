@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
-import { Colors, Spacing, Type } from '../../constants/theme';
+import { Colors, Radius, Spacing, Type } from '../../constants/theme';
 
 /**
- * Alt çizgili sekme şeridi.
+ * Segment sekme şeridi — tonlu yiv içinde beyaz aktif çip.
  *
  * Profil sekmelerinde (Sıralamam / Günlük / Listeler) kullanılıyor. Faz 2'de
  * mekan sayfasındaki fotoğraf türü sekmeleri (Menü / Yemek / Mekan) AYNI
@@ -57,31 +57,44 @@ export default function SegmentedTabs<T extends string>({
   );
 }
 
+/**
+ * ── ALT ÇİZGİDEN BEYAZ ÇİPE (2026-08-13) ───────────────────────────────────
+ * Önceki hal: şeffaf zemin + aktif sekmenin altında 2px marka çizgisi.
+ * Yeni hal: tonlu bir yiv (`canvasAlt`) içinde, aktif sekme BEYAZ bir çip.
+ *
+ * Gerekçe tasarım turundan: alt çizgi seçili sekmeyi ancak dikkatle bakınca
+ * belli ediyordu; dolu çip seçimi bir bakışta okutuyor ve sekme şeridini
+ * içerikten net biçimde ayırıyor.
+ *
+ * ⚠️ GÖLGE YOK. Yükselti hissi yiv ile çip arasındaki YÜZEY KONTRASTINDAN
+ * geliyor — projenin Midas kararı gölgeyi yalnızca birincil butona, bottom
+ * sheet'e ve harita üstündeki karta ayırıyor.
+ */
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderSubtle,
+    backgroundColor: Colors.canvasAlt,
+    borderRadius: Radius.full,
+    padding: Spacing.xxs,
+    gap: Spacing.xxs,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    // Aktif göstergenin 2px'i, kapsayıcının 1px alt çizgisini örtsün —
-    // yoksa iki çizgi üst üste binip kalınlık tutarsız görünüyor.
-    marginBottom: -1,
+    justifyContent: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.xxs,
+    borderRadius: Radius.full,
   },
   tabActive: {
-    borderBottomColor: Colors.brand,
+    backgroundColor: Colors.surface,
   },
   tabPressed: {
     opacity: 0.6,
   },
   label: {
-    ...Type.bodyStrong,
-    color: Colors.textMuted,
+    ...Type.captionStrong,
+    color: Colors.textSecondary,
   },
   labelActive: {
     color: Colors.textPrimary,

@@ -141,6 +141,7 @@ export default function MapSummarySheet({
             <SectionHeader
               title="Puanladıklarım"
               actionLabel={rankings.length > 0 ? 'Tümünü gör' : undefined}
+              actionIsLink
               onAction={rankings.length > 0 ? onSeeAllRankings : undefined}
               style={styles.sectionHeader}
             />
@@ -176,6 +177,7 @@ export default function MapSummarySheet({
             <SectionHeader
               title="Listelerim"
               actionLabel={lists.length > 0 ? 'Tümünü gör' : undefined}
+              actionIsLink
               onAction={lists.length > 0 ? onSeeAllLists : undefined}
               style={styles.sectionHeader}
             />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { Colors, Spacing, Type } from '../../constants/theme';
+import Icon from './Icon';
 
 /**
  * Bölüm başlığı — başlık + opsiyonel alt yazı + opsiyonel sağ aksiyon.
@@ -23,6 +24,15 @@ export interface SectionHeaderProps {
   /** Sağ tarafta metin buton — verilmezse çizilmez. */
   actionLabel?: string;
   onAction?: () => void;
+  /**
+   * Aksiyon bir EYLEM değil GEZİNME ise `true`: etiketin sonuna ok ekleniyor.
+   *
+   * Ayrım kasıtlı. "Menü ekle" bir eylemdir, sonuna ok koymak "bir yere
+   * gidiyorsun" diye yanlış söz verir; "Tümünü gör" ise gerçekten başka bir
+   * ekrana götürüyor. Varsayılan `false`, yani mevcut çağıranların hiçbiri
+   * değişmiyor.
+   */
+  actionIsLink?: boolean;
   style?: ViewStyle;
 }
 
@@ -32,6 +42,7 @@ export default function SectionHeader({
   badge,
   actionLabel,
   onAction,
+  actionIsLink = false,
   style,
 }: SectionHeaderProps) {
   // Etiket varsa ama handler yoksa buton çizmek yanıltıcı olurdu.
@@ -51,9 +62,12 @@ export default function SectionHeader({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           {({ pressed }) => (
-            <Text style={[styles.action, pressed && styles.actionPressed]}>
-              {actionLabel}
-            </Text>
+            <View style={[styles.actionRow, pressed && styles.actionPressed]}>
+              <Text style={styles.action}>{actionLabel}</Text>
+              {actionIsLink ? (
+                <Icon name="forward" size={16} color={Colors.brandStrong} />
+              ) : null}
+            </View>
           )}
         </Pressable>
       ) : badge ? (
@@ -81,6 +95,11 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.textSecondary,
     marginTop: Spacing.xxs,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xxs,
   },
   action: {
     ...Type.bodyStrong,

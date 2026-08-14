@@ -71,7 +71,45 @@ const HERO_HEIGHT = 280;
 /** Galeride gösterilecek en fazla fotoğraf. */
 const MAX_PHOTOS = 8;
 
+/**
+ * Yorum uzunluğu sınırı — İSTEMCİDE, şemada DEĞİL.
+ *
+ * ⚠️ BİLİNEN BİR TUTARSIZLIĞI KAPATIYOR: `user_rankings.review_text`
+ * projedeki TEK sınırsız serbest metindi (`note` 1000, `bio` 300, liste
+ * açıklaması 500 — hepsinin sınırı var). CLAUDE.md bunu açık iş olarak
+ * kaydetmişti; sayaç eklemek bir sayı seçmeyi zorunlu kıldı.
+ *
+ * 1000 seçildi çünkü bu alanın eşi `diary_entries.note` (o da 1000): ikisi de
+ * "bir paragraf yaz" ölçeğinde. Tasarım turundaki mockup 500 gösteriyordu,
+ * bilinçli olarak uyulmadı — tutarlılık mockup'taki sayıdan önce geliyor.
+ *
+ * ⚠️ ŞEMADA CHECK KISITI YOK. Bu bir savunma, gerçek tavan değil; daha uzun
+ * bir kayıt sunucudan gelirse KIRPILMIYOR, yalnızca uzatılamıyor. Gerçek
+ * kısıt ayrı bir migration işi.
+ */
+const REVIEW_MAX = 1000;
+
 // ─── Puan seçici ──────────────────────────────────────────────────────────────
+
+/**
+ * Puana karşılık gelen kısa sıfat.
+ *
+ * Tasarım turunda puanlama bloğunun altında bir açıklama satırı vardı. İki işi
+ * birden görüyor: kutuya hayat katıyor VE puan seçilince alt satırın boş
+ * kalıp yerleşimi zıplatmasını önlüyor (puansız halde "Puan seçmek için dokun"
+ * yazıyor, seçilince yerine bu geçiyor).
+ *
+ * Yarım yıldız adımlarını da karşılıyor; eşikler yukarıdan aşağı taranıyor.
+ */
+function ratingWord(value: number): string {
+  if (value >= 5) return 'Mükemmeldi';
+  if (value >= 4.5) return 'Harikaydı';
+  if (value >= 4) return 'Çok iyiydi';
+  if (value >= 3.5) return 'İyiydi';
+  if (value >= 3) return 'Fena değildi';
+  if (value >= 2) return 'İdare ederdi';
+  return 'Beklediğim gibi değildi';
+}
 
 function RatingSelector({
   value,
@@ -81,10 +119,22 @@ function RatingSelector({
   onChange: (v: number) => void;
 }) {
   return (
+    /**
+     * Yıldızlar artık TONLU BİR KUTUNUN içinde — tasarım turunda "yıldızlar
+     * daha büyük duruyor" diye algılanan şey aslında buydu, boyut değil.
+     * `StarRating`'in `size` değeri BİLİNÇLİ OLARAK DEĞİŞMEDİ (32).
+     */
     <View style={styles.selector}>
-      <StarRating rating={value} size={32} onChange={onChange} />
-      <Text style={styles.selectorValue}>
-        {value > 0 ? `${value.toFixed(1)} / 5.0` : 'Puan seçmek için dokun'}
+      <View style={styles.selectorRow}>
+        <StarRating rating={value} size={32} onChange={onChange} />
+        {/* Sayı yalnızca puan varken; 0'da yerini boş bırakmıyor, hiç
+            çizilmiyor. */}
+        {value > 0 ? (
+          <Text style={styles.selectorValue}>{value.toFixed(1)}</Text>
+        ) : null}
+      </View>
+      <Text style={styles.selectorHint}>
+        {value > 0 ? ratingWord(value) : 'Puan seçmek için dokun'}
       </Text>
     </View>
   );
@@ -749,9 +799,13 @@ export default function RestaurantDetailScreen() {
             <SectionHeader
               title="Yorumun"
               subtitle="Mekan hakkındaki genel görüşün"
+              // Sayaç TIKLANAMAZ bilgi metni, yani `badge` yuvası — aksiyon
+              // değil. `DiaryEntrySheet`'in not alanındaki sayacın karşılığı.
+              badge={`${reviewText.length}/${REVIEW_MAX}`}
             />
             <TextInput
               style={styles.reviewInput}
+              maxLength={REVIEW_MAX}
               placeholder="Bu mekan hakkında ne düşünüyorsun?"
               placeholderTextColor={Colors.textMuted}
               multiline
@@ -1014,10 +1068,40 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
 
-  selector: { alignItems: 'center', paddingTop: Spacing.xs },
+  /**
+   * Tonlu puanlama kutusu. Gölge YOK — derinlik yüzey kontrastı ve ince
+   * kenarlıktan geliyor (Midas kararı, `theme.ts`'in başında yazılı).
+   */
+  selector: {
+    marginTop: Spacing.xs,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.brandSurface,
+    borderWidth: 1,
+    borderColor: Colors.brandBorder,
+  },
+  /**
+   * Yıldızlar solda, sayı sağda.
+   *
+   * GENİŞLİK HESABI: 5 yıldız × 32 × 1.3 = 208px, sayı ~40px. 360dp'lik bir
+   * ekranda ekran dolgusu (2×20) ve kutu dolgusu (2×16) düşünce 288px kalıyor,
+   * yani ~40px pay var. Daha dar cihazlarda sayı sıkışabilir; bu yüzden sayı
+   * `flexShrink` almıyor ama yıldızlar da büyütülmüyor.
+   */
+  selectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
   selectorValue: {
-    ...Type.bodyStrong,
+    ...Type.title,
     color: Colors.brandStrong,
+    fontVariant: ['tabular-nums'],
+  },
+  selectorHint: {
+    ...Type.caption,
+    color: Colors.textSecondary,
     marginTop: Spacing.xs,
   },
 

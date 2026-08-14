@@ -35,7 +35,12 @@ import PhotoViewer, { PhotoViewerInfo } from './PhotoViewer';
  */
 
 const COLUMNS = 3;
-const GAP = Spacing.xxs;
+/**
+ * Kareler arası boşluk 4 → 8 (2026-08-13). Bitişik ızgara "kontak baskı"
+ * gibi duruyordu; nefes payı her kareyi kendi başına bir fotoğraf yapıyor.
+ * `size` hesabı GAP'ten türediği için kare boyu kendiliğinden uyuyor.
+ */
+const GAP = Spacing.xs;
 
 export interface PhotoGridProps {
   photos: PlacePhoto[];
@@ -288,7 +293,9 @@ const styles = StyleSheet.create({
     gap: GAP,
   },
   cell: {
-    borderRadius: Radius.sm,
+    // 8 → 12: aralık açılınca köşelerin de yumuşaması gerekti, yoksa kareler
+    // "kesilmiş" duruyor. Uygulamanın köşe dili orta kademede birleşiyor.
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.canvasAlt,
   },
