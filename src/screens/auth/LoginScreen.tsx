@@ -239,6 +239,8 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.brand,
     fontWeight: Type.bodyStrong.fontWeight,
+    // Android ozel fontta agirlik sentezlemiyor: yuz adi da gerekli.
+    fontFamily: Type.bodyStrong.fontFamily,
   },
   secondaryButton: {
     marginTop: Spacing.lg,
@@ -252,5 +254,7 @@ const styles = StyleSheet.create({
     color: Colors.brand,
     // Ham '700' yerine token'dan okunuyor — vurgu dili tek yerden döner.
     fontWeight: Type.bodyStrong.fontWeight,
+    // Android ozel fontta agirlik sentezlemiyor: yuz adi da gerekli.
+    fontFamily: Type.bodyStrong.fontFamily,
   },
 });

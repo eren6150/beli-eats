@@ -2,6 +2,13 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useFonts } from 'expo-font';
+import {
+  GoogleSansFlex_400Regular,
+  GoogleSansFlex_600SemiBold,
+  GoogleSansFlex_700Bold,
+  GoogleSansFlex_800ExtraBold,
+} from '@expo-google-fonts/google-sans-flex';
 import { RootStackParamList } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import TabNavigator from './TabNavigator';
@@ -54,7 +61,34 @@ function SplashScreen() {
 export default function RootNavigator() {
   const { session, loading } = useAuth();
 
-  if (loading) {
+  /**
+   * ── FONT YÜKLEME ──────────────────────────────────────────────────────────
+   * DÖRT AĞIRLIK TEK TEK yükleniyor. Android özel fontlarda `fontWeight`'i
+   * sentezlemiyor, yani her yüz kendi aile adıyla kayıtlı olmalı
+   * (`theme.ts` → `Type`'ın her rolü bu adlardan birine bağlı).
+   *
+   * Yalnızca `Type`'ın gerçekten kullandığı ağırlıklar var: 400/600/700/800.
+   * Paket 300–900 ve italikleri de taşıyor; kullanılmayanları yüklemek OTA
+   * paketini boşuna büyütürdü.
+   *
+   * ── NEDEN BURADA, App.tsx'te DEĞİL ────────────────────────────────────────
+   * Bu bileşende oturum için ZATEN bir bekleme kapısı ve bir splash var; font
+   * beklemesini aynı kapıya bağlamak ikinci bir yükleme ekranı yazmayı
+   * gereksiz kılıyor. İki bekleme paralel ilerliyor, toplam süre uzamıyor.
+   *
+   * ⚠️ Hata durumunda UYGULAMA KİLİTLENMİYOR: `useFonts` yüklenemezse
+   * `fontError` doluyor ve kapı açılıyor — metinler sistem fontuna düşer,
+   * `Type`'ın `fontWeight` değerleri korunduğu için hiyerarşi ayakta kalır.
+   * Font yüzünden açılamayan bir uygulama, fontsuz bir uygulamadan kötüdür.
+   */
+  const [fontsLoaded, fontError] = useFonts({
+    GoogleSansFlex_400Regular,
+    GoogleSansFlex_600SemiBold,
+    GoogleSansFlex_700Bold,
+    GoogleSansFlex_800ExtraBold,
+  });
+
+  if (loading || (!fontsLoaded && !fontError)) {
     return <SplashScreen />;
   }
 

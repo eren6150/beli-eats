@@ -622,6 +622,7 @@ const styles = StyleSheet.create({
   noteInput: {
     fontSize: Type.body.fontSize,
     fontWeight: Type.body.fontWeight,
+    fontFamily: Type.body.fontFamily,
     color: Colors.textPrimary,
     backgroundColor: Colors.canvasAlt,
     borderRadius: Radius.md,

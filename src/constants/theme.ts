@@ -243,19 +243,106 @@ export const Colors = {
 // Kullanım: <Text style={[Type.heading, { color: Colors.textPrimary }]}>
 // Renk bilinçli olarak dahil DEĞİL — aynı rol farklı zeminlerde kullanılıyor.
 
+/**
+ * ── ÖLÇEK KONTRASTI AÇILDI (2026-08-13) ─────────────────────────────────────
+ * Üst üç kademe büyütüldü: `display` 28→32, `title` 22→24, `heading` 17→18.
+ * `body` ve aşağısı DEĞİŞMEDİ.
+ *
+ * NEDEN: tasarım turunda istenen "hiyerarşi okunmadan, bir bakışta hissedilsin"
+ * etkisinin büyük kısmı fonttan değil, başlık ile gövde ARASINDAKİ FARKTAN
+ * geliyor. Eskiden `heading` 17 ile `body` 15 arasında 2px vardı — aynı
+ * ağırlıkta görünüyorlardı; şimdi 3px + kalınlık farkı.
+ *
+ * Satır yükseklikleri oranı büyüdükçe SIKILAŞIYOR (display 1.19, title 1.25,
+ * heading 1.33, body 1.47): büyük metin kendi içinde daha az nefes ister,
+ * aksi halde başlıklar dağınık görünür.
+ *
+ * ⚠️ `display` bir dönem 32'den 28'e ÇEKİLMİŞTİ (Faz 1b adım 7, iki auth
+ * ekranı farklı boyuttaydı ve rol tek olduğu için birleşmişti). O bir
+ * birleştirme kararıydı, ölçü kararı değil — 32'ye dönmek onu bozmuyor,
+ * iki ekran hâlâ tek rolden besleniyor.
+ *
+ * Kullanım yeri az ve kontrollü: `display` 6 yerde (mekan adı, profil adı,
+ * splash, üç auth ekranı). ⚠️ Mekan ve profil adında `numberOfLines` YOK —
+ * yani uzun bir ad KIRPILMIYOR, SARIYOR. Kırpılma riski bu yüzden doğmuyor;
+ * bedeli yalnızca dikeyde birkaç piksel ve ikisi de kaydırılabilir bir
+ * kapsayıcının içinde. Sabit yükseklikli bir kutuya konsaydı bu projenin iki
+ * kez ısırdığı "sabit yükseklik varsayımı" sınıfına girerdi.
+ */
+/**
+ * ── ÖZEL FONT: GOOGLE SANS FLEX (2026-08-13) ────────────────────────────────
+ * `@expo-google-fonts/google-sans-flex`. Sistem fontundan çıkıldı.
+ *
+ * ⚠️ LİSANS — bu font BİR DÖNEM KULLANILAMAZDI. "Google Sans" on yıl boyunca
+ * Google'ın kendi ürünlerine özel, tescilli bir marka fontuydu. 2025'te
+ * **SIL Open Font License 1.1** ile açık kaynağa çevrildi; ticari kullanım
+ * serbest, atıf zorunluluğu yok. npm paketinin lisans alanı da bunu söylüyor:
+ * `MIT AND OFL-1.1` (MIT sarmalayıcı JS, OFL fontun kendisi). Eski "Google
+ * Sans kullanılamaz" bilgisiyle karşılaşan biri bu satırı okusun.
+ *
+ * Değişken (variable) bir font ama paket STATİK, ağırlık başına ayrı `.ttf`
+ * getiriyor — yani RN tarafında eksen (axis) uğraşı yok.
+ *
+ * ⚠️ Dosyalar Figtree'nin ~3,3 katı (ağırlık başına ~130 KB, dört ağırlık
+ * ~520 KB). Bilinçli kabul edildi; OTA paketini büyütüyor.
+ *
+ * ── ⚠️ HER AĞIRLIK KENDİ AİLE ADI — Android'in kuralı ──────────────────────
+ * Özel bir `fontFamily` verildiğinde Android `fontWeight`'i SENTEZLEMİYOR:
+ * `fontFamily: 'GoogleSansFlex'` + `fontWeight: '600'` düz Regular çizer. Bu yüzden
+ * her rol kendi yüz adına bağlı (`GoogleSansFlex_600SemiBold` gibi) ve o yüzler
+ * `RootNavigator`'da tek tek yükleniyor.
+ *
+ * ── ⚠️ `fontWeight` KALDIRILMADI — bilinçli ────────────────────────────────
+ * Kod tabanında ON BİR yer `Type.X.fontWeight`'i TEK TEK okuyor (hepsi
+ * `TextInput` stili; bu projede `...Type.X` spread etmek yasak çünkü
+ * `lineHeight` Android'de metni dikeyde kırpıyor). `fontWeight` silinseydi o
+ * on bir yerde değer `undefined` olur ve uygulamadaki TÜM form alanları
+ * sessizce ağırlığını kaybederdi. Kalması ayrıca fontlar yüklenmeden önceki
+ * (ve yüklenemezse) sistem fontu halinde de doğru ağırlığı veriyor.
+ */
 export const Type = {
   /** Detay ekranı mekan adı — sayfada tek bir tane olur */
-  display: { fontSize: 28, lineHeight: 34, fontWeight: '800' },
+  display: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '800',
+    fontFamily: 'GoogleSansFlex_800ExtraBold',
+  },
   /** Ekran başlığı */
-  title: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  title: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '700',
+    fontFamily: 'GoogleSansFlex_700Bold',
+  },
   /** Bölüm başlığı, kart adı, liste satırı adı */
-  heading: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  heading: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    fontFamily: 'GoogleSansFlex_700Bold',
+  },
   /** Gövde metni, yorum, açıklama */
-  body: { fontSize: 15, lineHeight: 22, fontWeight: '400' },
+  body: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
+    fontFamily: 'GoogleSansFlex_400Regular',
+  },
   /** Vurgulu gövde — buton etiketi, seçili sekme */
-  bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  bodyStrong: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
+    fontFamily: 'GoogleSansFlex_600SemiBold',
+  },
   /** Adres, meta bilgi, yardımcı metin */
-  caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  caption: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400',
+    fontFamily: 'GoogleSansFlex_400Regular',
+  },
   /**
    * Vurgulu küçük metin — form etiketi, sayaç değeri.
    *
@@ -266,9 +353,19 @@ export const Type = {
    * yazmaktan iyi: override'lar "boyut+satır+kalınlık birlikte gelir"
    * ilkesini deler ve tek tek kayar.
    */
-  captionStrong: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  captionStrong: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: 'GoogleSansFlex_600SemiBold',
+  },
   /** Chip etiketi, sayaç alt yazısı — en küçük okunabilir kademe */
-  micro: { fontSize: 11, lineHeight: 14, fontWeight: '600' },
+  micro: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    fontFamily: 'GoogleSansFlex_600SemiBold',
+  },
 } as const satisfies Record<string, TextStyle>;
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -289,6 +289,7 @@ const styles = StyleSheet.create({
     // Android'de metni dikeyde kırpabiliyor (auth ekranlarındaki aynı gerekçe).
     fontSize: Type.body.fontSize,
     fontWeight: Type.body.fontWeight,
+    fontFamily: Type.body.fontFamily,
     color: Colors.textPrimary,
     backgroundColor: Colors.canvasAlt,
     borderRadius: Radius.md,
