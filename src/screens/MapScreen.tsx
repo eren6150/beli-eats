@@ -627,9 +627,13 @@ export default function MapScreen() {
             coordinate={{ latitude: place.lat, longitude: place.lng }}
             onPress={() => handleRankedPress(place)}
             // Bu dosyadaki TEK ham hex — bilinçli. Android yalnızca hue'yu
-            // kullanıyor (Color.colorToHSV → hsv[0]), yani standart yeşil pin
-            // çıkar; token'a bağlamak görünümü birebir yansıtmaz.
-            pinColor="#22C55E"
+            // kullanıyor (Color.colorToHSV → hsv[0]), yani standart pin
+            // varlığından bir ton seçiliyor; token'a bağlamak görünümü birebir
+            // yansıtmaz. ⚠️ AMA MARKA RAMP'İYLE BİRLİKTE ELLE GÜNCELLENMELİ:
+            // 2026-08-13'te marka zeytin yeşiline döndü (#5F7527, hue ≈ 77°)
+            // ve bu satır eski parlak yeşilde kalsaydı haritadaki pinler tek
+            // başına eski markayı taşırdı.
+            pinColor="#5F7527"
           />
         ))}
       </MapView>

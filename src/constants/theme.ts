@@ -39,17 +39,54 @@ import type { TextStyle, ViewStyle } from 'react-native';
 // migrasyonda uygulanıyor, bu dosyada değil (bkz. LEGACY blokları).
 
 const Palette = {
+  /**
+   * ── MARKA RAMP'İ: ZEYTİN YEŞİLİ (2026-08-13) ──────────────────────────────
+   * Önceki hal Tailwind `green` (500 = #22C55E) idi ve bilinçli olarak
+   * değiştirildi: o ton "bildirim yeşili" gibi okunuyordu, yemek uygulamasına
+   * ait hissettirmiyordu. Yenisi bir tasarım turundan çıktı ve **500 adımı
+   * elle seçildi** (`#5F7527`) — ara adımlar HSL üzerinden ondan türetildi
+   * (H≈77, S≈50, L eğrisi 500'de bu tona oturacak şekilde kuruldu).
+   *
+   * ⚠️ 500'ü hesaplanmış değere (#607728) yuvarlama: YAPILMADI. Seçilen ton
+   * korunuyor, ramp ona uyuyor — tersi değil.
+   *
+   * 🎁 YAN KAZANÇ — KONTRAST DÜZELDİ. Beyaz metin (`textOnBrand`) birincil
+   * butonun üstünde eski yeşilde **2.3:1** ile WCAG AA eşiğinin (4.5:1)
+   * ALTINDAYDI; koyu zeytinde **5.2:1**. Yani "Puanı Kaydet" butonunun yazısı
+   * bugüne kadar erişilebilirlik sınırının altındaydı ve bu tesadüfen kapandı.
+   *
+   * 300/400/700/800/900 bugün hiçbir yerden OKUNMUYOR (yalnızca 50/100/200/
+   * 500/600 kullanılıyor); ramp'in tamlığı için duruyorlar, koyu uçtaki
+   * sıkışma pratikte görünmüyor.
+   */
   green: {
-    50: '#F0FDF4',
-    100: '#DCFCE7',
-    200: '#BBF7D0',
-    300: '#86EFAC',
-    400: '#4ADE80',
-    500: '#22C55E',
-    600: '#16A34A',
-    700: '#15803D',
-    800: '#166534',
-    900: '#14532D',
+    50: '#F6F8F2',
+    100: '#EBEFE1',
+    200: '#D8E1C1',
+    300: '#BBCC8E',
+    400: '#92B045',
+    500: '#5F7527',
+    600: '#506520',
+    700: '#415219',
+    800: '#344413',
+    900: '#28340E',
+  },
+
+  /**
+   * SICAK NÖTR — yalnızca zemin için.
+   *
+   * `canvas`/`canvasAlt` bir dönem `gray` ramp'ine bakıyordu (#F9FAFB), yani
+   * SOĞUK bir griydi. Zeytin yeşiliyle birlikte istenen his sıcak krem; fark
+   * küçük ama ekranın tamamını kapladığı için baskın.
+   *
+   * ⚠️ METİN VE KENARLIK GRİLERİ NÖTR KALIYOR, bilinçli: onları da ısıtmak
+   * metni çamurlaştırır ve okunabilirliği düşürür — ayrı ve riskli bir karar.
+   * Bu ramp'in işi yalnızca zemin.
+   */
+  sand: {
+    50: '#F9F8F5',
+    100: '#F3F1ED',
+    200: '#E7E5DE',
   },
   gray: {
     50: '#F9FAFB',
@@ -63,11 +100,20 @@ const Palette = {
     800: '#1F2937',
     900: '#111827',
   },
+  /**
+   * PUANLAMA SARISI. 500 adımı `#F59E0B`'den `#E4A425`'e çekildi (2026-08-13):
+   * eski ton turuncuya kaçıyordu ve zeytin yeşilinin yanında cırtlak
+   * duruyordu; yenisi daha derin ve sakin bir altın.
+   *
+   * ⚠️ YARIM YILDIZ MEKANİZMASINA DOKUNULMADI. `StarRating` dolu `★` glifini
+   * kırparak yarım yıldız çiziyor ve bu fonttan bağımsız çalışsın diye
+   * bilinçli seçilmişti; burada değişen yalnızca renk.
+   */
   amber: {
     50: '#FFFBEB',
     100: '#FEF3C7',
     300: '#FCD34D',
-    500: '#F59E0B',
+    500: '#E4A425',
     700: '#B45309',
     900: '#78350F',
   },
@@ -98,15 +144,25 @@ export const Colors = {
   brandSurface: Palette.green[50],
   /** Marka zeminli öğelerin kenarlığı */
   brandBorder: Palette.green[200],
-  brandShadow: 'rgba(34,197,94,0.30)',
+  /**
+   * ⚠️ RAMP'E BAĞLI DEĞİL — elle güncellenmesi gereken TEK marka değeri.
+   * `rgba()` gerektiği için `Palette.green[500]`'den türetilemiyor; ramp
+   * değişirse burası SESSİZCE eski renkte kalır. 2026-08-13'te zeytine
+   * çevrildi: `#5F7527` = rgb(95,117,39).
+   */
+  brandShadow: 'rgba(95,117,39,0.30)',
 
   // ─── Yüzeyler ────────────────────────────────────────────────────────────
   /** Kart, sheet, header — içeriğin üstünde durduğu yüzey */
   surface: Palette.white,
-  /** Ekranın en alt zemini */
-  canvas: Palette.gray[50],
+  /**
+   * Ekranın en alt zemini. SICAK nötr (`sand`), soğuk gri DEĞİL — zeytin
+   * yeşiliyle birlikte istenen krem hissi buradan geliyor. Fark küçük ama
+   * ekranın tamamını kapladığı için baskın.
+   */
+  canvas: Palette.sand[50],
   /** Girdi alanı, thumb placeholder, pasif buton */
-  canvasAlt: Palette.gray[100],
+  canvasAlt: Palette.sand[100],
 
   // ─── Metin ───────────────────────────────────────────────────────────────
   textPrimary: Palette.gray[900],
