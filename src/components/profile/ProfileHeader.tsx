@@ -182,39 +182,73 @@ export default function ProfileHeader({
         ) : null}
       </View>
 
-      {/* Kimlik satırı: avatar + sayaçlar */}
-      <View style={styles.identityRow}>
-        {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <Text style={styles.avatarLetter}>{initial}</Text>
-          </View>
-        )}
-
-        <View style={styles.statsRow}>
-          <Stat value={stats.rankings} label="Mekan" />
-          <Stat
-            value={stats.followers}
-            label="Takipçi"
-            onPress={onPressFollowers}
-          />
-          <Stat
-            value={stats.following}
-            label="Takip"
-            onPress={onPressFollowing}
-          />
+      {/**
+        * ── YENİ DİZİLİM (2026-08-13) ─────────────────────────────────────────
+        * Eskiden avatar SOLDA, sayaçlar onun SAĞINDA tek satırdaydı ve isim
+        * altta küçük (`bodyStrong`, 15px) duruyordu — yani ekranın sahibi olan
+        * bilgi (kişinin adı) en zayıf tipografiye sahipti.
+        *
+        * Yeni sıra: avatar (küçülmüş, tek başına) → AD (`display`, 32px) →
+        * @kullanıcı → bio → sayaç şeridi. Tasarım turunun çıktısı ve hiyerarşi
+        * açısından da doğrusu bu: sayfa bir KİŞİYİ anlatıyor, sayılar onun
+        * özeti — önce kim, sonra ne kadar.
+        */}
+      {avatarUrl ? (
+        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+      ) : (
+        <View style={[styles.avatar, styles.avatarFallback]}>
+          <Text style={styles.avatarLetter}>{initial}</Text>
         </View>
-      </View>
+      )}
 
       {/* İsim / kullanıcı adı / bio */}
       <Text style={styles.name}>{primaryName}</Text>
       {showUsernameLine && <Text style={styles.username}>@{username}</Text>}
-      {bio?.trim() ? (
-        <Text style={styles.bio} numberOfLines={3}>
-          {bio.trim()}
-        </Text>
-      ) : null}
+      {/**
+        * ⚠️ `numberOfLines` YOK — bilinçli olarak KALDIRILDI (2026-08-13).
+        *
+        * Eskiden 3 satırda kırpılıyordu ve sahada bildirilen sorun şuydu: uzun
+        * bir bio üç noktayla kesiliyor ama dokunmanın hiçbir karşılığı yok,
+        * yani tam metne ulaşan bir yol kalmıyordu.
+        *
+        * ── NEDEN AÇILIR/KAPANIR (accordion) VEYA SHEET DEĞİL ────────────────
+        * İkisi de "metin gerçekten kırpıldı mı" sorusunu cevaplamayı
+        * gerektiriyor; `numberOfLines` uygulanmışken `onTextLayout` zaten
+        * kırpılmış satır sayısını döndürüyor, yani ölçüm için görünmez bir
+        * kopya çizmek ya da bir kare sınırsız render edip yanıp sönmeyi göze
+        * almak gerekirdi. Ölçüm yapılmazsa kısa bio'larda TIKLANABİLİR GÖRÜNÜP
+        * TEPKİ VERMEYEN bir alan doğardı — projenin açıkça reddettiği durum.
+        *
+        * ── NEDEN KIRPMAMAK GÜVENLİ ─────────────────────────────────────────
+        * `bio` şemada 300 karakterle sınırlı (migration 004'ün CHECK'i,
+        * istemcide `BIO_MAX`). En kötü ihtimalle 6-7 satır ve başlık zaten
+        * kaydırılabilir içeriğin parçası. Aynı karar liste açıklaması için de
+        * verilmişti ("sınırlı bir metin için ölçüm orantısız") — orada sınır
+        * 500'dü, burada 300.
+        */}
+      {bio?.trim() ? <Text style={styles.bio}>{bio.trim()}</Text> : null}
+
+      {/**
+        * Sayaç şeridi — bio'nun ALTINDA, üstünde ince bir ayraçla.
+        * Aralarındaki dikey çizgiler üç sayacı ayrı ayrı okunur kılıyor;
+        * öncesinde `space-around` ile dağıtılmışlardı ve uzun sayılarda
+        * hizalar kayıyordu. `flex: 1` + sol hizalama bunu sabitliyor.
+        */}
+      <View style={styles.statsStrip}>
+        <Stat value={stats.rankings} label="Mekan" />
+        <View style={styles.statDivider} />
+        <Stat
+          value={stats.followers}
+          label="Takipçi"
+          onPress={onPressFollowers}
+        />
+        <View style={styles.statDivider} />
+        <Stat
+          value={stats.following}
+          label="Takip"
+          onPress={onPressFollowing}
+        />
+      </View>
 
       {/* Tam genişlik ikincil buton — Instagram'ın profil header'ındaki yer.
           `Button` primitive'i KULLANILMIYOR: o form butonu (dikey padding
@@ -287,16 +321,18 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
 
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.lg,
-    marginTop: Spacing.xs,
-  },
+  /**
+   * Avatar KÜÇÜLDÜ (76 → 56) ve tek başına duruyor.
+   *
+   * Sayaçlar yanından kalkınca 76px gereksiz yer kaplıyordu; asıl vurgu artık
+   * altındaki isim. `avatarLetter` da `display` (32) yerine `title` (24)
+   * kullanıyor — 56px'lik dairede 32px harf taşıyordu.
+   */
   avatar: {
-    width: 76,
-    height: 76,
+    width: 56,
+    height: 56,
     borderRadius: Radius.full,
+    marginTop: Spacing.xs,
   },
   avatarFallback: {
     backgroundColor: Colors.brandSubtle,
@@ -304,16 +340,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarLetter: {
-    ...Type.display,
+    // 56px'lik dairede `display` (32) taşıyordu.
+    ...Type.title,
     color: Colors.brandStrong,
   },
 
-  statsRow: {
-    flex: 1,
+  statsStrip: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderSubtle,
   },
-  stat: { alignItems: 'center' },
+  /** Üçü eşit alan paylaşıyor; sola dayalı, böylece sayılar aynı eksende. */
+  stat: { flex: 1, alignItems: 'flex-start' },
+  statDivider: {
+    width: 1,
+    // Sabit yükseklik değil: içeriğin yüksekliğine göre değil, kısa bir
+    // ayraç olarak yeterli. Sabit sayı yazı tipi ölçeğinde kırılırdı.
+    alignSelf: 'stretch',
+    backgroundColor: Colors.borderSubtle,
+    marginHorizontal: Spacing.sm,
+  },
   statValue: {
     ...Type.heading,
     color: Colors.textPrimary,
@@ -324,10 +373,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  /**
+   * Sayfanın asıl başlığı. `bodyStrong` (15) → `display` (32): kişinin adı
+   * ekranın en güçlü tipografik öğesi olmalı.
+   */
   name: {
-    ...Type.bodyStrong,
+    ...Type.display,
     color: Colors.textPrimary,
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
   },
   username: {
     ...Type.caption,

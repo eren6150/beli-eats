@@ -91,6 +91,14 @@ export default function RankRow({
     onMoveUp !== undefined && onMoveDown !== undefined && !selectionMode;
   const showDelete = onDelete !== undefined && !selectionMode;
 
+  /**
+   * Satır sonundaki ok — yalnızca satır tıklanabilirken VE sağda başka bir
+   * kontrol yokken. Ok ile ok tuşlarını/çöp kutusunu yan yana koymak sağ
+   * kenarı kalabalıklaştırır ve hangisinin ne yaptığı belirsizleşir.
+   */
+  const showChevron =
+    onPress !== undefined && !showControls && !showDelete && !selectionMode;
+
   // İç Pressable'lar (ok/çöp kutusu) dıştakinin ÜSTÜNDE kazanıyor — RN iç içe
   // dokunmada en içteki hedefi seçiyor. Sıra değiştirirken yanlışlıkla mekan
   // detayına gidilmiyor.
@@ -106,7 +114,15 @@ export default function RankRow({
           />
         </View>
       ) : rank !== undefined ? (
-        <Text style={[styles.rank, isTopThree && styles.rankTop]}>{rank}</Text>
+        /**
+         * İKİ HANELİ: 1 → "01". Tek haneli bir rakam sütunda cılız kalıyordu;
+         * sabit iki hane görsel ağırlık veriyor ve `tabular-nums` ile birlikte
+         * sütunu gerçekten sabit genişlikte tutuyor. 10 ve üstü zaten iki
+         * hane, dokunulmuyor.
+         */
+        <Text style={[styles.rank, isTopThree && styles.rankTop]}>
+          {String(rank).padStart(2, '0')}
+        </Text>
       ) : null}
 
       {photoUrl ? (
@@ -179,6 +195,10 @@ export default function RankRow({
           <Icon name="trash" size={18} color={Colors.textMuted} />
         </Pressable>
       )}
+
+      {showChevron && (
+        <Icon name="forward" size={18} color={Colors.textMuted} />
+      )}
     </>
   );
 
@@ -234,19 +254,23 @@ const styles = StyleSheet.create({
   },
 
   rank: {
-    ...Type.body,
+    // `body` değil `bodyStrong`: iki haneli numara ince gövdede cılız kalıyor.
+    ...Type.bodyStrong,
     width: RANK_COLUMN_WIDTH,
-    textAlign: 'right',
+    textAlign: 'center',
     color: Colors.textMuted,
     // Basamak sayısı değişince isim hizası kaymasın diye sabit genişlik.
     fontVariant: ['tabular-nums'],
   },
+  /**
+   * İlk üç YALNIZCA RENKLE ayrışıyor — boyut aynı.
+   *
+   * ⚠️ Eskiden `Type.heading` ile BOYUT DA değişiyordu ve bu, dosyanın kendi
+   * başındaki kuralın ("ilk üç yalnızca renkle ayrışıyor") sessiz bir
+   * ihlaliydi: satırlar arasında görünür bir yükseklik zıplaması üretiyordu.
+   */
   rankTop: {
-    ...Type.heading,
     color: Colors.brandStrong,
-    textAlign: 'right',
-    width: RANK_COLUMN_WIDTH,
-    fontVariant: ['tabular-nums'],
   },
 
   thumb: {
