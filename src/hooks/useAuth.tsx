@@ -12,6 +12,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseRecovery } from '../lib/supabaseClient';
 import { authRedirectUrl } from '../lib/authRedirect';
+import { CaptchaHost, getCaptchaToken } from '../lib/captcha';
 
 /**
  * Supabase hata KODU → kullanıcıya gösterilecek kısa Türkçe metin.
@@ -51,6 +52,13 @@ const AUTH_ERROR_TEXT: Record<string, string> = {
   same_password: 'Yeni şifren eskisiyle aynı olamaz.',
   // Kod doğrulama denemeleri de sınırlı — e-posta gönderiminden ayrı bir kota.
   over_request_rate_limit: 'Çok sık denedin. Biraz bekleyip tekrar dene.',
+
+  // ── Bot koruması ─────────────────────────────────────────────────────────
+  // Panel anahtarı AÇIK ve istek token'sız (ya da token geçersiz/kullanılmış)
+  // geldiğinde dönüyor. Sahada bunu en çok görecek durum, anahtarın yeni APK
+  // herkese ulaşmadan açılmasıdır — metin bu yüzden kullanıcıyı suçlamıyor,
+  // yalnızca tekrar denemeye yönlendiriyor.
+  captcha_failed: 'Doğrulama tamamlanamadı, tekrar dene.',
 };
 
 /**
@@ -72,6 +80,35 @@ function toDisplayError(error: AuthError | null, kaynak: string): Error | null {
     'Bir şeyler ters gitti, tekrar dene.';
 
   return new Error(text);
+}
+
+/**
+ * Bir doğrulama turu çalıştırır ve sonucu çağıranın anlayacağı şekle çevirir.
+ *
+ * ── İPTAL BURADA HATA SAYILIYOR — Google girişinin TERSİ, bilinçli ───────────
+ * `signInWithGoogle` iptali hata saymıyor, çünkü orada kullanıcı ayrı bir
+ * butona basıp o akışı bütünüyle terk ediyor: yaptığı şey tamamlanmış bir
+ * karar. Burada ise "Giriş Yap"a basmış ve doğrulama bir ARA ADIM olarak
+ * çıkmış; kapatınca istediği giriş gerçekleşmiyor ve ekranda sebebini
+ * anlatan başka hiçbir şey olmuyor. Sessiz kalmak, spinner'ın durup hiçbir
+ * şeyin olmaması demekti.
+ *
+ * Token'sız dönüş (`token: null`, hata yok) bir başarısızlık DEĞİL: site
+ * anahtarı yapılandırılmamış demek ve istek tokensiz gidiyor. Panel anahtarı
+ * kapalıysa sorunsuz çalışır, açıksa sunucu `captcha_failed` döndürür — yani
+ * hata, yapılandırmayı gerçekten bilen tarafta üretiliyor.
+ */
+async function requireCaptcha(): Promise<
+  { ok: true; token: string | undefined } | { ok: false; error: Error }
+> {
+  const { token, cancelled, error } = await getCaptchaToken();
+
+  if (error) return { ok: false, error };
+  if (cancelled) {
+    return { ok: false, error: new Error('Doğrulama tamamlanmadı, tekrar dene.') };
+  }
+
+  return { ok: true, token: token ?? undefined };
 }
 
 /**
@@ -301,7 +338,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [exchangeAuthCode]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const captcha = await requireCaptcha();
+    if (!captcha.ok) return { error: captcha.error };
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: { captchaToken: captcha.token },
+    });
     return { error: toDisplayError(error, 'signIn') };
   }, []);
 
@@ -391,10 +435,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const signUp = useCallback(
     async (email: string, password: string, username: string) => {
+      const captcha = await requireCaptcha();
+      if (!captcha.ok) {
+        return {
+          error: captcha.error,
+          alreadyRegistered: false,
+          needsConfirmation: false,
+        };
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          captchaToken: captcha.token,
           data: { username },
           /**
            * Onay bağlantısı artık UYGULAMAYI açıyor (öncesinde GitHub Pages
@@ -449,13 +503,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * `resend`'i zaten vardı ama hiçbir yerden çağrılmıyordu.
    */
   const resendConfirmation = useCallback(async (email: string) => {
+    const captcha = await requireCaptcha();
+    if (!captcha.ok) return { error: captcha.error };
+
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
       // `signUp` ile AYNI adres. Atlanırsa tekrar gönderilen mail eski
       // davranışa (Site URL) döner ve iki mail farklı yerlere giderdi —
       // kullanıcının hangisine dokunduğuna bağlı, teşhisi zor bir tutarsızlık.
-      options: { emailRedirectTo: authRedirectUrl() },
+      options: {
+        emailRedirectTo: authRedirectUrl(),
+        captchaToken: captcha.token,
+      },
     });
     return { error: toDisplayError(error, 'resend') };
   }, []);
@@ -475,7 +535,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * aile, ama burada ayırt edici bir işaret YOK, yani ayrım da yapılamaz.
    */
   const sendPasswordResetCode = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const captcha = await requireCaptcha();
+    if (!captcha.ok) return { error: captcha.error };
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      captchaToken: captcha.token,
+    });
     return { error: toDisplayError(error, 'resetPasswordForEmail') };
   }, []);
 
@@ -500,10 +565,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const resetPassword = useCallback(
     async (email: string, code: string, newPassword: string) => {
+      /**
+       * ⚠️ Bu, şifre sıfırlama akışındaki İKİNCİ doğrulama turu (ilki kodu
+       * gönderirken). Token tek kullanımlık ve kısa ömürlü, yani ilkini
+       * saklayıp buraya taşımak mümkün değil — her uç kendi turunu istiyor.
+       * `size: 'invisible'` olduğu için kullanıcı çoğu turda hiçbir şey
+       * görmüyor; görünür bulmaca çıkarsa akış iki kez sorar.
+       *
+       * `/verify` ucunun sunucu tarafında gerçekten captcha istediği
+       * DOĞRULANMADI — supabase-js tipi alanı kabul ediyor, o kadar. Token
+       * göndermek iki durumda da güvenli (istemiyorsa yok sayılır),
+       * göndermemek istiyorsa akışı kırardı. Anahtar açıldığı gün ölçülüp
+       * gereksizse buradan kaldırılabilir — o zaman bu tur da UX'ten düşer.
+       */
+      const captcha = await requireCaptcha();
+      if (!captcha.ok) return { error: captcha.error };
+
       const { error: verifyError } = await supabaseRecovery.auth.verifyOtp({
         email,
         token: code,
         type: 'recovery',
+        options: { captchaToken: captcha.token },
       });
 
       if (verifyError) {
@@ -602,7 +684,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  /**
+   * `CaptchaHost` widget'ın ağaçtaki TEK örneği ve burada duruyor çünkü
+   * `getCaptchaToken()`'ı çağıran beş fonksiyon da burada. Ekranların hiçbiri
+   * onu bilmiyor.
+   *
+   * `children`'ın YANINDA olması güvenli: kütüphane her şeyi
+   * `<Modal transparent visible={show}>` içine koyuyor, gizliyken ağaç boş ve
+   * layout'a etkisi sıfır. Site anahtarı yoksa kendisi `null` render ediyor.
+   */
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <CaptchaHost />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {
