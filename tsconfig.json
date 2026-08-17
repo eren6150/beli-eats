@@ -2,5 +2,14 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  // ⚠️ `supabase/functions/**` DENO ortamında çalışıyor, React Native'de değil.
+  // Oradaki dosyalar `Deno.env`, `Deno.serve` ve `jsr:` import'ları kullanıyor;
+  // bu tsconfig'in altında derlenmeleri İMKÂNSIZ ve gereksiz — uygulama
+  // paketine hiç girmiyorlar. Dışlanmazlarsa `npx tsc --noEmit` her çalıştığında
+  // 7 sahte hata veriyor ve gerçek hataları gölgeliyor.
+  //
+  // Fonksiyonların kendi doğrulaması Deno tarafında: `supabase functions deploy`
+  // dağıtımdan önce onları Deno ile derliyor.
+  "exclude": ["node_modules", "supabase/functions"]
 }

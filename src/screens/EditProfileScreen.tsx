@@ -15,10 +15,11 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { ProfileStackParamList } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
-import { Colors, Spacing, Type } from '../constants/theme';
+import { Colors, Radius, Spacing, Type } from '../constants/theme';
 import TextField from '../components/ui/TextField';
 import Button from '../components/ui/Button';
 import ErrorBanner from '../components/ui/ErrorBanner';
+import DeleteAccountSheet from '../components/profile/DeleteAccountSheet';
 import {
   normalizeUsername,
   validateUsername,
@@ -70,7 +71,7 @@ const USERNAME_MAX = 30;
 export default function EditProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteType>();
-  const { user } = useAuth();
+  const { user, deleteAccount } = useAuth();
   const { updateProfile } = useProfile(user?.id);
 
   const [username, setUsername] = useState(route.params?.username ?? '');
@@ -78,6 +79,8 @@ export default function EditProfileScreen() {
   const [bio, setBio] = useState(route.params?.bio ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Hesap silme onayı — `null` yerine boolean, sheet'in tek girdisi yok. */
+  const [deleteVisible, setDeleteVisible] = useState(false);
 
   const initialUsername = route.params?.username ?? '';
   const initialFullName = route.params?.fullName ?? '';
@@ -288,8 +291,44 @@ export default function EditProfileScreen() {
             disabled={!dirty}
             style={styles.saveButton}
           />
+
+          {/* ── Tehlikeli bölge ──
+              YERİ BİLİNÇLİ: ayarlar menüsü yerine burası. O menü bugün iki
+              maddelik bir `Alert` ("İptal / Çıkış Yap") ve oraya yıkıcı bir
+              üçüncü madde koymak yanlış dokunmayı kolaylaştırırdı. Burası
+              zaten kimliğini yönettiğin ekran ve buton sayfanın EN ALTINDA,
+              kaydırmadan görünmüyor.
+
+              Buton DOLU DEĞİL, kenarlıklı: birincil eylemle (Kaydet) aynı
+              görsel ağırlıkta olmamalı. */}
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerTitle}>Tehlikeli bölge</Text>
+            <Text style={styles.dangerText}>
+              Hesabını silmek geri alınamaz. Tüm puanların, ziyaretlerin,
+              listelerin ve fotoğrafların kalıcı olarak silinir.
+            </Text>
+            <Pressable
+              onPress={() => setDeleteVisible(true)}
+              style={({ pressed }) => [
+                styles.dangerButton,
+                pressed && styles.dangerButtonPressed,
+              ]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.dangerButtonText}>Hesabımı sil</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Onayın kendisi ayrı bileşende: kullanıcı adını yazdırma, ne
+          silineceğinin listesi ve hata durumu oraya ait. */}
+      <DeleteAccountSheet
+        visible={deleteVisible}
+        username={initialUsername}
+        onCancel={() => setDeleteVisible(false)}
+        onConfirm={deleteAccount}
+      />
     </SafeAreaView>
   );
 }
@@ -344,4 +383,40 @@ const styles = StyleSheet.create({
   // düzenleniyor, kilitli kutu diye bir şey kalmadı.
 
   saveButton: { marginTop: Spacing.md },
+
+  /**
+   * Tehlikeli bölge — Kaydet'ten ince bir çizgiyle ve geniş bir boşlukla
+   * ayrılıyor. Amaç yakınlık kurmamak: kaydetmeye gelen parmak buraya
+   * kazara ulaşmamalı.
+   */
+  dangerZone: {
+    marginTop: Spacing['3xl'],
+    paddingTop: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderSubtle,
+  },
+  dangerTitle: {
+    ...Type.captionStrong,
+    color: Colors.danger,
+  },
+  dangerText: {
+    ...Type.caption,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xxs,
+  },
+  // DOLU DEĞİL, kenarlıklı: birincil eylemle aynı görsel ağırlıkta olmamalı.
+  dangerButton: {
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.dangerBorder,
+    backgroundColor: Colors.dangerSurface,
+  },
+  dangerButtonPressed: { opacity: 0.7 },
+  dangerButtonText: {
+    ...Type.bodyStrong,
+    color: Colors.danger,
+  },
 });

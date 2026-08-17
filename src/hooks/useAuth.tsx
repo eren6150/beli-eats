@@ -157,6 +157,11 @@ interface AuthContextValue {
     newPassword: string
   ) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  /**
+   * Hesabı KALICI olarak siler (Edge Function) ve yerel oturumu kapatır.
+   * Parametre YOK ve olmamalı: silinecek kimlik sunucuda JWT'den okunuyor.
+   */
+  deleteAccount: () => Promise<{ error: Error | null }>;
 }
 
 /**
@@ -521,6 +526,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
+   * Hesabı KALICI olarak siler.
+   *
+   * ── NEDEN EDGE FUNCTION ÇAĞRISI ──────────────────────────────────────────
+   * `auth.users`'tan silmek admin yetkisi istiyor; istemcide yalnızca anon key
+   * var ve olmalı. Fonksiyon (`supabase/functions/delete-account`) silinecek
+   * kimliği İSTEK GÖVDESİNDEN DEĞİL, doğrulanmış JWT'den okuyor — bu yüzden
+   * buradan hiçbir kullanıcı kimliği gönderilmiyor, gönderilmemeli.
+   *
+   * `functions.invoke` oturumun access token'ını `Authorization` başlığına
+   * kendisi koyuyor; fonksiyonun kimliği oradan çıkarması bu sayede çalışıyor.
+   *
+   * ── ⚠️ `scope: 'local'` ŞART ─────────────────────────────────────────────
+   * Silme başarılı olduğunda kullanıcı sunucuda ARTIK YOK, yani token geçersiz.
+   * Varsayılan `signOut()` sunucuya iptal isteği atıyor ve o istek 401 dönüp
+   * yerel oturumun temizlenmesini engelleyebilir — kullanıcı silinmiş bir
+   * hesapla uygulamanın içinde asılı kalırdı. `local` yalnızca cihazdaki
+   * oturumu siliyor, ağ turu yok. (`supabaseRecovery`'de aynı bayrak başka bir
+   * gerekçeyle kullanılıyor: orada diğer cihazların oturumunu kapatmamak için.)
+   */
+  const deleteAccount = useCallback(async (): Promise<{
+    error: Error | null;
+  }> => {
+    const { error } = await supabase.functions.invoke('delete-account', {
+      method: 'POST',
+    });
+
+    if (error) {
+      console.error('[useAuth] hesap silinemedi:', error);
+      return { error: new Error('Hesap silinemedi, tekrar dene.') };
+    }
+
+    await supabase.auth.signOut({ scope: 'local' });
+    return { error: null };
+  }, []);
+
+  /**
    * `useMemo` + `useCallback` — süs değil.
    * Provider'ın her render'ında yeni bir nesne/fonksiyon üretmek, değer
    * gerçekten değişmese bile TÜM tüketicileri yeniden render ettirir ve
@@ -542,6 +583,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       linkNotice,
       clearLinkNotice,
       signOut,
+      deleteAccount,
     }),
     [
       session,
@@ -556,6 +598,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       linkNotice,
       clearLinkNotice,
       signOut,
+      deleteAccount,
     ]
   );
 
