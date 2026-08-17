@@ -1732,6 +1732,36 @@ eklendi → native modül → autolink → **build**. §2 ritüeli gereği `vers
   üstelik iki kopya da aynı sürüm (18.0.13). `expo-font`'u çökerten şey **farklı
   ve uyumsuz** sürümlerdi (57.0.1 ↔ 14.0.12) — bu onun sınıfından değil.
 
+#### ⚠️ İLK BUILD PATLADI — `prop-types` (2026-08-17), ve ders TYPECHECK'İN SINIRI
+İlk `preview` build'i "Bundle JavaScript" aşamasında düştü:
+`Unable to resolve module prop-types from @hcaptcha/react-native-hcaptcha/index.js`.
+
+**Kök neden paketin kendi hatası:** `index.js` `prop-types`'ı import ediyor ama
+`package.json`'ında **ilan etmiyor** (tek bağımlılığı `@hcaptcha/loader`).
+Birçok projede başka bir paketten hoist edildiği için görünmez kalıyor; bizim
+ağacımızda hiç yoktu. Düzeltme: `prop-types` **doğrudan bağımlılık** yapıldı —
+§5.1'in `expo-font`/`@expo/vector-icons` için kurduğu desenin aynısı
+(çözümlemeyi şansa bırakma, açıkça sabitle). Saf JS, yani native değişiklik
+yok: `version`/`versionCode` yeniden yükseltilmedi.
+
+🔑 **DERS 1 — `tsc` bu sınıfı YAKALAYAMAZ.** Typecheck üçüncü parti paketin
+`index.d.ts`'ine bakıyor, `index.js`'ine değil; çalışma anı importları tip
+sisteminin görüş alanında değil. "Typecheck temiz" bir bundle'ın **derleneceği
+anlamına gelmiyor**.
+
+🔑 **DERS 2 — bundle'ı YERELDE üret, EAS'i test aracı olarak kullanma.**
+EAS'in çalıştırdığı adımın yerel karşılığı var ve 25 dakika yerine ~1 dakika
+sürüyor:
+```
+npx expo export --platform android --output-dir <gecici-dizin>
+```
+Çözümleme hatalarının **hepsini** aynı şekilde yakalıyor. Bu düzeltmeden sonra
+yerelde koşturuldu: bundle üretildi ve `[captcha]` · `captchaToken` ·
+`hcaptcha.com` dizeleri ile site anahtarının değeri bundle'da doğrulandı.
+⚠️ Ama bu YALNIZCA yerel `.env`'i kanıtlıyor — EAS build'i değişkenleri
+**EAS ortamından** okuyor (§8'in ıraksama dersi), o taraf ayrıca
+`eas-cli env:list --environment preview` ile kontrol edilmeli.
+
 #### Tasarım kararları
 - **ÜÇ AUTH EKRANI HİÇ DEĞİŞMEDİ.** Widget'ı `AuthProvider` kendi ağacında
   render ediyor, token `useAuth` içinde alınıyor, beş fonksiyonun dönüş şekli
