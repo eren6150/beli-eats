@@ -2,7 +2,24 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-13
+## 📍 Nerede kaldık — 2026-08-17
+
+**Bağımsız işler turu bitti ve sahada** (hepsi OTA, migration yok):
+
+| İş | Commit |
+|---|---|
+| Arama: `json.status` ekrana yansıyor + **arama geçmişi** | `cc3e86a` |
+| **Hesap silme** (Edge Function + istemci) | `e4e926d` |
+| 🔴 **Font düzeltmesi** — font hiç uygulanmıyormuş | `96535ba` |
+
+🔴 **Bu turun en önemli bulgusu:** özel font (Google Sans Flex) **sahada
+hiçbir yerde çalışmıyormuş** ve fark edilmemişti. Sebep `Type` rollerinde
+`fontFamily` ile `fontWeight`'in BİRLİKTE durması; Android ağırlığa özgü bir
+aileye ayrıca `fontWeight` verildiğinde sistem fontuna düşüyor. Kök neden ve
+nasıl bulunduğu (A/B/C ölçümü): Mimari Notlar → **Tipografi**.
+
+⚠️ **Hesap silme, projenin İLK Edge Function'ı.** Dağıtım yolu artık kurulu —
+Places anahtarını sunucuya almak (Kademe 3) bu altyapıyı yeniden kullanacak.
 
 **GÖRSEL KİMLİK YENİLEMESİ BİTTİ ve sahada** (altı tur, hepsi OTA, migration
 yok, native değişiklik yok). Marka rengi **zeytin yeşili `#5F7527`**, zemin
@@ -1576,6 +1593,71 @@ Takipçi listesinde uzun basış → onay → o kişi artık seni takip etmiyor.
 - ⚠️ **ÇIKARMAK ENGELLEMEK DEĞİL ve arayüz bunu SÖYLÜYOR** ("Dilerse tekrar
   takip edebilir"). INSERT politikası değişmedi, değişmemeli de — o kontrol
   herkesin kendi takibini kurmasının tek güvencesi. Instagram da böyle.
+
+### 🔤 Tipografi — `fontWeight` NEDEN YOK (2026-08-17, ölçümle kanıtlandı)
+> Biri "neden `Type` rollerinde `fontWeight` yok, ekleyelim" derse **önce bunu
+> okusun.** Eklemek fontu tamamen öldürür.
+
+**Kural: ağırlığa özgü bir `fontFamily` ile `fontWeight` AYNI ANDA verilemez.**
+Android, `fontFamily: 'GoogleSansFlex_700Bold'` + `fontWeight: '700'`
+gördüğünde o ailenin "bold" yüzünü arıyor, bulamıyor ve **sistem fontuna
+düşüyor**. Ağırlık artık YALNIZCA yüz adından geliyor — tek kaynak.
+
+⚠️ **Bu hata sahada 4 gün boyunca fark edilmedi.** Font turu "tamam" diye
+kapandı, oysa özel font **hiçbir ekranda uygulanmıyordu**. `fontWeight`'i
+bırakmak bilinçli bir tavizdi (*"11 yer `Type.X.fontWeight` okuyor, silinirse
+form alanları ağırlığını kaybeder"*) ve tam da o taviz hatayı üretiyordu.
+
+#### 📐 NASIL BULUNDU — tahmin değil ÖLÇÜM (yöntem dersi)
+Belirti **yanıltıcı** geldi: *"yalnızca Ana Sayfa'nın başlıkları farklı."*
+İki hipotez **kod okumasıyla çürütüldü**, ikisi de makuldü:
+- *Ekrana özgü stil/bileşen* → başlıklar paylaşılan `SectionHeader`'ı
+  kullanıyor, yerel kopya yok, override yok; `src/`'de `theme.ts` dışında
+  **tek bir literal `fontFamily` bile yok**.
+- *Font yükleme yarışı* (kullanıcının hipotezi) → `RootNavigator`'ın kapısı
+  fontlar yüklenmeden `NavigationContainer`'ı **hiç render etmiyor**, yani
+  `HomeScreen` mount bile olamıyor. Kullanıcı ayrıca **önce Profil'e gidip
+  Ana Sayfa'ya dönerek** zamanlamayı deneysel olarak da eledi.
+
+Çözen şey ölçüm oldu: Ana Sayfa'ya **geçici** olarak aynı metni üç farklı
+yolla çizen üç satır kondu — **A** = `Type.title` (token yolu) · **B** =
+yalnızca `fontFamily` · **C** = sistem fontu. Sonuç **A ≡ C ≠ B**.
+
+⚠️ **Ölçüm ayrıca semptomun kendisini de çürüttü:** `title` düşüyorsa **her
+rol** düşüyordu — uygulamanın tamamı sistem fontundaydı. "Ekranlar arası fark"
+algısı, aynı fontun farklı boyutlardaki iki örneğiydi. **Bildirilen semptomun
+kapsamı doğru olmayabilir; ölçüm onu da test etmeli.**
+
+Teşhis bloğu düzeltmeyle birlikte **geri çekildi** (`PhotoViewer`'ın
+PGRST201 teşhisindeki aynı disiplin).
+
+### Hesap silme (2026-08-17, sahada DOĞRULANDI) — projenin İLK Edge Function'ı
+`EditProfile` → "Tehlikeli bölge" → kullanıcı adını yazdıran onay sheet'i →
+`supabase/functions/delete-account`.
+
+- **Neden Edge Function:** `auth.users`'tan silmek `service_role` istiyor,
+  istemcide yalnızca anon key var. `security definer` SQL fonksiyonu elendi
+  (`auth` şemasına public fonksiyondan dokunmak önerilmiyor).
+- 🔴 **Güvenliğin tek kritik kuralı: silinecek kimlik İSTEK GÖVDESİNDEN
+  DEĞİL, doğrulanmış JWT'den okunuyor.** Gövdeden `userId` kabul eden bir uç
+  nokta **herkesin herkesi silebildiği** bir kapı olurdu. Bu dosyada
+  değiştirilmemesi gereken tek şey budur.
+- **Sıra zorunlu:** JWT doğrula → **fotoğraf yollarını OKU** (cascade'den
+  önce, sonra erişilemezler) → Storage sil → `auth.admin.deleteUser`.
+- **Migration GEREKMEDİ:** `profiles.id → auth.users on delete cascade` ve
+  `profiles`'a giden **sekiz FK'nın sekizi de** cascade.
+- ⚠️ **Storage hatası silmeyi bloklamıyor** (`removePhoto`'nun emsali). Bucket
+  public olduğu için **öksüz kalan dosya URL'ini bilene açık kalır** —
+  gizlilik metnine yazılmalı.
+- ⚠️ **`signOut({ scope: 'local' })` ŞART:** silme sonrası kullanıcı sunucuda
+  yok, token geçersiz; varsayılan `signOut()` 401 alıp yerel oturumu
+  temizlemeyebilir ve kullanıcı silinmiş bir hesapla içeride asılı kalırdı.
+- 🔑 **Şifre değil KULLANICI ADI yazdırılıyor:** Google ile girenin şifresi
+  yok; şifre sormak onları hesabını hiç silemez hale getirirdi (ve Apple'ın
+  uygulama içi silme şartını da karşılamazdı).
+- `tsconfig.json` → `supabase/functions` **dışlandı**: Deno ortamı (`Deno.env`,
+  `jsr:`) RN'in tsconfig'i altında derlenemez, dışlanmazsa `tsc` her
+  çalıştığında 7 sahte hata verip gerçek hataları gölgeliyordu.
 
 ### `PhotoViewer` — tam ekran fotoğraf, üç katman (2026-08-13, sahada DOĞRULANDI)
 Fotoğrafa dokunma akışının **yeniden tasarımı**. Bileşen:
@@ -3286,6 +3368,14 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > maddenin **ikisi de** native değişiklik. Ayrıca 1. madde `runtimeVersion`
 > politikasını değiştirdiği için sahadaki kurulumları OTA'dan koparır.
 >
+> ### ✅ KAPANDI: hesap silme + arama ekranı (2026-08-17)
+> - **Hesap silme** yapıldı (Edge Function + istemci). KVKK/GDPR silme hakkını
+>   ve Apple'ın "uygulama içi hesap silme" şartını karşılıyor. Detay: Mimari
+>   Notlar → **Hesap silme**.
+> - **`SearchScreen`'de `json.status`** artık ekrana yansıyor — listedeki en
+>   eski maddeydi ve sessizce yanlış bilgi veren tek yoldu.
+> - **Arama geçmişi** eklendi (cihazda, son 10).
+>
 > ### 🔧 GÖRSEL KİMLİK TURUNDAN KALAN ÜÇ KÜÇÜK NOT (2026-08-13)
 > Üçü de bugün bir hata üretmiyor; unutulmasın diye.
 > 1. **`RankRow`'un yorum önizlemesi `fontStyle: 'italic'` kullanıyor ama
@@ -3298,7 +3388,9 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >    karakter sınırı ve sayaç kondu (`REVIEW_MAX`), ama bu bir savunma;
 >    gerçek tavan için ayrı bir migration gerekiyor. Daha uzun bir kayıt
 >    sunucudan gelirse kırpılmıyor, yalnızca uzatılamıyor.
-> 3. **Google Sans Flex'in tabular rakam desteği doğrulanmadı.** `RankRow`'un
+> 3. **Google Sans Flex'in tabular rakam desteği HÂLÂ doğrulanmadı** — ve
+>    ⚠️ 2026-08-17'ye kadar font zaten hiç uygulanmadığı için bu madde o
+>    tarihe kadar **test EDİLEMEZDİ**. Artık gerçekten ölçülebilir. `RankRow`'un
 >    sıra sütunu ve puan değeri `fontVariant: ['tabular-nums']` kullanıyor;
 >    font desteklemiyorsa rakamlar oynayabilir. Sütun genişliği sabit olduğu
 >    için **yerleşim bozulmaz**, yalnızca hizalar kayar.
