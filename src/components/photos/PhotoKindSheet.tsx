@@ -164,7 +164,6 @@ const styles = StyleSheet.create({
   rowLabel: { ...Type.body, color: Colors.textPrimary },
   rowLabelSelected: {
     color: Colors.brandStrong,
-    fontWeight: Type.bodyStrong.fontWeight,
     // Android ozel fontta agirlik sentezlemiyor: yuz adi da gerekli.
     fontFamily: Type.bodyStrong.fontFamily,
   },

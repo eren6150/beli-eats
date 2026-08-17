@@ -238,7 +238,6 @@ const styles = StyleSheet.create({
   forgotText: {
     ...Type.caption,
     color: Colors.brand,
-    fontWeight: Type.bodyStrong.fontWeight,
     // Android ozel fontta agirlik sentezlemiyor: yuz adi da gerekli.
     fontFamily: Type.bodyStrong.fontFamily,
   },
@@ -253,7 +252,6 @@ const styles = StyleSheet.create({
   linkText: {
     color: Colors.brand,
     // Ham '700' yerine token'dan okunuyor — vurgu dili tek yerden döner.
-    fontWeight: Type.bodyStrong.fontWeight,
     // Android ozel fontta agirlik sentezlemiyor: yuz adi da gerekli.
     fontFamily: Type.bodyStrong.fontFamily,
   },

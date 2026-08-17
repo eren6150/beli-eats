@@ -120,7 +120,6 @@ const styles = StyleSheet.create({
   input: {
     // Bkz. dosya başındaki uyarı: spread YOK, token'lar tek tek.
     fontSize: Type.body.fontSize,
-    fontWeight: Type.body.fontWeight,
     fontFamily: Type.body.fontFamily,
     color: Colors.textPrimary,
     backgroundColor: Colors.canvasAlt,

@@ -292,55 +292,66 @@ export const Colors = {
  * her rol kendi yüz adına bağlı (`GoogleSansFlex_600SemiBold` gibi) ve o yüzler
  * `RootNavigator`'da tek tek yükleniyor.
  *
- * ── ⚠️ `fontWeight` KALDIRILMADI — bilinçli ────────────────────────────────
- * Kod tabanında ON BİR yer `Type.X.fontWeight`'i TEK TEK okuyor (hepsi
- * `TextInput` stili; bu projede `...Type.X` spread etmek yasak çünkü
- * `lineHeight` Android'de metni dikeyde kırpıyor). `fontWeight` silinseydi o
- * on bir yerde değer `undefined` olur ve uygulamadaki TÜM form alanları
- * sessizce ağırlığını kaybederdi. Kalması ayrıca fontlar yüklenmeden önceki
- * (ve yüklenemezse) sistem fontu halinde de doğru ağırlığı veriyor.
+ * ── 🔴 `fontWeight` HİÇBİR ROLDE YOK — ÖLÇÜMLE KANITLANDI ──────────────────
+ * Bir dönem `fontFamily` ile BİRLİKTE duruyordu ("11 yer `Type.X.fontWeight`'i
+ * okuyor, silinirse form alanları ağırlığını kaybeder" gerekçesiyle). O taviz
+ * SAHADA FONTU TAMAMEN ÖLDÜRÜYORDU: Android, ağırlığa özgü bir aileye ayrıca
+ * `fontWeight` verildiğinde o ailenin "bold" yüzünü arıyor, bulamıyor ve
+ * SİSTEM FONTUNA düşüyor. Yani özel font hiçbir yerde uygulanmıyordu.
+ *
+ * ── NASIL BULUNDU (yöntem notu) ────────────────────────────────────────────
+ * Belirti "yalnızca Ana Sayfa'nın başlıkları farklı" diye bildirildi ve iki
+ * hipotez (ekrana özgü stil, font yükleme yarışı) kod okumasıyla ÇÜRÜTÜLDÜ:
+ * başlıklar paylaşılan `SectionHeader`'ı kullanıyor ve `RootNavigator`'ın
+ * kapısı fontlar yüklenmeden `NavigationContainer`'ı hiç render etmiyor.
+ *
+ * Çözen şey tahmin değil ÖLÇÜM oldu: Ana Sayfa'ya geçici olarak AYNI metni
+ * üç farklı yolla çizen üç satır kondu —
+ *   A = `Type.title` (token yolu)   B = yalnızca `fontFamily`   C = sistem
+ * Sonuç **A ≡ C ≠ B**. Yani token yolu sistem fontuna eşitti.
+ *
+ * ⚠️ Bu aynı zamanda "sorun Ana Sayfa'ya özgü" gözlemini de çürüttü: `title`
+ * düşüyorsa HER rol düşüyordu, yani uygulamanın tamamı sistem fontundaydı.
+ * Ekranlar arası "fark" algısı, aynı fontun farklı boyutlardaki örnekleriydi.
+ *
+ * Bedeli ödendi: `Type.X.fontWeight` okuyan 11 satır `fontFamily` okumaya
+ * çevrildi. Ağırlık artık YALNIZCA yüz adından geliyor — tek kaynak.
  */
 export const Type = {
   /** Detay ekranı mekan adı — sayfada tek bir tane olur */
   display: {
     fontSize: 32,
     lineHeight: 38,
-    fontWeight: '800',
     fontFamily: 'GoogleSansFlex_800ExtraBold',
   },
   /** Ekran başlığı */
   title: {
     fontSize: 24,
     lineHeight: 30,
-    fontWeight: '700',
     fontFamily: 'GoogleSansFlex_700Bold',
   },
   /** Bölüm başlığı, kart adı, liste satırı adı */
   heading: {
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '700',
     fontFamily: 'GoogleSansFlex_700Bold',
   },
   /** Gövde metni, yorum, açıklama */
   body: {
     fontSize: 15,
     lineHeight: 22,
-    fontWeight: '400',
     fontFamily: 'GoogleSansFlex_400Regular',
   },
   /** Vurgulu gövde — buton etiketi, seçili sekme */
   bodyStrong: {
     fontSize: 15,
     lineHeight: 22,
-    fontWeight: '600',
     fontFamily: 'GoogleSansFlex_600SemiBold',
   },
   /** Adres, meta bilgi, yardımcı metin */
   caption: {
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '400',
     fontFamily: 'GoogleSansFlex_400Regular',
   },
   /**
@@ -356,14 +367,12 @@ export const Type = {
   captionStrong: {
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '600',
     fontFamily: 'GoogleSansFlex_600SemiBold',
   },
   /** Chip etiketi, sayaç alt yazısı — en küçük okunabilir kademe */
   micro: {
     fontSize: 11,
     lineHeight: 14,
-    fontWeight: '600',
     fontFamily: 'GoogleSansFlex_600SemiBold',
   },
 } as const satisfies Record<string, TextStyle>;

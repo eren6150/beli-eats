@@ -288,7 +288,6 @@ const styles = StyleSheet.create({
     // `...Type.body` SPREAD EDİLMİYOR — `lineHeight` bir TextInput'a verildiğinde
     // Android'de metni dikeyde kırpabiliyor (auth ekranlarındaki aynı gerekçe).
     fontSize: Type.body.fontSize,
-    fontWeight: Type.body.fontWeight,
     fontFamily: Type.body.fontFamily,
     color: Colors.textPrimary,
     backgroundColor: Colors.canvasAlt,

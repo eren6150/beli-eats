@@ -383,7 +383,6 @@ const styles = StyleSheet.create({
   },
   pendingEmail: {
     color: Colors.textPrimary,
-    fontWeight: Type.bodyStrong.fontWeight,
     // Android ozel fontta agirlik sentezlemiyor: yuz adi da gerekli.
     fontFamily: Type.bodyStrong.fontFamily,
   },
@@ -399,7 +398,6 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: Colors.brand,
-    fontWeight: Type.bodyStrong.fontWeight,
     // Android ozel fontta agirlik sentezlemiyor: yuz adi da gerekli.
     fontFamily: Type.bodyStrong.fontFamily,
   },
