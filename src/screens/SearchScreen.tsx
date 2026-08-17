@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Keyboard,
+  Alert,
 } from 'react-native';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,9 +17,12 @@ import { PlacePrediction, SearchStackParamList } from '../types';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
 import { SkeletonSearchRow } from '../components/ui/SkeletonLoader';
 import EmptyState from '../components/ui/EmptyState';
+import ErrorBanner from '../components/ui/ErrorBanner';
 import Chip from '../components/ui/Chip';
 import Icon from '../components/ui/Icon';
 import { useLocation } from '../hooks/useLocation';
+import { useAuth } from '../hooks/useAuth';
+import { useSearchHistory } from '../hooks/useSearchHistory';
 
 /**
  * ⚠️ Places REST anahtarı — native harita anahtarından AYRI.
@@ -101,6 +105,32 @@ export default function SearchScreen() {
    * yanıp sönme vardı; (b) ise `handleSelect` bug'ının görünen yüzüydü.
    */
   const [searchedFor, setSearchedFor] = useState<string | null>(null);
+  /**
+   * Aramanın kendisi başarısız oldu mu — kullanıcıya GÖSTERİLEN kısa metin.
+   *
+   * ── NEYİ KAPATIYOR ────────────────────────────────────────────────────────
+   * `json.status` bir dönem yalnızca konsola yazılıyordu ve ekran bu durumları
+   * "Sonuç bulunamadı" diye gösteriyordu. Yani anahtar reddedildiğinde
+   * (`REQUEST_DENIED`), günlük kota dolduğunda (`OVER_QUERY_LIMIT`) veya ağ
+   * koptuğunda kullanıcı **"burada restoran yok"** sanıyordu. Sessizce yanlış
+   * bilgi veren tek yol buydu; günlük kota 2.000'e çekildikten sonra
+   * `OVER_QUERY_LIMIT` gerçek bir ihtimal.
+   *
+   * ── NEDEN TEK MESAJ, DURUM KODUNA GÖRE AYRI METİN DEĞİL ───────────────────
+   * Kullanıcı `REQUEST_DENIED` ile `OVER_QUERY_LIMIT` karşısında FARKLI bir
+   * şey yapamaz — ikisi de "arama şu an çalışmıyor, sonra dene". Ayrım
+   * geliştiriciyi ilgilendiriyor ve o zaten `console.warn`'da. Projenin kuralı:
+   * ekrana kısa ve eyleme dönük metin, konsola tam nesne.
+   */
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  /**
+   * Arama geçmişi — cihazda, kullanıcıya bağlı anahtarla (gerekçe hook'ta).
+   * `user?.id` verilmesi şart: aynı telefonda hesap değiştiren iki kişi
+   * birbirinin geçmişini görmemeli.
+   */
+  const { user } = useAuth();
+  const history = useSearchHistory(user?.id);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * Yanıt sırası koruması: yalnızca EN SON başlatılan istek state'e yazabilir.
@@ -122,6 +152,8 @@ export default function SearchScreen() {
 
     const seq = ++requestSeqRef.current;
     setLoading(true);
+    // Yeni deneme, eski hatayı taşımasın.
+    setSearchError(null);
     try {
       /**
        * Konum bias: kullanıcının 50 km çevresini önceliklendir.
@@ -157,29 +189,37 @@ export default function SearchScreen() {
       if (seq !== requestSeqRef.current) return;
 
       /**
-       * `json.status` hâlâ ARAYÜZE yansıtılmıyor (açık iş: `places.ts`'teki
-       * `autocomplete()`'e geçiş) ama artık KONSOLA düşüyor.
+       * `json.status` ARTIK ARAYÜZE DE YANSIYOR (2026-08-13).
        *
-       * Sebep: bu ekran sessizce bozulabilen tek Google yolu. Anahtar yanlış,
-       * kota dolu veya API kısıtı hatalıysa `predictions` hiç gelmiyor ve
-       * ekranda yalnızca "Sonuç bulunamadı" görünüyor — yani teşhis edilemez
-       * hale geliyor. Bu satır davranışı DEĞİŞTİRMİYOR (kural gereği ayrı bir
-       * diff'e ait), yalnızca körlüğü kaldırıyor. SHA-1 Android kısıtlaması
-       * denendiğinde ilk bakılacak yer burası olacak.
+       * `ZERO_RESULTS` bir hata DEĞİL — gerçekten sonuç yok demek, ve o
+       * durumda "Sonuç bulunamadı" doğru cevap. Diğer her durum (
+       * `REQUEST_DENIED`, `OVER_QUERY_LIMIT`, `INVALID_REQUEST`,
+       * `UNKNOWN_ERROR`) aramanın YAPILAMADIĞI anlamına geliyor.
+       *
+       * ⚠️ BU DALDA `setSearchedFor` ÇAĞRILMIYOR — kritik nokta bu. O bayrak
+       * "bu metin için arama tamamlandı" demek ve "Sonuç bulunamadı" ekranının
+       * tek anahtarı. Hatalı bir yanıtta set edilseydi kullanıcı yine
+       * "burada restoran yok" görürdü, yani düzeltme hiçbir işe yaramazdı.
        */
       if (json.status && json.status !== 'OK' && json.status !== 'ZERO_RESULTS') {
         console.warn(
           `[SearchScreen] Places autocomplete status=${json.status}`,
           json.error_message ?? ''
         );
+        setSearchError('Arama şu an yapılamıyor. Biraz sonra tekrar dene.');
+        setLoading(false);
+        return;
       }
 
       if (json.predictions) setPredictions(json.predictions);
       // Arama bu metin için TAMAMLANDI; "sonuç yok" demeye ancak şimdi hak var.
       setSearchedFor(input);
     } catch (e) {
+      // Ağ hatası da aynı sınıf: arama YAPILAMADI. Öncesinde yalnızca
+      // loglanıyordu ve ekran yine "Sonuç bulunamadı" diyordu.
       console.error('Places autocomplete error:', e);
       if (seq !== requestSeqRef.current) return;
+      setSearchError('Bağlantını kontrol et.');
     }
     setLoading(false);
   };
@@ -213,12 +253,52 @@ export default function SearchScreen() {
    */
   const handleSelect = (prediction: PlacePrediction) => {
     Keyboard.dismiss();
+
+    /**
+     * Geçmişe kayıt BURADA — her tamamlanan aramada DEĞİL.
+     *
+     * ⚠️ TUZAK: `fetchPredictions` içinde kaydetmek cazip ama geçmişi çöpe
+     * çevirirdi. Debounce 400 ms ve kullanıcı yazarken duraklıyor; "mcd",
+     * "mcdo", "mcdonal" ayrı ayrı tamamlanmış aramalar olarak kaydedilirdi.
+     * Bir sonuca dokunmak ise gerçek bir NİYET ve arama başına tek kayıt.
+     *
+     * Bedeli kabul edildi: sonuç bulunamayan aramalar geçmişe girmiyor —
+     * başarısız bir aramayı tekrar önermenin faydası yok.
+     */
+    history.record(query);
+
     const cleanName = cleanPlaceName(prediction.structured_formatting.main_text);
     // Kendi stack'imizdeki rotaya push ediyoruz; geri tuşu arama sonuçlarına döner.
     navigation.navigate('RestaurantDetail', {
       placeId: prediction.place_id,
       placeName: cleanName,
     });
+  };
+
+  /**
+   * Geçmişteki bir terime dokunma → o aramayı TEKRAR yap.
+   *
+   * `fetchPredictions` DOĞRUDAN çağrılıyor, debounce'a girilmiyor: kullanıcı
+   * yazmıyor, hazır bir terim seçiyor — 400 ms beklemenin karşılığı yok.
+   * Bekleyen bir debounce varsa iptal ediliyor, yoksa az önce yazılmış bir
+   * metnin isteği bunun üstüne binebilirdi (`handleClear`'ın dersi).
+   */
+  const handleHistoryPress = (term: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setQuery(term);
+    fetchPredictions(term);
+  };
+
+  /** Yıkıcı ve tek hamlede geri gelmiyor → onaylı. Tek tek silme onaysız. */
+  const handleClearHistory = () => {
+    Alert.alert(
+      'Arama geçmişini temizle',
+      'Son aramaların silinecek. Bu işlem geri alınamaz.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Temizle', style: 'destructive', onPress: history.clear },
+      ]
+    );
   };
 
   const handleClear = () => {
@@ -231,6 +311,7 @@ export default function SearchScreen() {
     setQuery('');
     setPredictions([]);
     setSearchedFor(null);
+    setSearchError(null);
     setLoading(false);
   };
 
@@ -299,6 +380,63 @@ export default function SearchScreen() {
 
     // 2. Hiç yazılmadı.
     if (trimmed.length === 0) {
+      /**
+       * Geçmiş YALNIZCA kutu boşken görünüyor.
+       *
+       * Yazarken de göstermek, tahmin listesiyle AYNI alanı paylaşmak demekti:
+       * iki liste arasında hangisinin ne zaman kazanacağı yeni bir kural
+       * gerektirir ve `renderBody`'nin beş dalı zaten bir hata düzeltmesinin
+       * sonucu ("Sonuç bulunamadı" bir dönem CATCH-ALL'dı). Boş kutu, geçmişin
+       * doğal ve tek yeri.
+       */
+      if (history.terms.length > 0) {
+        return (
+          <View style={styles.historyWrapper}>
+            <View style={styles.historyHeader}>
+              <Text style={styles.historyTitle}>Son aramaların</Text>
+              <TouchableOpacity
+                onPress={handleClearHistory}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.historyClear}>Tümünü temizle</Text>
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={history.terms}
+              keyExtractor={(term) => term}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item, index }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.historyItem,
+                    index < history.terms.length - 1 && styles.resultItemBorder,
+                  ]}
+                  onPress={() => handleHistoryPress(item)}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="search" size={16} color={Colors.textMuted} />
+                  <Text style={styles.historyTerm} numberOfLines={1}>
+                    {item}
+                  </Text>
+                  {/* İç dokunma hedefi: satırı ezip yalnızca bu terimi siliyor.
+                      RN iç içe dokunmada en içteki hedefi seçiyor (`RankRow`'un
+                      cihazda doğrulanmış deseni). Onay YOK — yıkıcı değil. */}
+                  <TouchableOpacity
+                    onPress={() => history.remove(item)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item} aramasını geçmişten kaldır`}
+                  >
+                    <Icon name="close" size={16} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        );
+      }
+
       return (
         <View style={styles.emptyWrapper}>
           <EmptyState
@@ -367,6 +505,19 @@ export default function SearchScreen() {
           )}
         </View>
       </View>
+
+      {/* ── Hata şeridi ──
+          `renderBody`'nin İÇİNDE değil, ÜSTÜNDE: elde eski sonuçlar varken de
+          görünmesi gerekiyor. `renderBody`'nin ilk dalı sonuç varsa listeyi
+          döndürüyor, yani banner oraya konsaydı tam da "arama bozuldu ama
+          ekranda eski liste duruyor" durumunda gizli kalırdı. */}
+      {searchError && (
+        <ErrorBanner
+          message={searchError}
+          onRetry={() => fetchPredictions(query)}
+          style={styles.errorBanner}
+        />
+      )}
 
       {/* ── Body ── */}
       {renderBody()}
@@ -478,5 +629,39 @@ const styles = StyleSheet.create({
   emptyWrapper: {
     flex: 1,
     justifyContent: 'center',
+  },
+  errorBanner: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+
+  historyWrapper: { flex: 1 },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
+  },
+  historyTitle: {
+    ...Type.captionStrong,
+    color: Colors.textSecondary,
+  },
+  historyClear: {
+    ...Type.captionStrong,
+    color: Colors.brandStrong,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  historyTerm: {
+    ...Type.body,
+    color: Colors.textPrimary,
+    flex: 1,
   },
 });
