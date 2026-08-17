@@ -12,7 +12,20 @@
 | **Hesap silme** (Edge Function + istemci) | `e4e926d` |
 | 🔴 **Font düzeltmesi** — font hiç uygulanmıyormuş | `96535ba` |
 
-🔴 **Bu turun en önemli bulgusu:** özel font (Google Sans Flex) **sahada
+**🤖 BOT KORUMASI (hCaptcha) — KOD HAZIR, SAHADA DEĞİL.** Beş auth ucuna
+captcha token'ı bağlandı, `version` **1.3.0** / versionCode **6**'ya çekildi.
+⚠️ **Build bekliyor ve panel anahtarı KAPALI** — anahtar proje geneli ve geri
+uyumluluk kaçışı yok, erken açılırsa sahadaki APK'nın auth'u anında ölür ve
+düzeltme OTA ile gidemez. Zorunlu sıra ve tüm kararlar: Mimari Notlar →
+**Bot koruması**.
+
+⚠️ **1.2.0'A ARTIK OTA GÖNDERİLEMEZ.** `version` 1.3.0 olduğu için yayınlanacak
+güncellemeler runtime 1.3.0'ı hedefliyor; sahadaki APK'lar (senin ve arkadaşının
+cihazı, versionCode 5) **yeni APK kurulana kadar OTA almaz.** Bump bilinçliydi:
+bundle `react-native-webview` import ediyor ve o modül eski binary'de yok, yani
+1.2.0'a inecek bir OTA çökertirdi.
+
+🔴 **Font turunun en önemli bulgusu:** özel font (Google Sans Flex) **sahada
 hiçbir yerde çalışmıyormuş** ve fark edilmemişti. Sebep `Type` rollerinde
 `fontFamily` ile `fontWeight`'in BİRLİKTE durması; Android ağırlığa özgü bir
 aileye ayrıca `fontWeight` verildiğinde sistem fontuna düşüyor. Kök neden ve
@@ -175,13 +188,20 @@ takip ettiği kişilerin aktivite akışı olacak.
 - Proje kök dizini: C:\proje\kodlama\beli-eats
 
 ## Ortam Notları (önemli)
-- **`node` PATH'te değil.** Bu oturumda doğrulandı: `node --version` → command not found.
-  Binary: `C:\tmp\node22_extract\node-v22.17.0-win-x64\node.exe`
-  Typecheck komutu (PowerShell):
+- **`node` PATH'te — 2026-08-17'de düzeltildi.** Bu not uzun süre *"PATH'te
+  değil, tam yolu kullan"* diyordu ve **artık yanlış**. Bash aracında
+  doğrulandı: `which node` → `/c/tmp/node22_extract/node-v22.17.0-win-x64/node`,
+  `node --version` → v22.17.0, `npm --version` → 10.9.2.
+  Typecheck (Bash):
   ```
-  $node = "C:\tmp\node22_extract\node-v22.17.0-win-x64\node.exe"; & $node ".\node_modules\typescript\lib\tsc.js" --noEmit
+  node ./node_modules/typescript/lib/tsc.js --noEmit
   ```
-  (Kullanıcı PATH'e eklediğini belirtti ama Claude'un shell'inde görünmüyor — tam yolu kullan.)
+  `npx expo install`, `npx expo-modules-autolinking search -p android` ve
+  `npx eas-cli@latest ...` de öneksiz çalışıyor — yani paket kurulumu ve
+  autolinking kontrolü kullanıcıya devredilmek zorunda değil.
+  Binary dizini hâlâ `C:\tmp\node22_extract\node-v22.17.0-win-x64`; "command
+  not found" alınırsa PowerShell'de önek hâlâ işe yarar:
+  `$env:PATH = "C:\tmp\node22_extract\node-v22.17.0-win-x64;" + $env:PATH`
 - **Her kod değişikliğinden sonra typecheck çalıştır.**
 - Supabase anahtarları `.env` içinde, `.gitignore`'da. **`app.config.js`** dinamik
   config (API key enjeksiyonu burada), `app.json` statik kısım.
@@ -1658,6 +1678,123 @@ PGRST201 teşhisindeki aynı disiplin).
 - `tsconfig.json` → `supabase/functions` **dışlandı**: Deno ortamı (`Deno.env`,
   `jsr:`) RN'in tsconfig'i altında derlenemez, dışlanmazsa `tsc` her
   çalıştığında 7 sahte hata verip gerçek hataları gölgeliyordu.
+
+### 🤖 Bot koruması — hCaptcha (2026-08-17, KOD HAZIR, SAHADA DEĞİL)
+Supabase'in CAPTCHA koruması + istemci köprüsü. `src/lib/captcha.tsx` ve
+`useAuth`'un beş çağrısı. **Build bekliyor; panel anahtarı KAPALI.**
+
+**Korunan şey:** beş auth ucu anon key ile doğrudan Supabase'e gidiyor
+(`signUp` · `signInWithPassword` · `resend` · `resetPasswordForEmail` ·
+`verifyOtp`). Anon key bundle'da, yani APK'yı eline alan biri bu uçlara script
+atabilir. En gerçekçi zarar **SendGrid kotasının yakılması**: her çağrı bir
+mail, bot kotayı dakikalar içinde bitirir ve **meşru kullanıcılar onay maili
+alamaz** — Kademe 2'nin ✅ işaretli "custom SMTP" koşulunu fiilen geçersiz
+kılar. İkincil zarar çöp `auth.users` + `profiles` satırları.
+
+#### 🔴 DAĞITIM SIRASI — TERSİ SAHAYI KIRAR, GERİ UYUMLULUK KAÇIŞI YOK
+Supabase'deki anahtar **proje geneli** ve açıldığı an token taşımayan her
+istek reddedilir. Sahadaki APK token göndermiyor → anahtar erken açılırsa
+**kayıt, giriş, şifre sıfırlama, tekrar gönder dördü birden anında ölür.**
+
+⚠️ Ve düzeltme **OTA ile gönderilemez** (aşağıdaki WebView maddesi). Yani
+zorunlu sıra: **build → herkes kursun → doğrula → SONRA panel anahtarı.**
+
+- **Migration 017'nin "önce migration sonra OTA" durumunun DAHA SERT hali:**
+  orada `default true` sayesinde parametreyi göndermeyen eski istemci
+  bozulmuyordu. Burada öyle bir varsayılan **yok** — anahtar açık ya da kapalı.
+- **Ters yön güvenli ve planın emniyet kemeri bu:** token GÖNDEREN istemci
+  anahtar KAPALIYKEN de çalışır, sunucu token'a bakmaz. Dolayısıyla **geri
+  alma anlık ve kodsuz** — bir şey ters giderse panelden anahtarı kapatmak
+  yeter, yeni build gerekmez.
+
+#### Neden build: WebView zinciri
+Token üretmenin tek yolu hCaptcha'nın web widget'ı, o da WebView içinde
+çalışıyor. `react-native-webview@13.15.0` (SDK 54'ün sabitlediği sürüm)
+eklendi → native modül → autolink → **build**. §2 ritüeli gereği `versionCode`
+5→6 **ve** `version` 1.2.0→**1.3.0**.
+
+- **`version` bump'ı build'in değil KODUN parçası olarak yapıldı** ve gerekçesi
+  yapısal: bundle artık `react-native-webview` import ediyor, o modül
+  versionCode 5 binary'sinde YOK. Bump olmadan yanlışlıkla gönderilecek bir
+  `eas update` runtime 1.2.0 cihazlara iner ve **çökertir**. 1.3.0'a çekmek o
+  OTA'yı fiziksel olarak imkânsız kılıyor — insan hafızasına değil politikaya
+  dayanan koruma.
+- **Bump öncesi doğrulandı:** son OTA (font fix) ile HEAD arasında `src/`,
+  `app.json` ve `app.config.js` **hiç değişmemiş**, yani sahaya inmeyi bekleyen
+  OTA'lık iş yoktu. Bekleyen iş olsaydı önce o gönderilmeliydi — bump'tan sonra
+  1.2.0'a OTA gönderilemiyor.
+- **Kurulan SDK 4.1.0** ve tek bağımlılığı `@hcaptcha/loader`; eski sürümlerin
+  `react-native-modal` bağımlılığı artık yok. **Tek native ek webview.**
+  (Web araması 3.0.2 diyordu, yerel `package.json` 4.1.0 — sürüm bilgisi
+  paketin kendisinden okundu.)
+- **Autolinking build ALMADAN kontrol edildi** (§5.1'in dersi): tek boş olmayan
+  duplicate `expo-constants` ve o **önceden var** (package-lock diff'inde yok),
+  üstelik iki kopya da aynı sürüm (18.0.13). `expo-font`'u çökerten şey **farklı
+  ve uyumsuz** sürümlerdi (57.0.1 ↔ 14.0.12) — bu onun sınıfından değil.
+
+#### Tasarım kararları
+- **ÜÇ AUTH EKRANI HİÇ DEĞİŞMEDİ.** Widget'ı `AuthProvider` kendi ağacında
+  render ediyor, token `useAuth` içinde alınıyor, beş fonksiyonun dönüş şekli
+  birebir korundu. `useAuth`'un Context'e çevrilmesindeki kararın aynısı:
+  değişen tek şey değerin nereden geldiği. Supabase/hCaptcha detayı hook'ta
+  kalıyor (`toDisplayError`'ın gerekçesi).
+- **`getCaptchaToken()` modül fonksiyonu, hook DEĞİL:** beş callback de token
+  istiyor ve hiçbiri bir hook örneğine sahip değil. `addPlaceToList`'in
+  `useListItems` dışında durmasıyla aynı gerekçe. Yan fayda, `useCallback`
+  bağımlılık dizilerinin boş kalması.
+- **`size: 'invisible'`** — hCaptcha yalnızca şüphelendiğinde bulmaca
+  çıkarıyor. Görünür bir checkbox'ı her girişe koymak, korumanın bedelini her
+  meşru kullanıcıya ödetirdi.
+- **İPTAL BURADA HATA SAYILIYOR — Google girişinin TERSİ, bilinçli.**
+  `signInWithGoogle`'da iptal hata değil, çünkü kullanıcı ayrı bir butona basıp
+  o akışı bütünüyle terk ediyor: tamamlanmış bir karar. Burada ise "Giriş
+  Yap"a basmış ve doğrulama bir ARA ADIM olarak çıkmış; kapatınca istediği
+  giriş olmuyor ve ekranda sebebini anlatan başka hiçbir şey yok. Sessiz
+  kalmak, spinner'ın durup hiçbir şeyin olmaması demekti.
+- **Site anahtarı eksikse uygulama KİLİTLENMİYOR**, istek tokensiz gidiyor.
+  Anahtar kapalıyken sorunsuz çalışır, açıkken sunucu `captcha_failed` döndürür
+  — yani hata, yapılandırmayı gerçekten bilen tarafta üretiliyor.
+  `supabaseClient.ts`'in "açılışta fırlatma, konsola tam teşhis" kararının
+  aynısı; eksik yapılandırmayı sessiz bir ölüme çevirmek bir kez APK'yı
+  açılışta çökertmişti.
+- **`settle()` İDEMPOTENT** — süs değil. Kütüphanenin `hide()` sözleşmesi
+  belirsiz: `.d.ts` "argümansız çağırmak `cancel` üretir" gibi okunabiliyor ama
+  KAYNAK tersini yapıyor (`if (source) onMessage(...)`). İki okumadan hangisi
+  doğru olursa olsun sonuç aynı kalsın diye ilk kapatan kazanıyor.
+- **`'open'` mesajı TERMİNAL DEĞİL** (challenge görünür oldu). Sonuç sayılsaydı
+  kullanıcı bulmacayı çözerken yarıda kesilirdi.
+- **120 sn'lik backstop:** hCaptcha'nın kendi zaman aşımı yalnızca YÜKLEMEYİ
+  kapsıyor. Widget yüklenip hiç cevap vermezse ekrandaki spinner sonsuza kadar
+  dönerdi — bu projede "sonsuz spinner" bir kez gerçek bir hata oldu.
+
+#### Doğrulanan ve doğrulanmayan
+- ✅ **Google girişi captcha'nın DIŞINDA** — yerel kanıt: `auth-js`'in
+  `SignInWithOAuthCredentials` tipinde `captchaToken` alanı **yok**, oysa diğer
+  beş tipin hepsinde var. Anahtar açıldığında Google girişi kırılmaz.
+- ✅ Supabase'in hata kodu **`captcha_failed`** (`auth-js` `ErrorCode` union'ında
+  doğrulandı), `AUTH_ERROR_TEXT`'e eklendi.
+- ⚠️ **`/verify` ucunun sunucu tarafında gerçekten captcha istediği
+  DOĞRULANMADI** — supabase-js tipi alanı kabul ediyor, o kadar. Token
+  göndermek iki durumda da güvenli (istemiyorsa yok sayılır), göndermemek
+  istiyorsa akışı kırardı. Bedeli: şifre sıfırlama akışında **iki tur**
+  doğrulama (kod isterken + kodu doğrularken). Token tek kullanımlık ve kısa
+  ömürlü olduğu için ilkini saklayıp taşımak mümkün değil. Anahtar açıldığı gün
+  ölçülüp gereksizse kaldırılabilir.
+- ⚠️ **HİÇBİRİ BUILD ALINMADAN DOĞRULANAMAZ.** Expo Go bu projeyi zaten açmıyor
+  (keyboard-controller) ve WebView de native. "Expo Go'daki ölçüm kanıt
+  değildir" dersinin dördüncü tekrarı, bu kez baştan kabul edilmiş hâli.
+
+#### Panel tarafı
+- **Site key PUBLIC**, `EXPO_PUBLIC_HCAPTCHA_SITE_KEY` olarak bundle'a gömülüyor.
+  **Secret key yalnızca Supabase panelinde**, kodda hiçbir yerde yok.
+- ⚠️ **§5.2'nin tuzağı burada da geçerli:** `.env`'de olması YETMEZ, expo.dev →
+  Environment variables altında **preview ve production** ortamlarına da
+  eklenmeli. Eksikse bundle boş anahtarla çıkar ve anahtar açıldığında
+  **kimse giriş yapamaz.** Kontrol: `npx eas-cli@latest env:list --environment preview`
+- **Tamamlayıcı önlem (bot koruması DEĞİL, hasar sınırlama):** Authentication →
+  Rate Limits → e-posta gönderim saatlik tavanı. Botun SendGrid kotasını
+  yakmasını üst sınırlıyor. Tavana çarpan meşru kullanıcı
+  `over_email_send_rate_limit` alıyor ve o kod zaten Türkçe metne eşli.
 
 ### `PhotoViewer` — tam ekran fotoğraf, üç katman (2026-08-13, sahada DOĞRULANDI)
 Fotoğrafa dokunma akışının **yeniden tasarımı**. Bileşen:
@@ -3354,7 +3491,13 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > Build 1'de gitti: **keyboard-controller** (native taraf) · **kaydırmalı
 > sekmeler** · **`expo` yama farkı** · **deep link + Google girişi**.
 >
-> **Kalan iki madde, ikisi de acil değil:**
+> **🤖 BUILD 2'NİN TETİKLEYİCİSİ ARTIK BELLİ: bot koruması.** Kodu hazır ve
+> `react-native-webview` yüzünden OTA ile gidemiyor; `version` 1.3.0 /
+> versionCode 6 zaten yazıldı. Build alındığında dağıtım sırası **zorunlu**:
+> herkes yeni APK'yı kursun → doğrula → **SONRA** panel anahtarı. Gerekçe:
+> Mimari Notlar → **Bot koruması**.
+>
+> **Yanına binebilecek iki madde, ikisi de acil değil:**
 > 1. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9). `.fingerprintignore`
 >    hazır ve kanıtlı (Fark 1); kalan iş **Fark 2'nin bir build ile teşhisi**.
 >    Build 1'e bilinçli alınmadı — o build Fark 2'yi besleyen kategoriden
