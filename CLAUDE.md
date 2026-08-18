@@ -20,10 +20,12 @@ açıldıktan sonra kayıt · giriş · şifre sıfırlama · tekrar gönder · 
 girişi hepsi doğru çalışıyor (Faz C). Kararlar, dağıtım sırasının neden zorunlu
 olduğu ve ilk build'i patlatan `prop-types`: Mimari Notlar → **Bot koruması**.
 
-✅ **Places anahtarı — Aşama 1 sahada** (2026-08-17). Edge Function
-`google-places` (details + autocomplete) + migration 022 (`places.photo_base_urls`).
-Fotoğraf 302'si sunucuda çözülüyor, anahtarsız CDN adresi saklanıyor.
-⚠️ **Aşama 2-4 açık ve anahtar HÂLÂ bundle'da** — asıl kazanç Aşama 4'te.
+✅ **Places anahtarı — Aşama 1 ve 2 sahada** (2026-08-17). Edge Function
+`google-places` + migration 022; `refreshPlace` ve `SearchScreen` EF'e geçti,
+istemci Google'a **JSON için artık hiç gitmiyor**.
+⚠️ **Anahtar HÂLÂ bundle'da** — `photoUrl` ona bağlı (12 çağrı yeri, Aşama 3).
+Asıl kazanç Aşama 4'te: anahtarı çıkarmak **ve Console'da döndürmek**.
+🔴 **Aşama 3'ün ön koşulu kasıtlı backfill** — ölçüldü, 57 mekandan 3'ü dolu.
 Detay ve teşhis dersleri: Mimari Notlar → **Places anahtarını istemciden çıkarma**.
 
 ✅ **Migration 021 — metin uzunluğu tavanları** (2026-08-17, panelde çalıştırıldı
@@ -758,9 +760,42 @@ eş tutulmalı.
 | Aşama | İçerik | Durum |
 |---|---|---|
 | 1 | EF + migration 022 + EF'in `upsert_place`'i çağırması | ✅ **sahada** |
-| 2 | `refreshPlace` + `SearchScreen` → EF | ⬜ |
+| 2 | `refreshPlace` + `SearchScreen` → EF | ✅ **sahada** |
 | 3 | `photoUrl` yeniden yazımı, 12 çağrı yeri + 4 sıralama ekranı | ⬜ |
 | 4 | Anahtarı bundle'dan çıkar → OTA → **Console'da DÖNDÜR** | ⬜ |
+
+#### ✅ Aşama 2 (2026-08-17) — istemci Google'a artık hiç gitmiyor
+`refreshPlace` ve `SearchScreen` EF'e geçti; 7 testin hepsi cihazda geçti ve
+**gecikme fark edilir seviyede değil** (cache miss'te zincir uzamasına rağmen).
+- `places.ts` **290 → 148 satır**: `getPlaceDetails`, `nearbySearch`,
+  `autocomplete`, `placesRequest`, `PlacesError`, `STATUS_HINTS` ve üç arayüz
+  ölü kaldı, silindi. Kalan: `GOOGLE_API_KEY`, `isFoodPlace`, `parseCoord`,
+  `photoUrl`.
+- **Alan maskesi artık tek yerde** (EF). `SearchScreen`'in ham `fetch`'i ile
+  kullanılmayan `autocomplete()`'in ikiliği de kapandı.
+- **EF'e `fallbackName` eklendi:** POI dokunuşunda isim native olaydan geliyor
+  ve Google detayda isim döndürmezse tek kaynak o. İkisi de yoksa satır
+  yazılmıyor, 422 dönüyor — `placeId`'yi isim diye yazmak NOT_FOUND'u 7 gün
+  maskelerdi.
+- **`upsert_place`'in `authenticated` yetkisi ALINMADI:** OTA uygulanırken her
+  cihazda en az bir oturum eski bundle'la çalışıyor ve o kod RPC'yi doğrudan
+  çağırıyor. Aşama 3 sonrasına bırakıldı.
+
+#### 🔴 AŞAMA 3'ÜN ÖN KOŞULU: KASITLI BACKFILL (ölçüldü, 2026-08-17)
+Aşama 2'nin *"`photo_base_urls` null → expired"* kuralının satırları kendi
+kendine dolduracağı düşünülmüştü. **Ölçüm bunu yalanladı: 57 mekandan yalnızca
+3'ü doldu.**
+
+Sebep yapısal: kural `resolvePlace`'ten geçen mekanlarda işliyor, yani
+kullanıcının **açtıklarında**. Liste ekranları (`ProfileScreen`, `HomeScreen`,
+`ListDetailScreen`) `getPlaces()` ile **toplu L2 okuması** yapıyor ve yenileme
+tetiklemiyor — doğru davranış, aksi hâlde 57 satırlık bir liste 57 EF çağrısı
+üretirdi.
+
+⚠️ **Sonuç: Aşama 3 bu haliyle sahaya inseydi mekanların çoğunda fotoğraf
+görünmezdi.** Aşama 3'ün ilk adımı, kalan satırları kasıtlı olarak
+doldurmak olmalı (54 satır ≈ 54 faturalanan `details` çağrısı, günlük kota
+2.000 — maliyet ihmal edilebilir).
 
 ⚠️ **Aşama 3'ün gizli maliyeti:** `useRankings` `.select('*')` yapıyor, `places`
 gömmüyor. Yani `ProfileScreen`/`UserProfileScreen`/`MapSummarySheet`/
@@ -3770,9 +3805,11 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   edilmemesini sağlıyor. Kendi işi; anahtar üretimi + `app.config.js` +
 >   sertifikanın build'e girmesi demek, yani **build gerektirir**. Düşük-orta
 >   öncelik.
-> - **Places anahtarı Aşama 2 ve 3** (Aşama 1 sahada). Aşama 2: `refreshPlace`
->   + `SearchScreen` → Edge Function. Aşama 3: `photoUrl` yeniden yazımı,
->   **12 çağrı yeri** + dört sıralama ekranına `places` satırı. İkisi de saf JS.
+> - **Places anahtarı Aşama 3** (1 ve 2 sahada). `photoUrl` yeniden yazımı,
+>   **12 çağrı yeri** + dört sıralama ekranına `places` satırı. Saf JS.
+>   🔴 **Ön koşul: kasıtlı backfill** — yenileme kuralı satırları kendi kendine
+>   doldurmuyor (ölçüm: 57'de 3), çünkü liste ekranları `getPlaces()` ile
+>   yenileme tetiklemeden okuyor.
 >   ⚠️ **Aşama 4 OTA DEĞİL panel işi ve ZORUNLU:** anahtarı Google Console'da
 >   döndürmek. Sahadaki APK'ya gömülü anahtar aksi hâlde yaşamaya devam eder ve
 >   o anahtar ayrıca bir sohbet oturumunda düz metin paylaşıldı.
