@@ -1,0 +1,105 @@
+-- ====================================================
+-- Migration 022 — çözülmüş fotoğraf taban adresleri
+-- Supabase SQL Editor'a kopyalayıp çalıştır.
+-- Bağımlılık: migration 002 (`places` tablosu).
+-- ====================================================
+--
+-- ── NEDEN ───────────────────────────────────────────────────────────────────
+-- Google Places anahtarını istemciden çıkarma işinin (Aşama 1) sunucu ayağı.
+--
+-- Bugün fotoğraf adresi istemcide kuruluyor (`places.ts` → `photoUrl`) ve
+-- anahtarı URL'in İÇİNE gömüyor:
+--     …/place/photo?maxwidth=400&photoreference=REF&key=ANAHTAR
+-- Bu adres doğrudan `<Image>`'a veriliyor, yani anahtar bundle'da olmak
+-- ZORUNDA. Sadece JSON uçlarını (details/autocomplete) sunucuya taşımak bu
+-- yüzden hiçbir işe yaramaz — anahtar yine çıkarılabilir kalır.
+--
+-- ── ÖLÇÜLEN DAVRANIŞ (2026-08-17, curl ile doğrulandı) ──────────────────────
+-- `/place/photo` ucu **302** döndürüyor ve `Location` başlığı anahtarsız bir
+-- CDN adresi veriyor:
+--     https://lh3.googleusercontent.com/place-photos/AG9NLj…=s1600-w400
+-- Ayrıca sondaki `=s1600-w400` boyut ekidir ve DEĞİŞTİRİLEBİLİR: aynı adres
+-- `=w800` ile de sorunsuz yükleniyor (ayrıca test edildi).
+--
+-- Bu iki ölçüm birlikte tasarımı belirledi: sunucu 302'yi bir kez çözüp
+-- **boyut eki OLMADAN** taban adresi saklıyor, istemci render anında
+-- `=w{genişlik}` ekliyor. Sonuç:
+--   · anahtar hiçbir yerde görünmüyor
+--   · `<Image>` Google CDN'inden DOĞRUDAN yüklüyor → Supabase egress'i YOK
+--     (baytları proxy'lemek bu projenin ücretsiz katmandaki asıl darboğazını
+--      vurur; o yüzden elendi)
+--   · `photoUrl(place, width)` **senkron kalıyor** — 12 render yolunu state'e
+--     taşımak gerekmiyor
+--
+-- ── DİZİ, TEK KOLON DEĞİL ───────────────────────────────────────────────────
+-- `photo_refs` ile İNDEKS İNDEKS eşleşiyor: `photo_base_urls[i]`,
+-- `photo_refs[i]`'nin çözülmüş hâli. Mekan sayfası bütün fotoğrafları
+-- gösteriyor (`photo_refs.map`), kapak ise her yerde `[1]`.
+-- ⚠️ Çözülemeyen bir referansın yerine **null** yazılıyor; hizalama bozulmasın
+-- diye eleman ATILMIYOR.
+--
+-- ── ⚠️ `upsert_place` BİLİNÇLİ OLARAK DEĞİŞTİRİLMEDİ ───────────────────────
+-- Yeni kolonu oraya parametre olarak eklemek cazipti; üç sebeple yapılmadı:
+--
+--   (a) Yeni parametre eklemek `create or replace` ile OLMUYOR — aşırı yükleme
+--       yaratıyor (migration 008'in dersi), yani önce `drop function` gerekir.
+--       Bu da çalışan bir fonksiyonu bir an ortadan kaldırmak ve ~130 satırlık
+--       gövdeyi bu dosyaya kopyalamak demek: sessiz drift'e açık.
+--   (b) `upsert_place`'in VARLIK SEBEBİ istemcinin `places`'e yazamaması.
+--       Edge Function `service_role` taşıyor, yani o korumaya ihtiyacı yok;
+--       taban adresleri doğrudan yazabiliyor.
+--   (c) Migration 019'un gerekçesiyle aynı: çalışan bir tanımı değiştirmek
+--       yerine üstüne eklemek daha güvenli.
+--
+-- Sonuç: EF önce `upsert_place` RPC'sini çağırıyor (normalizasyon kuralı hâlâ
+-- TEK yerde), sonra bu kolonu `service_role` ile yazıyor.
+--
+-- ── ⚠️ GEÇİCİ TUTARSIZLIK PENCERESİ (Aşama 2'ye kadar) ─────────────────────
+-- Aşama 2 sahaya inene kadar ESKİ istemci `upsert_place`'i doğrudan çağırmaya
+-- devam ediyor ve o çağrı `photo_refs`'i günceller ama `photo_base_urls`'e
+-- dokunmaz — yani diziler geçici olarak ayrışabilir. Zararı sınırlı: adresler
+-- hâlâ GEÇERLİ, sadece daha eski bir fotoğraf kümesine işaret edebilir.
+-- Aşama 2 hemen ardından geldiği için kabul edildi.
+--
+-- Kalıcı çözüm zaten Aşama 2/3'te: istemci `upsert_place`'i hiç çağırmayacak
+-- ve o noktada RPC'nin `authenticated` yetkisi geri alınabilecek.
+--
+-- ── BACKFILL YOK — GEREKMİYOR ──────────────────────────────────────────────
+-- Mevcut satırlarda kolon null kalıyor. Aşama 2'de `freshnessOf`'a
+-- "taban adresi olmayan satır `expired` sayılır" kuralı eklenecek; mevcut
+-- yenileme makinesi satırları kendi kendine dolduracak. Ayrı bir backfill
+-- script'i yazmaya gerek yok.
+
+alter table places
+  add column if not exists photo_base_urls text[];
+
+comment on column places.photo_base_urls is
+  'Google Photo 302 yönlendirmesinin çözülmüş hâli, BOYUT EKİ OLMADAN. '
+  'photo_refs ile indeks indeks eşleşir; çözülemeyen referans için null. '
+  'İstemci render anında =w{genişlik} ekler. Yazan tek yer: '
+  'google-places Edge Function (service_role).';
+
+-- ----------------------------------------------------
+-- Doğrulama
+-- ----------------------------------------------------
+-- Kolon eklendi mi:
+--
+--   select column_name, data_type
+--   from information_schema.columns
+--   where table_name = 'places' and column_name = 'photo_base_urls';
+--
+-- Aşama 1'in kendi doğrulaması (EF deploy edildikten SONRA):
+-- EF'i elle çağır, sonra bu satıra bak — photo_base_urls dolmuş olmalı ve
+-- uzunluğu photo_refs ile aynı olmalı:
+--
+--   select place_id,
+--          array_length(photo_refs, 1)      as ref_sayisi,
+--          array_length(photo_base_urls, 1) as url_sayisi,
+--          photo_base_urls[1]               as ilk_url,
+--          fetched_at
+--   from places
+--   order by fetched_at desc
+--   limit 3;
+--
+-- ilk_url "https://lh3.googleusercontent.com/place-photos/..." ile başlamalı
+-- ve İÇİNDE "key=" GEÇMEMELİ.

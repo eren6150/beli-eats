@@ -20,6 +20,12 @@ açıldıktan sonra kayıt · giriş · şifre sıfırlama · tekrar gönder · 
 girişi hepsi doğru çalışıyor (Faz C). Kararlar, dağıtım sırasının neden zorunlu
 olduğu ve ilk build'i patlatan `prop-types`: Mimari Notlar → **Bot koruması**.
 
+✅ **Places anahtarı — Aşama 1 sahada** (2026-08-17). Edge Function
+`google-places` (details + autocomplete) + migration 022 (`places.photo_base_urls`).
+Fotoğraf 302'si sunucuda çözülüyor, anahtarsız CDN adresi saklanıyor.
+⚠️ **Aşama 2-4 açık ve anahtar HÂLÂ bundle'da** — asıl kazanç Aşama 4'te.
+Detay ve teşhis dersleri: Mimari Notlar → **Places anahtarını istemciden çıkarma**.
+
 ✅ **Migration 021 — metin uzunluğu tavanları** (2026-08-17, panelde çalıştırıldı
 ve doğrulandı). `user_rankings.review_text` ≤ 1000 ve `profiles.username` ≤ 100;
 şemada uzunluk sınırı olmayan son iki serbest metin kapandı. ⚠️ username 100,
@@ -234,7 +240,7 @@ takip ettiği kişilerin aktivite akışı olacak.
   `014_place_photos_storage` → `015_public_diary` → `016_entry_likes` →
   `017_optional_ranking_update` → `018_photo_moderation` →
   `019_remove_follower` → `020_photo_entry_link` →
-  `021_text_length_limits`.
+  `021_text_length_limits` → `022_photo_base_urls`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -693,6 +699,102 @@ buna bağlanacak.
 - Sorgulara `locationbias` eklendi (sonuçlar Türkiye/Ankara'ya öncelikli)
 - API'den dönen ham metinler/anlamsız karakterler filtreleniyor
 - `nearbySearch()` fonksiyonu duruyor ama **çağrılmıyor** — ileride "bu bölgede ara" için bırakıldı
+
+### 🔑 Places anahtarını istemciden çıkarma — Aşama 1 SAHADA (2026-08-17)
+Edge Function `google-places` + migration 022. **Aşama 1 deploy edildi ve
+doğrulandı; Aşama 2-4 açık.**
+
+**Neden:** `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY` JS bundle'ına gömülüyor ve
+mobil REST çağrıları için Google'da uygulama kısıtlaması YOK (IP ve referrer
+var, ikisi de mobilde işe yaramaz) — yani anahtarı istemcide kilitlemenin bir
+yolu hiç yoktu. Bugünkü korumalar (API kısıtı + 2.000/gün kota + bütçe uyarısı)
+zararı sınırlıyor, açığı kapatmıyor.
+
+🔑 **Asıl kazanç anahtarı gizlemek DEĞİL, kimlik iliştirmek:** fonksiyon geçerli
+bir Supabase JWT'si istiyor, yani Google çağrıları artık anonim değil ve
+gerekirse kullanıcı başına sınırlanabilir.
+
+#### 🔴 SADECE JSON UÇLARINI TAŞIMAK İŞE YARAMAZDI
+İşin merkezindeki engel `photoUrl`: anahtarı `<Image>`'ın gördüğü URL'e
+gömüyor ve **12 çağrı yerinde** kullanılıyor (11'i `photoUrl()`, biri
+`RestaurantBottomSheet`'te satır içi elle kurulmuş — `photoUrl(` grep'i onu
+kaçırıyor). `details`+`autocomplete`'i taşıyıp fotoğrafı bırakmak anahtarı
+bundle'da bırakırdı, yani amaç hiç gerçekleşmezdi.
+
+#### ÖLÇÜLEN İKİ DAVRANIŞ — tasarımı bunlar belirledi
+1. `/place/photo` **302** döndürüyor ve `Location` **anahtarsız** bir CDN
+   adresi veriyor: `https://lh3.googleusercontent.com/place-photos/…=s1600-w400`
+2. Sondaki `=s1600-w400` boyut eki **değiştirilebilir** — aynı adres `=w800`
+   ile de yükleniyor.
+
+Sonuç: sunucu 302'yi bir kez çözüp **boyut eki olmadan** taban adresi
+saklıyor, istemci render anında `=w{genişlik}` ekliyor. Böylece
+`photoUrl(place, width)` **senkron kalıyor** — 12 render yolunu state'e taşımak
+gerekmiyor. Baytları EF üzerinden proxy'lemek elendi: Supabase **egress** bu
+projenin ücretsiz katmandaki asıl darboğazı.
+
+#### Mimari bölüşüm
+- **Yalnızca L3 (Google) taşınıyor.** L1 (modül belleği, `peekPlace` senkron)
+  ve L2 (`places` okuması) istemcide kalıyor; TTL kararı da istemcide.
+- **`upsert_place` RPC'sini artık EF çağırıyor**, istemci değil. Normalizasyon
+  kuralı (koordinat kırpma, dizi temizliği, `fetched_at`) tek yerde kalıyor.
+  Aşama 2 bitince RPC'nin `authenticated` yetkisi geri alınabilir.
+- **`photo_base_urls` `upsert_place`'e parametre olarak EKLENMEDİ:** yeni
+  parametre `create or replace` ile olmuyor, aşırı yükleme yaratıyor (008'in
+  dersi) → `drop function` + 130 satır kopya demekti. EF `service_role`
+  taşıdığı için kolonu doğrudan yazıyor; RPC'nin varlık sebebi zaten
+  *istemcinin* yazamamasıydı.
+- **Üçüncü bir `photo` action'ı planlanmıştı, ELENDİ:** `user_rankings.place_id
+  → places` FK'sı var (migration 003), yani her puanlanmış mekanın `places`
+  satırı var ve `photo_base_urls`'ü doluyor. "Referansı olup satırı olmayan
+  fotoğraf" durumu doğmuyor — ölü kod olurdu.
+
+#### ⚠️ ALAN MASKESİ ŞU AN İKİ YERDE
+`PLACE_DETAIL_FIELDS` hem EF'te hem `placeCache.ts`'te. Aşama 2'de istemci
+Google'ı hiç çağırmayacağı için oradaki kopya **silinmeli**; o güne kadar ikisi
+eş tutulmalı.
+
+#### Aşamalar
+| Aşama | İçerik | Durum |
+|---|---|---|
+| 1 | EF + migration 022 + EF'in `upsert_place`'i çağırması | ✅ **sahada** |
+| 2 | `refreshPlace` + `SearchScreen` → EF | ⬜ |
+| 3 | `photoUrl` yeniden yazımı, 12 çağrı yeri + 4 sıralama ekranı | ⬜ |
+| 4 | Anahtarı bundle'dan çıkar → OTA → **Console'da DÖNDÜR** | ⬜ |
+
+⚠️ **Aşama 3'ün gizli maliyeti:** `useRankings` `.select('*')` yapıyor, `places`
+gömmüyor. Yani `ProfileScreen`/`UserProfileScreen`/`MapSummarySheet`/
+`RankingReviewSheet` fotoğrafı denormalize `user_rankings.photo_reference`'tan
+alıyor ve çözülmüş URL'ler oraya ulaşmıyor — dört ekrana `places` satırı
+taşınmalı (`getPlaces()` zaten toplu yüklüyor).
+
+🔴 **Aşama 4'te anahtar DÖNDÜRÜLMESİ ZORUNLU, opsiyonel değil.** `.env`'den
+ve EAS'ten kaldırmak yalnızca yeni bundle'ları temizler; sahadaki APK'ya gömülü
+anahtar çalışmaya devam eder. Ayrıca **anahtar 2026-08-17'de bir sohbet
+oturumunda düz metin olarak paylaşıldı**, yani artık kayıt altında — döndürme
+"iyi olur" değil, yapılması gereken. Sıra: OTA → iki cihaz da güncellensin →
+sonra eski anahtarı Console'dan sil.
+
+#### 🩺 TEŞHİS DERSLERİ (ilk çağrı `REQUEST_DENIED` verdi)
+**Kök neden: secret'a Places değil MAPS anahtarı yazılmıştı.** Maps anahtarında
+Android uygulama kısıtı var (paket + SHA-1); sunucudan giden istek ne paket ne
+imza taşıyor → Google reddediyor. İki anahtar bölünmesinin aynadaki hâli.
+
+- **Hatanın kendisi iki soruyu zaten cevaplıyordu:** secret boş olsaydı kod
+  `not_configured` dönerdi, env adı yanlış olsaydı yine öyle. `REQUEST_DENIED`
+  gelmesi "fonksiyon Google'a boş olmayan bir anahtarla gitti" demekti.
+- **Anahtar kısıtlaması yerelde elendi:** aynı anahtar bu makineden
+  `autocomplete` + `details` (EF'in birebir maskesiyle) + `photo` (302) olarak
+  çalıştı. Rastgele bir IP'den çalışması IP/referrer/uygulama kısıtını eliyor.
+- ⚠️ **YÖNTEM DERSİ — teşhis aracının kendisi yanlış sinyal üretti.** Fonksiyona
+  eklenen `hasWhitespace` kontrolü script kaçışları yüzünden `/s/` yerine
+  `/s/` olarak yazıldı, yani "boşluk var mı" değil "içinde s harfi var mı" diye
+  baktı ve `true` döndürüp bir turu boşa harcattı. **Tutarsızlığın kendisi
+  ipucuydu:** hash temiz anahtara BİREBİR eşitken "boşluk var" demek mümkün
+  değil. Teşhis çıktısı kendi içinde çelişiyorsa önce aracı doğrula.
+- **CLI 2.114.0'da `supabase functions logs` YOK.** Log'lar Dashboard →
+  Edge Functions → fonksiyon → Logs altında. Tek seferlik teşhislerde daha
+  pratik yol: sonucu log yerine **yanıta** koymak.
 
 ### Arama ekranı — durum ayrımı (2026-08-04, cihazda DOĞRULANDI)
 Arkadaş testi sırasında çıkan bir davranış hatasının teşhisi ve düzeltmesi.
@@ -3668,6 +3770,12 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   edilmemesini sağlıyor. Kendi işi; anahtar üretimi + `app.config.js` +
 >   sertifikanın build'e girmesi demek, yani **build gerektirir**. Düşük-orta
 >   öncelik.
+> - **Places anahtarı Aşama 2 ve 3** (Aşama 1 sahada). Aşama 2: `refreshPlace`
+>   + `SearchScreen` → Edge Function. Aşama 3: `photoUrl` yeniden yazımı,
+>   **12 çağrı yeri** + dört sıralama ekranına `places` satırı. İkisi de saf JS.
+>   ⚠️ **Aşama 4 OTA DEĞİL panel işi ve ZORUNLU:** anahtarı Google Console'da
+>   döndürmek. Sahadaki APK'ya gömülü anahtar aksi hâlde yaşamaya devam eder ve
+>   o anahtar ayrıca bir sohbet oturumunda düz metin paylaşıldı.
 > - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
 > - **Şifre sıfırlamadaki İKİNCİ captcha turunun gerekli olup olmadığını ölç**
 >   (2026-08-17'den kalan). `verifyOtp`'den token'ı geçici olarak çıkarıp
