@@ -12,18 +12,17 @@
 | **Hesap silme** (Edge Function + istemci) | `e4e926d` |
 | 🔴 **Font düzeltmesi** — font hiç uygulanmıyormuş | `96535ba` |
 
-**🤖 BOT KORUMASI (hCaptcha) — KOD HAZIR, SAHADA DEĞİL.** Beş auth ucuna
-captcha token'ı bağlandı, `version` **1.3.0** / versionCode **6**'ya çekildi.
-⚠️ **Build bekliyor ve panel anahtarı KAPALI** — anahtar proje geneli ve geri
-uyumluluk kaçışı yok, erken açılırsa sahadaki APK'nın auth'u anında ölür ve
-düzeltme OTA ile gidemez. Zorunlu sıra ve tüm kararlar: Mimari Notlar →
-**Bot koruması**.
+**🤖 BOT KORUMASI (hCaptcha) — ✅ TAMAMLANDI, CANLIDA AKTİF** (2026-08-17).
+Beş auth ucuna captcha token'ı bağlandı, **Build 2** alındı (`version` **1.3.0**
+/ versionCode **6**) ve **panel anahtarı AÇILDI**. Üç fazın üçü de doğrulandı:
+anahtar kapalıyken regresyon yok (Faz A: sen, Faz B: arkadaşın), anahtar
+açıldıktan sonra kayıt · giriş · şifre sıfırlama · tekrar gönder · Google
+girişi hepsi doğru çalışıyor (Faz C). Kararlar, dağıtım sırasının neden zorunlu
+olduğu ve ilk build'i patlatan `prop-types`: Mimari Notlar → **Bot koruması**.
 
-⚠️ **1.2.0'A ARTIK OTA GÖNDERİLEMEZ.** `version` 1.3.0 olduğu için yayınlanacak
-güncellemeler runtime 1.3.0'ı hedefliyor; sahadaki APK'lar (senin ve arkadaşının
-cihazı, versionCode 5) **yeni APK kurulana kadar OTA almaz.** Bump bilinçliydi:
-bundle `react-native-webview` import ediyor ve o modül eski binary'de yok, yani
-1.2.0'a inecek bir OTA çökertirdi.
+⚠️ **OTA RUNTIME'I ARTIK 1.3.0.** Sahadaki iki cihaz da versionCode 6'ya
+geçtiği için OTA yeniden akıyor. 1.2.0'a gönderilemez ve gönderilmemeli:
+bundle `react-native-webview` import ediyor, o modül eski binary'de yok.
 
 🔴 **Font turunun en önemli bulgusu:** özel font (Google Sans Flex) **sahada
 hiçbir yerde çalışmıyormuş** ve fark edilmemişti. Sebep `Type` rollerinde
@@ -1679,9 +1678,10 @@ PGRST201 teşhisindeki aynı disiplin).
   `jsr:`) RN'in tsconfig'i altında derlenemez, dışlanmazsa `tsc` her
   çalıştığında 7 sahte hata verip gerçek hataları gölgeliyordu.
 
-### 🤖 Bot koruması — hCaptcha (2026-08-17, KOD HAZIR, SAHADA DEĞİL)
+### 🤖 Bot koruması — hCaptcha (2026-08-17, ✅ CANLIDA AKTİF, DOĞRULANDI)
 Supabase'in CAPTCHA koruması + istemci köprüsü. `src/lib/captcha.tsx` ve
-`useAuth`'un beş çağrısı. **Build bekliyor; panel anahtarı KAPALI.**
+`useAuth`'un beş çağrısı. **Build 2 alındı, panel anahtarı AÇIK, üç fazın
+üçü de cihazda doğrulandı.**
 
 **Korunan şey:** beş auth ucu anon key ile doğrudan Supabase'e gidiyor
 (`signUp` · `signInWithPassword` · `resend` · `resetPasswordForEmail` ·
@@ -1698,6 +1698,12 @@ istek reddedilir. Sahadaki APK token göndermiyor → anahtar erken açılırsa
 
 ⚠️ Ve düzeltme **OTA ile gönderilemez** (aşağıdaki WebView maddesi). Yani
 zorunlu sıra: **build → herkes kursun → doğrula → SONRA panel anahtarı.**
+
+✅ **Bu sıra uygulandı ve sorunsuz işledi** (2026-08-17): Faz A (kendi cihaz,
+anahtar kapalı — regresyon yok) → Faz B (arkadaşın cihazı, anahtar kapalı) →
+Faz C (anahtar açıldı, beş akış yeniden test edildi). Anahtarın açıldığı ana
+kadar sahadaki her iki cihaz da versionCode 6'daydı, yani kırılabilecek bir
+istemci kalmamıştı.
 
 - **Migration 017'nin "önce migration sonra OTA" durumunun DAHA SERT hali:**
   orada `default true` sayesinde parametreyi göndermeyen eski istemci
@@ -1803,16 +1809,20 @@ yerelde koşturuldu: bundle üretildi ve `[captcha]` · `captchaToken` ·
   beş tipin hepsinde var. Anahtar açıldığında Google girişi kırılmaz.
 - ✅ Supabase'in hata kodu **`captcha_failed`** (`auth-js` `ErrorCode` union'ında
   doğrulandı), `AUTH_ERROR_TEXT`'e eklendi.
-- ⚠️ **`/verify` ucunun sunucu tarafında gerçekten captcha istediği
-  DOĞRULANMADI** — supabase-js tipi alanı kabul ediyor, o kadar. Token
-  göndermek iki durumda da güvenli (istemiyorsa yok sayılır), göndermemek
-  istiyorsa akışı kırardı. Bedeli: şifre sıfırlama akışında **iki tur**
-  doğrulama (kod isterken + kodu doğrularken). Token tek kullanımlık ve kısa
-  ömürlü olduğu için ilkini saklayıp taşımak mümkün değil. Anahtar açıldığı gün
-  ölçülüp gereksizse kaldırılabilir.
-- ⚠️ **HİÇBİRİ BUILD ALINMADAN DOĞRULANAMAZ.** Expo Go bu projeyi zaten açmıyor
-  (keyboard-controller) ve WebView de native. "Expo Go'daki ölçüm kanıt
-  değildir" dersinin dördüncü tekrarı, bu kez baştan kabul edilmiş hâli.
+- ✅ **Beş akışın beşi de anahtar AÇIKKEN cihazda doğrulandı** (Faz C):
+  kayıt · giriş · şifre sıfırlama · tekrar gönder · Google girişi.
+  `size: 'invisible'` beklendiği gibi çalışıyor — meşru kullanımda görünür
+  bulmaca çıkmıyor.
+- ⚠️ **`/verify` ucunun captcha'yı gerçekten ZORUNLU tuttuğu HÂLÂ ölçülmedi.**
+  Şifre sıfırlama uçtan uca çalışıyor ama biz token gönderdiğimiz için bu,
+  "isteniyor" ile "istenmiyor ama zararsız" arasında ayrım yapmıyor. Bedeli
+  duruyor: akışta **iki tur** doğrulama var (kod isterken + kodu doğrularken).
+  Ölçmek için `verifyOtp`'den token'ı geçici olarak çıkarıp denemek gerekir;
+  gereksizse kaldırmak bir tur UX kazandırır. Düşük öncelikli, ayrı bir iş.
+- ✅ **Build alınmadan hiçbiri doğrulanamıyordu ve öyle de oldu** — Expo Go bu
+  projeyi zaten açmıyor (keyboard-controller), WebView de native. "Expo Go'daki
+  ölçüm kanıt değildir" dersinin dördüncü tekrarı, bu kez baştan kabul edilmiş
+  hâliyle: doğrulama tamamen gerçek APK'ya bırakıldı.
 
 #### Panel tarafı
 - **Site key PUBLIC**, `EXPO_PUBLIC_HCAPTCHA_SITE_KEY` olarak bundle'a gömülüyor.
@@ -3517,29 +3527,38 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > Keşfedilebilirlik sorunu kesin, marka tarafı değerlendirilmedi. Alan adı
 > müsaitliği **kayıt şirketinden kontrol edilmeli** (arama sonuçları yetersiz).
 >
-> ### 📦 BUILD 2'NİN PAKETİ — Build 1 ile altı maddenin dördü kapandı
-> Build 1'de gitti: **keyboard-controller** (native taraf) · **kaydırmalı
+> ### ✅ BUILD 2 ALINDI ve SAHADA (2026-08-17) — versionCode 6 / `version` 1.3.0
+> **Tek içeriği bot korumasıydı**: `react-native-webview` native olduğu için
+> OTA ile gidemiyordu. Üç faz da doğrulandı ve panel anahtarı açıldı; gerekçe
+> ve dağıtım sırası Mimari Notlar → **Bot koruması**.
+>
+> ⚠️ İlk deneme "Bundle JavaScript" aşamasında **patladı** (`prop-types`,
+> paketin ilan etmediği bağımlılık). Çıkan iki ders — *typecheck bu sınıfı
+> yakalayamaz* ve *bundle'ı yerelde `expo export` ile üret* — aynı bölümde.
+>
+> Build 1'de gitmişti: **keyboard-controller** (native taraf) · **kaydırmalı
 > sekmeler** · **`expo` yama farkı** · **deep link + Google girişi**.
 >
-> **🤖 BUILD 2'NİN TETİKLEYİCİSİ ARTIK BELLİ: bot koruması.** Kodu hazır ve
-> `react-native-webview` yüzünden OTA ile gidemiyor; `version` 1.3.0 /
-> versionCode 6 zaten yazıldı. Build alındığında dağıtım sırası **zorunlu**:
-> herkes yeni APK'yı kursun → doğrula → **SONRA** panel anahtarı. Gerekçe:
-> Mimari Notlar → **Bot koruması**.
->
-> **Yanına binebilecek iki madde, ikisi de acil değil:**
+> ### 📦 BUILD 3'ÜN PAKETİ — iki madde, ikisi de acil değil
+> **Bugün build gerektiren başka bir iş YOK**; aşağıdaki ikisi de kendi
+> tetikleyicisini bekliyor.
 > 1. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9). `.fingerprintignore`
 >    hazır ve kanıtlı (Fark 1); kalan iş **Fark 2'nin bir build ile teşhisi**.
 >    Build 1'e bilinçli alınmadı — o build Fark 2'yi besleyen kategoriden
->    (New Architecture codegen) **iki paket ekliyordu**. Arkadaş testi bitince
->    kendi başına ele alınacak.
+>    (New Architecture codegen) **iki paket ekliyordu**. Build 2'ye de
+>    alınmadı: o build'in tek işi bot korumasını sahaya indirmekti ve araya
+>    teşhis edilmemiş bir değişken sokmanın anlamı yoktu.
 > 2. **Faz 4 marka görsellerinin NATIVE tarafı** — aşağıdaki tabloda
 >    (ikon, native splash, uygulama adı, `adaptiveIcon` rengi).
 >
+> ⚠️ **2. madde REBRAND'in build'ine bindirilmeli, tek başına alınmamalı** —
+> rebrand paket adını değiştiriyor ve o zaten herkese yeniden kurdurtuyor.
+> 1. madde de doğal olarak oraya oturuyor: tek maliyeti sahadaki kurulumları
+> OTA'dan koparmak ve o bedel zaten ödenmiş olacak.
+>
 > ⚠️ Build alınırken **§2'deki sürüm yükseltme ritüeli** ihmal edilmemeli:
 > `versionCode` +1 her zaman, `version` +1 native değişiklik varsa. Kalan iki
-> maddenin **ikisi de** native değişiklik. Ayrıca 1. madde `runtimeVersion`
-> politikasını değiştirdiği için sahadaki kurulumları OTA'dan koparır.
+> maddenin **ikisi de** native değişiklik.
 >
 > ### ✅ KAPANDI: hesap silme + arama ekranı (2026-08-17)
 > - **Hesap silme** yapıldı (Edge Function + istemci). KVKK/GDPR silme hakkını
@@ -3570,8 +3589,11 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >
 > ### 🚀 OTA İLE GİDEBİLECEK BİRİKMİŞ İŞLER (build beklemiyor)
 > Sıradakilerin hepsi saf JS ve/veya migration:
-> - **Fotoğraf akışının yeniden tasarımı + kamera/galeri "+" menüsü**
->   (bu listede, park edilmiş). **Sıradaki en büyük kullanıcı değeri.**
+> - **Kamera/galeri "+" menüsü** (istek: 2026-08-11). ⚠️ Bu maddenin diğer
+>   yarısı — *fotoğraf akışının yeniden tasarımı* — **2026-08-13'te bitti ve
+>   sahada**; kalan tek parça çekim/seçim menüsü. Kamera izni versionCode
+>   4'ten beri APK'da (`expo-image-picker` kendi manifest'inde ilan ediyor),
+>   yani **build gerekmiyor**. **Sıradaki en büyük kullanıcı değeri.**
 > - **Kullanıcı engelleme** (bu listede, park edilmiş — kendi planını istiyor).
 > - **`ProfileScreen`'de kaydırmalı sekme** (bu listede, ertelenmiş).
 > - **keyboard-controller'ın KALAN ekranlara uygulanması** — ⚠️ *ölçülmüş
@@ -3582,6 +3604,10 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   boşaltmıştı — **tetikleyici yeni bir ölçüm olmalı**, tutarlılık isteği
 >   değil.
 > - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
+> - **Şifre sıfırlamadaki İKİNCİ captcha turunun gerekli olup olmadığını ölç**
+>   (2026-08-17'den kalan). `verifyOtp`'den token'ı geçici olarak çıkarıp
+>   akışın hâlâ çalıştığına bak; çalışıyorsa bir tur UX kazanılır. Düşük
+>   öncelik, gerekçe: Mimari Notlar → **Bot koruması** → doğrulananlar.
 >
 > ### 🎨 Marka işi: neyin OTA gittiği, neyin build istediği (tespit: 2026-08-08)
 > `app.json` ve `app.config.js` okunarak çıkarıldı, tahmin değil. Faz 4'e
@@ -3957,6 +3983,15 @@ her biri bir öncekinin üstüne biniyor:
     gizlenen fotoğraf yükleyicisinde "Gizlendi" etiketiyle duruyor.
   - ⬜ **Kendi alan adı** — SPF/DKIM olmadan onay mailleri spam'e düşebilir.
     Faz 4'le birleşiyor: marka adı kararlaşınca alan adı alınır.
+    **Kademe 2'nin TEK kalan koşulu bu.**
+- ✅ **BOT KORUMASI (2026-08-17) — listede yoktu, sonradan eklendi ve kapandı.**
+  Koşul olarak yazılmamıştı ama fiilen **"custom SMTP" koşulunu koruyan şey
+  bu**: captcha olmadan bir bot, kayıt/tekrar-gönder uçlarına script atıp
+  SendGrid kotasını dakikalar içinde yakabilir ve o noktada davetlilerin
+  hiçbiri onay maili alamaz — yani ✅ işaretli bir koşul, kimse fark etmeden
+  geçersizleşirdi. Detay: Mimari Notlar → **Bot koruması**.
+  ⚠️ Ders, custom SMTP'nin kendi dersiyle aynı aileden: *bir koşulu
+  işaretlemek, onu ayakta tutan şeyi de işaretlemek anlamına gelmiyor.*
 - **Kademe 3'ün Edge Function maddesi çift işe yarıyor:** hem Places anahtarını
   istemciden tamamen kaldırıyor (Dağıtım §6/2'nin kökten çözümü) hem `places`
   yazma yolunu sunucuya taşıyor.
