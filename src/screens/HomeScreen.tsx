@@ -16,7 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { UserRanking, Profile, HomeStackParamList } from '../types';
-import { photoUrl } from '../lib/places';
+import { photoUrl, placePhotoUrl } from '../lib/places';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
 import { SkeletonCard, SkeletonListItem } from '../components/ui/SkeletonLoader';
 import RestaurantCard from '../components/ui/RestaurantCard';
@@ -324,7 +324,10 @@ export default function HomeScreen() {
             authorUsername={item.author.username}
             authorAvatarUrl={item.author.avatar_url}
             placeName={item.entry.places?.name ?? 'Bilinmeyen mekan'}
-            placePhotoUrl={photoUrl(item.entry.places?.photo_refs?.[0], CARD_PHOTO_WIDTH)}
+            placePhotoUrl={placePhotoUrl(
+                    item.entry.places?.photo_base_urls?.[0],
+                    CARD_PHOTO_WIDTH
+                  )}
             visitedAt={item.entry.visited_at}
             rating={item.entry.rating}
             note={item.entry.note}

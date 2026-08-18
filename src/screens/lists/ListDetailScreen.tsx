@@ -19,7 +19,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useListItems } from '../../hooks/useListItems';
 import { ListItem, ListDetailStackParamList } from '../../types';
-import { photoUrl } from '../../lib/places';
+import { placePhotoUrl } from '../../lib/places';
 import { Colors, Spacing, Type } from '../../constants/theme';
 import { SkeletonListItem } from '../../components/ui/SkeletonLoader';
 import EmptyState from '../../components/ui/EmptyState';
@@ -326,7 +326,10 @@ export default function ListDetailScreen() {
             rank={isOrdered ? index + 1 : undefined}
             name={nameOf(item)}
             subtitle={item.places?.formatted_address}
-            photoUrl={photoUrl(item.places?.photo_refs?.[0], THUMB_PHOTO_WIDTH)}
+            photoUrl={placePhotoUrl(
+                    item.places?.photo_base_urls?.[0],
+                    THUMB_PHOTO_WIDTH
+                  )}
             // Modda dokunmak SEÇER, mekan detayına gitmez.
             onPress={
               selectionMode ? () => toggleSelect(item.id) : () => handleOpenPlace(item)

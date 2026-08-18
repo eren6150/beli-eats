@@ -134,7 +134,45 @@ export function parseCoord(value: unknown, type: 'lat' | 'lng'): number | null {
  * taşınmadı; ihtiyaç doğarsa orada yazılır.
  */
 
-/** Photo endpoint'i JSON değil görsel döndürür — URL'i doğrudan <Image> alır. */
+/**
+ * `places.photo_base_urls` içindeki taban adrese genişlik ekler.
+ *
+ * ── NASIL ÇALIŞIYOR ─────────────────────────────────────────────────────────
+ * Edge Function, Google'ın `/place/photo` ucunun döndürdüğü **302**'yi bir kez
+ * çözüp `Location` adresini BOYUT EKİ OLMADAN saklıyor:
+ *     https://lh3.googleusercontent.com/place-photos/AG9NLj…
+ * Sondaki `=s1600-w400` boyut ekidir ve değiştirilebilir (ölçüldü: `=w800` ile
+ * de yükleniyor). Bu yüzden tek bir çözüm bütün genişliklere yetiyor.
+ *
+ * ── NEDEN SENKRON ───────────────────────────────────────────────────────────
+ * Adres zaten `places` satırında; çözüm anında yapılmıyor. Bu, fonksiyonu
+ * `renderItem` içinde çağrılabilir tutuyor — async yapmak 12 render yolunu
+ * state'e taşımak demekti.
+ *
+ * Anahtar İÇERMİYOR: adres Google CDN'ine gidiyor ve `<Image>` oradan
+ * doğrudan yüklüyor, yani Supabase egress'i de yok.
+ */
+export function placePhotoUrl(
+  baseUrl: string | null | undefined,
+  width: number
+): string | null {
+  if (!baseUrl) return null;
+  return `${baseUrl}=w${width}`;
+}
+
+/**
+ * ⚠️ ESKİ YOL — kaldırılıyor, YENİ ÇAĞRI EKLEME. Yerine `placePhotoUrl`.
+ *
+ * Anahtarı URL'e gömüyor, yani `GOOGLE_API_KEY`'i bundle'da tutan son bağ bu.
+ * Aşama 3'ün adımları çağrı yerlerini sırayla `placePhotoUrl`'e taşıyor;
+ * sonuncusu taşındığında bu fonksiyon ve `GOOGLE_API_KEY` birlikte silinecek.
+ *
+ * ⚠️ SÖZLEŞMESİ BİLİNÇLİ OLARAK DEĞİŞTİRİLMEDİ: `placePhotoUrl` ile aynı
+ * imzayı taşıyor ama FARKLI bir girdi bekliyor (referans ↔ taban adres).
+ * İkisini tek fonksiyonda birleştirip girdiyi koklamak (`https://` ile mi
+ * başlıyor) cazipti; yapılmadı — bu proje kırılgan sezgisel ayrımları bir kez
+ * reddetti. İki ayrı isim, hangi çağrı yerinin taşındığını okunur kılıyor.
+ */
 export function photoUrl(
   photoReference: string | null | undefined,
   maxWidth: number

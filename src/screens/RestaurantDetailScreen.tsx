@@ -29,7 +29,7 @@ import {
 } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useRankings } from '../hooks/useRankings';
-import { photoUrl } from '../lib/places';
+import { placePhotoUrl } from '../lib/places';
 import { peekPlace, resolvePlace } from '../lib/placeCache';
 import { Colors, Elevation, Radius, Spacing, Type } from '../constants/theme';
 import StarRating from '../components/ui/StarRating';
@@ -251,9 +251,9 @@ export default function RestaurantDetailScreen() {
   // kaynağı senkron tutma derdi demekti.
   const photos = useMemo(
     () =>
-      (place?.photo_refs ?? [])
+      (place?.photo_base_urls ?? [])
         .slice(0, MAX_PHOTOS)
-        .map((ref) => photoUrl(ref, 800))
+        .map((base) => placePhotoUrl(base, 800))
         .filter((u): u is string => u !== null),
     [place]
   );

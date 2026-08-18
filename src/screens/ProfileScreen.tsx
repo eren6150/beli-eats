@@ -21,7 +21,7 @@ import {
   ProfileStackParamList,
   ProfileTabKey,
 } from '../types';
-import { photoUrl } from '../lib/places';
+import { photoUrl, placePhotoUrl } from '../lib/places';
 import { Colors, Spacing } from '../constants/theme';
 import { SkeletonListItem } from '../components/ui/SkeletonLoader';
 import EmptyState from '../components/ui/EmptyState';
@@ -549,7 +549,10 @@ export default function ProfileScreen() {
               name={item.places?.name ?? 'Bilinmeyen mekan'}
               rating={item.rating}
               note={item.note}
-              photoUrl={photoUrl(item.places?.photo_refs?.[0], THUMB_PHOTO_WIDTH)}
+              photoUrl={placePhotoUrl(
+                      item.places?.photo_base_urls?.[0],
+                      THUMB_PHOTO_WIDTH
+                    )}
               onPress={() => handleOpenEntry(item)}
               onLongPress={() => handleLongPressEntry(item)}
             />
