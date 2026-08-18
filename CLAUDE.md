@@ -20,6 +20,13 @@ açıldıktan sonra kayıt · giriş · şifre sıfırlama · tekrar gönder · 
 girişi hepsi doğru çalışıyor (Faz C). Kararlar, dağıtım sırasının neden zorunlu
 olduğu ve ilk build'i patlatan `prop-types`: Mimari Notlar → **Bot koruması**.
 
+✅ **Migration 021 — metin uzunluğu tavanları** (2026-08-17, panelde çalıştırıldı
+ve doğrulandı). `user_rankings.review_text` ≤ 1000 ve `profiles.username` ≤ 100;
+şemada uzunluk sınırı olmayan son iki serbest metin kapandı. ⚠️ username 100,
+istemcideki 30 **değil** — 30 koymak uzun e-postalı kullanıcının hiç
+kaydolamamasına yol açardı; gerekçe migration dosyasında, daraltma işi (022)
+açık işlerde.
+
 ⚠️ **OTA RUNTIME'I ARTIK 1.3.0.** Sahadaki iki cihaz da versionCode 6'ya
 geçtiği için OTA yeniden akıyor. 1.2.0'a gönderilemez ve gönderilmemeli:
 bundle `react-native-webview` import ediyor, o modül eski binary'de yok.
@@ -226,7 +233,8 @@ takip ettiği kişilerin aktivite akışı olacak.
   `011_update_diary_entry` → `012_username_conflict` → `013_place_photos` →
   `014_place_photos_storage` → `015_public_diary` → `016_entry_likes` →
   `017_optional_ranking_update` → `018_photo_moderation` →
-  `019_remove_follower`.
+  `019_remove_follower` → `020_photo_entry_link` →
+  `021_text_length_limits`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -502,9 +510,12 @@ satır 125-128 hâlâ *"istemci bugün `options.data` GÖNDERMİYOR"* diyor.
 **Gönderiyor** (`useAuth.tsx`). Migration dosyası çalıştırılmış bir kayıt
 olduğu için içeriği DEĞİŞTİRİLMEDİ; doğrusu burada.
 
-⚠️ **`profiles.username`'in şemada uzunluk sınırı YOK** (`text unique not
-null`). `review_text` ile aynı tutarsızlık. İstemcideki 30 karakter bir
-savunma, gerçek tavan değil — CHECK kısıtı ayrı bir migration işi.
+~~⚠️ `profiles.username`'in şemada uzunluk sınırı YOK~~ → **KISMEN KAPANDI
+(migration 021):** artık `<= 100` kısıtı var. ⚠️ Ama **istemcideki 30 DEĞİL**
+ve bu bilinçli — `handle_new_user` adı e-postanın @ öncesinden türetip sonek
+ekliyor, 30 koymak uzun e-postalı kullanıcının hiç kaydolamamasına yol
+açardı. 30'a sıkmak önce üreteç fonksiyonunu düzeltmeyi gerektiriyor
+(migration 022, açık işlerde). Alt sınır bilinçli olarak yok.
 
 #### Düzeltme sırası (öneri)
 **1 → 3 → 2**, çünkü ilk ikisi küçük ve tek dosyalık, sonuncusu ekran işi:
@@ -1356,11 +1367,10 @@ Bir sıralama kaydının puanı + **tam yorum metni**. Bilinen Açık İşler'de
   önünde kalır (`MapSummarySheet`'in aynı kararı).
 - **Yeni sorgu YOK:** `UserRanking` satırı `review_text` dahil zaten listede
   geliyor, sheet parametreyle besleniyor (anlık görüntü kuralı).
-- **⚠️ `review_text`'in HİÇBİR YERDE uzunluk sınırı yok** — ne şemada
-  (`review_text text`) ne istemcide (`maxLength` yok). Projedeki diğer serbest
-  metinlerin hepsinin var (`note` 1000, `bio` 300, liste açıklaması 500). Bu bir
-  **tutarsızlık ve ayrı bir iş**; pratik sonucu, "zaten kısa" varsayımının
-  geçersiz olması ve metnin **kaydırılabilir** olmak zorunda kalması.
+- ~~**⚠️ `review_text`'in HİÇBİR YERDE uzunluk sınırı yok**~~ → **KAPANDI:**
+  istemcide 1000 (`REVIEW_MAX`, 2026-08-13) ve şemada `<= 1000` (migration
+  021, 2026-08-17). Yine de metnin **kaydırılabilir** olması şart — 1000
+  karakter kısa değil ve ölçüm bunu doğruluyor: sahadaki en uzun yorum 934.
   `ScrollView`'da `flexShrink: 1` bu yüzden şart — onsuz uzun bir yorumda
   kırpılan ilk şey alttaki eylem satırı olurdu (`DiaryEntrySheet`'in dersi).
 - **KAPSAM DIŞI, bilinçli:** `MapSummarySheet`'teki sıralama satırları eski
@@ -3576,10 +3586,9 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >    italik vardı ama yüklemiyorduk), yani bir gerileme değil. Rahatsız
 >    ederse çözüm italiği kaldırıp ayrımı renk/ağırlıkla yapmak — italik yüz
 >    yüklemek OTA'ya ~130 KB daha ekler.
-> 2. **`review_text`'in şemada hâlâ CHECK kısıtı yok.** İstemciye 1000
->    karakter sınırı ve sayaç kondu (`REVIEW_MAX`), ama bu bir savunma;
->    gerçek tavan için ayrı bir migration gerekiyor. Daha uzun bir kayıt
->    sunucudan gelirse kırpılmıyor, yalnızca uzatılamıyor.
+> 2. ~~**`review_text`'in şemada hâlâ CHECK kısıtı yok.**~~ → **KAPANDI**
+>    (migration 021, 2026-08-17): şemada `<= 1000`, istemcideki `REVIEW_MAX`
+>    ile birebir. Ön kontrolde ihlal eden satır yoktu (en uzun 934).
 > 3. **Google Sans Flex'in tabular rakam desteği HÂLÂ doğrulanmadı** — ve
 >    ⚠️ 2026-08-17'ye kadar font zaten hiç uygulanmadığı için bu madde o
 >    tarihe kadar **test EDİLEMEZDİ**. Artık gerçekten ölçülebilir. `RankRow`'un
@@ -3603,6 +3612,16 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   Sorunu olmayan ekrana dokunmak bu projede bir kez ekranı tamamen
 >   boşaltmıştı — **tetikleyici yeni bir ölçüm olmalı**, tutarlılık isteği
 >   değil.
+> - **`username` kısıtını 100'den 30'a sıkma (migration 022)** — ⚠️ **kısıtı
+>   tek başına daraltma, kayıt akışını kırar.** `handle_new_user` adı
+>   `split_part(email, '@', 1)` ile üretip sonek (`eren2`…) ve son çare olarak
+>   `_` + uuid'nin 8 hanesini ekliyor; 30 kısıtı altında uzun e-postalı ya da
+>   2 karakterlik @ önekine sahip bir kullanıcı **hiç kaydolamaz**
+>   (`Database error saving new user`) — migration 012'nin düzelttiği hatanın
+>   ta kendisi. **Zorunlu sıra:** önce `next_available_username` tabanı
+>   `left(v_base, 21)` ile kırpsın ve kısa tabanı doldursun, SONRA kısıt
+>   daraltılsın. Alt sınır eklenecekse aynı kural. Bugün somut bir zarar
+>   üretmiyor (sahadaki en uzun ad 23, en kısa 3) — düşük öncelik.
 > - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
 > - **Şifre sıfırlamadaki İKİNCİ captcha turunun gerekli olup olmadığını ölç**
 >   (2026-08-17'den kalan). `verifyOtp`'den token'ı geçici olarak çıkarıp
