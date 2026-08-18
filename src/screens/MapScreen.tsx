@@ -452,8 +452,7 @@ export default function MapScreen() {
 
         if (place) openIfFood(place);
       } catch (e) {
-        // `PlacesError`ın teknik metni (status kodu, Cloud Console adımları)
-        // yalnızca burada. Bildirim 2.5 sn'de kayboluyor ve retry butonu yok,
+        // Teknik teşhis (Edge Function hata kodu, ağ hatası) yalnızca burada. Bildirim 2.5 sn'de kayboluyor ve retry butonu yok,
         // o yüzden mesaj kullanıcıya bir sonraki adımı söylüyor.
         console.error('[MapScreen] POI detayları alınamadı:', e);
         if (lastPoiTapRef.current === placeId) {

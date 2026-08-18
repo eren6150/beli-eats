@@ -23,19 +23,7 @@ import Icon from '../components/ui/Icon';
 import { useLocation } from '../hooks/useLocation';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchHistory } from '../hooks/useSearchHistory';
-
-/**
- * ⚠️ Places REST anahtarı — native harita anahtarından AYRI.
- * Gerekçe `places.ts`'in başında tam olarak yazılı: bu ekrandaki autocomplete
- * çağrısı düz HTTPS, yani paket adı/imza taşımıyor ve Android uygulama
- * kısıtlaması onu tanıyamaz.
- *
- * NOT: bu dosya hâlâ ham `fetch` kullanıyor ve `json.status`'ü KONTROL
- * ETMİYOR (açık iş). Somut sonucu: anahtar yanlışsa `REQUEST_DENIED` döner,
- * `json.predictions` hiç gelmez ve ekranda yalnızca "Sonuç bulunamadı"
- * görünür — yani anahtar bölmesi yanlış yapılırsa hata SESSİZ olur.
- */
-const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
+import { supabase } from '../lib/supabaseClient';
 
 /**
  * Bu uzunluğun altında Google'a HİÇ gidilmiyor.
@@ -43,6 +31,9 @@ const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
  * ve `query.length > 1`); ikisi de artık bu sabiti okuyor.
  */
 const MIN_QUERY_LENGTH = 2;
+
+/** Konum bias yarıçapı (metre). Edge Function'a parametre olarak gidiyor. */
+const SEARCH_BIAS_RADIUS_M = 50000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -170,48 +161,55 @@ export default function SearchScreen() {
        * var. Bias sıralıyor, daraltmıyor; yanlış varsayılan bile global
        * sonuçtan iyi.
        */
-      const biasPart =
-        `&locationbias=circle:50000@` +
-        `${effectiveLocation.latitude},${effectiveLocation.longitude}`;
+      /**
+       * ── AŞAMA 2: GOOGLE'A ARTIK DOĞRUDAN GİDİLMİYOR ──────────────────────
+       * Burada bir dönem ham `fetch` vardı ve API anahtarını URL'e gömüyordu.
+       * Çağrı `google-places` Edge Function'ına taşındı: anahtar sunucuda ve
+       * `functions.invoke` Supabase JWT'sini kendisi ekliyor, yani arama artık
+       * anonim değil.
+       *
+       * Yan fayda: `places.ts`'te kullanılmadan duran `autocomplete()` ile bu
+       * ham fetch'in ikiliği de kapandı — listedeki en eski maddelerden biri.
+       */
+      const { data, error } = await supabase.functions.invoke<{
+        predictions?: unknown[];
+      }>('google-places', {
+        body: {
+          action: 'autocomplete',
+          input,
+          latitude: effectiveLocation.latitude,
+          longitude: effectiveLocation.longitude,
+          radius: SEARCH_BIAS_RADIUS_M,
+        },
+      });
 
-      const url =
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-        `?input=${encodeURIComponent(input)}` +
-        `&types=restaurant|food|cafe|bar` +
-        `&language=tr` +
-        biasPart +
-        `&key=${GOOGLE_API_KEY}`;
-
-      const res = await fetch(url);
-      const json = await res.json();
       // Araya yeni bir istek girdiyse bu yanıt bayat — hiçbir şeye yazma.
       // `loading`'e de dokunma: onun sahibi artık yeni istek.
       if (seq !== requestSeqRef.current) return;
 
       /**
-       * `json.status` ARTIK ARAYÜZE DE YANSIYOR (2026-08-13).
+       * Hata ARAYÜZE YANSIYOR (2026-08-13'te eklendi, Aşama 2'de korundu).
        *
-       * `ZERO_RESULTS` bir hata DEĞİL — gerçekten sonuç yok demek, ve o
-       * durumda "Sonuç bulunamadı" doğru cevap. Diğer her durum (
-       * `REQUEST_DENIED`, `OVER_QUERY_LIMIT`, `INVALID_REQUEST`,
-       * `UNKNOWN_ERROR`) aramanın YAPILAMADIĞI anlamına geliyor.
+       * `ZERO_RESULTS` bir hata DEĞİL ve EF onu zaten boş `predictions` olarak
+       * döndürüyor — o durumda "Sonuç bulunamadı" doğru cevap. Buraya düşen
+       * her şey aramanın YAPILAMADIĞI anlamına geliyor (Google durum kodu,
+       * yapılandırma hatası, EF'in kendisi).
        *
        * ⚠️ BU DALDA `setSearchedFor` ÇAĞRILMIYOR — kritik nokta bu. O bayrak
        * "bu metin için arama tamamlandı" demek ve "Sonuç bulunamadı" ekranının
        * tek anahtarı. Hatalı bir yanıtta set edilseydi kullanıcı yine
        * "burada restoran yok" görürdü, yani düzeltme hiçbir işe yaramazdı.
        */
-      if (json.status && json.status !== 'OK' && json.status !== 'ZERO_RESULTS') {
-        console.warn(
-          `[SearchScreen] Places autocomplete status=${json.status}`,
-          json.error_message ?? ''
-        );
+      if (error) {
+        console.warn('[SearchScreen] google-places autocomplete hatası:', error);
         setSearchError('Arama şu an yapılamıyor. Biraz sonra tekrar dene.');
         setLoading(false);
         return;
       }
 
-      if (json.predictions) setPredictions(json.predictions);
+      if (data?.predictions) {
+        setPredictions(data.predictions as PlacePrediction[]);
+      }
       // Arama bu metin için TAMAMLANDI; "sonuç yok" demeye ancak şimdi hak var.
       setSearchedFor(input);
     } catch (e) {

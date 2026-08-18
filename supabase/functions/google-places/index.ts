@@ -29,10 +29,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
  * `photo_base_urls`'ü zaten dolduruluyor. "Referansı olup satırı olmayan
  * fotoğraf" durumu doğmuyor; ayrı bir action ölü kod olurdu.
  *
- * ── ⚠️ ALAN MASKESİ GEÇİCİ OLARAK İKİ YERDE ────────────────────────────────
- * `PLACE_DETAIL_FIELDS` istemcide de duruyor (`src/lib/placeCache.ts`).
- * Aşama 2'de istemci Google'ı hiç çağırmayacağı için oradaki kopya SİLİNMELİ;
- * o güne kadar iki kopya birbirine EŞ tutulmalı. Maske SKU'yu belirliyor:
+ * ── ALAN MASKESİ ARTIK TEK YERDE (Aşama 2) ─────────────────────────────────
+ * `PLACE_DETAIL_FIELDS` bir dönem istemcide de duruyordu; Aşama 2'de istemci
+ * Google'ı hiç çağırmaz olunca oradaki kopya silindi. Maske SKU'yu belirliyor:
  * `rating` / `user_ratings_total` / `price_level` Atmosphere katmanı (en
  * pahalı), gerisi Basic. Maskede tek bir Atmosphere alanı olması çağrının
  * tamamını o katmandan faturalandırıyor — üçünü birlikte almanın ek maliyeti
@@ -226,11 +225,31 @@ Deno.serve(async (req) => {
         | { location?: { lat?: number; lng?: number } }
         | undefined;
 
+      /**
+       * İsim kaynağı sırası: Google → çağıranın verdiği `fallbackName`.
+       *
+       * POI dokunuşunda isim native harita olayından geliyor ve Google detayda
+       * isim döndürmezse elimizdeki TEK kaynak o — çöpe atmayalım. `placeId`'yi
+       * isim diye yazmak ise NOT_FOUND'u 7 gün boyunca maskelerdi, o yüzden
+       * ikisi de yoksa satır YAZILMIYOR ve hata dönüyor (istemcinin eski
+       * davranışının aynısı).
+       */
+      const fallbackName =
+        typeof body.fallbackName === 'string' ? body.fallbackName.trim() : '';
+      const name = ((result.name as string | undefined) ?? '').trim() || fallbackName;
+
+      if (!name) {
+        console.warn(
+          `[google-places] ${placeId} için isim yok (ne Google ne fallback).`
+        );
+        return json({ error: 'missing_name' }, 422);
+      }
+
       // 1) Normalizasyon kuralı TEK yerde kalsın diye RPC: koordinat kırpma,
       //    dizi temizliği ve `fetched_at` orada yaşıyor.
       const { error: rpcError } = await admin.rpc('upsert_place', {
         p_place_id: placeId,
-        p_name: result.name ?? placeId,
+        p_name: name,
         p_formatted_address: result.formatted_address ?? null,
         p_latitude: geometry?.location?.lat ?? null,
         p_longitude: geometry?.location?.lng ?? null,

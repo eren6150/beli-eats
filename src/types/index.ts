@@ -35,6 +35,15 @@ export interface Place {
   price_level: number | null;
   /** Fotoğraf referansları; kapak = photo_refs[0]. */
   photo_refs: string[] | null;
+  /**
+   * Fotoğraf 302'lerinin çözülmüş hâli, BOYUT EKİ OLMADAN (migration 022).
+   * `photo_refs` ile indeks indeks eşleşir; çözülemeyen referans için null.
+   * İstemci render anında `=w{genişlik}` ekler (Aşama 3).
+   *
+   * ⚠️ null olması "bu satır henüz Edge Function'dan geçmedi" demek ve
+   * `freshnessOf` onu 'expired' sayıyor — kendi kendini iyileştiren backfill.
+   */
+  photo_base_urls: (string | null)[] | null;
   /** Faz 3 için ayrılmış; şu an her satırda null. */
   city: string | null;
   /** Google verisinin çekilme anı — TTL kararı buna bakar, updated_at'e değil. */

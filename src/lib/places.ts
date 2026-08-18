@@ -34,97 +34,6 @@ export const GOOGLE_API_KEY =
 
 // ─── Hata tipi ────────────────────────────────────────────────────────────────
 
-/** Places status kodlarının okunabilir karşılıkları (log'da ne yapılacağını söyler). */
-const STATUS_HINTS: Record<string, string> = {
-  REQUEST_DENIED:
-    'API key reddedildi. Google Cloud Console: Places API açık mı, key kısıtlaması bu paketi kapsıyor mu?',
-  OVER_QUERY_LIMIT:
-    'Kota doldu veya faturalandırma kapalı. Google Cloud Console → Billing.',
-  INVALID_REQUEST: 'Zorunlu parametre eksik veya hatalı.',
-  NOT_FOUND: 'place_id bulunamadı — kayıt eski/geçersiz olabilir.',
-  UNKNOWN_ERROR: 'Google tarafında geçici hata, tekrar denenebilir.',
-  NO_API_KEY:
-    'EXPO_PUBLIC_GOOGLE_PLACES_API_KEY tanımsız. .env dosyasını kontrol et ve Metro\'yu yeniden başlat. (Native harita anahtarı AYRI: EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.)',
-};
-
-export class PlacesError extends Error {
-  constructor(
-    readonly status: string,
-    readonly endpoint: string,
-    googleMessage?: string
-  ) {
-    const hint = STATUS_HINTS[status] ?? 'Beklenmeyen status.';
-    super(
-      `[Places/${endpoint}] ${status} — ${hint}` +
-        (googleMessage ? ` Google: "${googleMessage}"` : '')
-    );
-    this.name = 'PlacesError';
-  }
-}
-
-// ─── Ortak istek katmanı ──────────────────────────────────────────────────────
-
-type Params = Record<string, string | number | undefined>;
-
-async function placesRequest<T>(
-  endpoint: string,
-  params: Params
-): Promise<T> {
-  if (!GOOGLE_API_KEY) {
-    throw new PlacesError('NO_API_KEY', endpoint);
-  }
-
-  const qs = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') qs.append(key, String(value));
-  }
-  qs.append('key', GOOGLE_API_KEY);
-
-  const res = await fetch(`${BASE}/${endpoint}/json?${qs.toString()}`);
-  if (!res.ok) {
-    throw new PlacesError(`HTTP_${res.status}`, endpoint, res.statusText);
-  }
-
-  const json = await res.json();
-
-  // ZERO_RESULTS hata değil — boş sonuç kümesi. Diğer her şey hata.
-  if (json.status !== 'OK' && json.status !== 'ZERO_RESULTS') {
-    throw new PlacesError(json.status ?? 'NO_STATUS', endpoint, json.error_message);
-  }
-
-  return json as T;
-}
-
-// ─── Tipler ───────────────────────────────────────────────────────────────────
-
-export interface PlaceGeometry {
-  location: { lat: number; lng: number };
-}
-
-export interface NearbyPlace {
-  place_id: string;
-  name: string;
-  geometry: PlaceGeometry;
-  rating?: number;
-  user_ratings_total?: number;
-  vicinity?: string;
-  types?: string[];
-  photos?: Array<{ photo_reference: string }>;
-  business_status?: string;
-}
-
-export interface PlaceDetailsResult {
-  place_id?: string;
-  geometry?: PlaceGeometry;
-  types?: string[];
-  formatted_address?: string;
-  name?: string;
-  rating?: number;
-  user_ratings_total?: number;
-  price_level?: number;
-  photos?: Array<{ photo_reference: string }>;
-}
-
 // ─── Tür sınıflandırma ────────────────────────────────────────────────────────
 //
 // Haritadaki native Google POI'lerine dokunulduğunda park, müze, mağaza da
@@ -212,60 +121,18 @@ export function parseCoord(value: unknown, type: 'lat' | 'lng'): number | null {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/** Tek bir mekanın detayını çeker. Alan listesi maliyeti etkiler, dar tut. */
-export async function getPlaceDetails(
-  placeId: string,
-  fields: string
-): Promise<PlaceDetailsResult | null> {
-  const json = await placesRequest<{ result?: PlaceDetailsResult }>(
-    'details',
-    { place_id: placeId, fields, language: 'tr' }
-  );
-  return json.result ?? null;
-}
-
 /**
- * Verilen koordinatın çevresindeki restoranları getirir.
- * Nearby Search geometry'yi yanıtın içinde döndürür — ek details çağrısı gerekmez.
+ * ⚠️ GOOGLE'A JSON İSTEĞİ ATAN FONKSİYONLAR BURADAN KALKTI (Aşama 2).
+ *
+ * `getPlaceDetails`, `autocomplete` ve `nearbySearch` `google-places` Edge
+ * Function'ına taşındı: anahtar artık sunucuda ve çağrılar Supabase JWT'siyle
+ * kimliğe bağlı. İstemcide kalan tek Google yolu `photoUrl` — o da Aşama 3'te
+ * `places.photo_base_urls`'e geçince `GOOGLE_API_KEY` bundle'dan tamamen
+ * çıkacak.
+ *
+ * `nearbySearch` ayrıca zaten ÖLÜ koddu (hiç çağrılmıyordu) ve EF'e de
+ * taşınmadı; ihtiyaç doğarsa orada yazılır.
  */
-export async function nearbySearch(opts: {
-  latitude: number;
-  longitude: number;
-  radius: number;
-  type?: string;
-}): Promise<NearbyPlace[]> {
-  const json = await placesRequest<{ results?: NearbyPlace[] }>(
-    'nearbysearch',
-    {
-      location: `${opts.latitude},${opts.longitude}`,
-      radius: opts.radius,
-      type: opts.type ?? 'restaurant',
-      language: 'tr',
-    }
-  );
-  return json.results ?? [];
-}
-
-/** Autocomplete önerileri. locationbias verilirse sonuçlar o çevreye öncelenir. */
-export async function autocomplete(opts: {
-  input: string;
-  latitude?: number;
-  longitude?: number;
-  radius?: number;
-}): Promise<any[]> {
-  const bias =
-    opts.latitude !== undefined && opts.longitude !== undefined
-      ? `circle:${opts.radius ?? 50000}@${opts.latitude},${opts.longitude}`
-      : undefined;
-
-  const json = await placesRequest<{ predictions?: any[] }>('autocomplete', {
-    input: opts.input,
-    types: 'restaurant|food|cafe|bar',
-    language: 'tr',
-    locationbias: bias,
-  });
-  return json.predictions ?? [];
-}
 
 /** Photo endpoint'i JSON değil görsel döndürür — URL'i doğrudan <Image> alır. */
 export function photoUrl(

@@ -4,41 +4,13 @@
 // Google istemcisi, Supabase'i hiç tanımıyor. Burası ikisini birleştiren yer —
 // Supabase okuması + TTL kararı + gerektiğinde Google'a düşüp cache'i doldurma.
 //
-// Yazma yolu yalnızca `upsert_place()` RPC'si: `places` tablosunda INSERT/UPDATE
-// için RLS politikası yok, istemci doğrudan yazamaz (bkz. migration 002 §4-5).
+// ⚠️ ARTIK GOOGLE'A İSTEMCİDEN GİDİLMİYOR (Aşama 2, 2026-08-17). L3 katmanı
+// `google-places` Edge Function'a taşındı: anahtar sunucuda, çağrı kimliğe
+// bağlı. Yazma da orada — `upsert_place()` RPC'sini artık EF çağırıyor.
+// Bu modülde kalan iş L1 (bellek) + L2 (`places` okuması) + TTL kararı.
 
 import { supabase } from './supabaseClient';
-import { getPlaceDetails, parseCoord, PlaceDetailsResult } from './places';
 import type { Place } from '../types';
-
-// ─── Alan maskesi ─────────────────────────────────────────────────────────────
-
-/**
- * Place Details için TEK alan maskesi. Tek olması maliyet kararı:
- * eskiden POI dokunuşu `formatted_address,types,photos,rating`, detay ekranı
- * `name,formatted_address,geometry,photos,rating,price_level` istiyordu —
- * farklı maskeler, ortak cache yok, aynı mekan için iki çağrı. Tek maske
- * ikisini tek cache satırında birleştirir.
- *
- * SKU: `rating`, `user_ratings_total` ve `price_level` **Atmosphere Data**
- * katmanına girer ve Basic'in üzerine eklenir. Maskede bir tane Atmosphere
- * alanı varsa çağrının tamamı o katmandan faturalanır — yani bu üçünü birlikte
- * almanın tek bir tanesini almaya göre EK maliyeti yok.
- *
- * `opening_hours` / `website` / telefon bilinçli olarak yok: onlar Contact SKU'su
- * (ayrı bir ek ücret) ve hiçbir ekran göstermiyor.
- */
-export const PLACE_DETAIL_FIELDS = [
-  'place_id',
-  'name',
-  'formatted_address',
-  'geometry',
-  'types',
-  'photos',
-  'rating',
-  'user_ratings_total',
-  'price_level',
-].join(',');
 
 // ─── TTL ──────────────────────────────────────────────────────────────────────
 
@@ -61,8 +33,26 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type PlaceFreshness = 'fresh' | 'stale' | 'expired';
 
-/** `fetched_at`e göre tazelik. Bozuk/eksik tarih güvenli tarafa, 'expired'a düşer. */
-export function freshnessOf(place: Pick<Place, 'fetched_at'>): PlaceFreshness {
+/**
+ * `fetched_at`e göre tazelik. Bozuk/eksik tarih güvenli tarafa, 'expired'a düşer.
+ *
+ * ⚠️ EK KURAL: `photo_base_urls` YOKSA satır 'expired' sayılır (Aşama 2).
+ * Migration 022 kolonu boş ekledi ve mevcut satırların hiçbirinde çözülmüş
+ * adres yok. Ayrı bir backfill script'i yazmak yerine mevcut yenileme
+ * makinesini kullanıyoruz: satır bayat sayılıyor, `refreshPlace` EF'e gidiyor,
+ * EF adresleri dolduruyor. Kendi kendini iyileştiren backfill.
+ *
+ * Bu kural Aşama 3'ten ÖNCE devrede olmalı ki fotoğraf yolu sahaya indiğinde
+ * satırlar çoktan dolmuş olsun — aksi hâlde bir tur boş fotoğraf görünürdü.
+ * Satırlar dolduktan sonra kural pratikte hiç tetiklenmiyor; kaldırmak için
+ * ayrı bir sebep yok, çünkü "adres yoksa fotoğraf gösterilemez" kalıcı olarak
+ * doğru.
+ */
+export function freshnessOf(
+  place: Pick<Place, 'fetched_at' | 'photo_base_urls'>
+): PlaceFreshness {
+  if (place.photo_base_urls === null) return 'expired';
+
   const fetchedAt = Date.parse(place.fetched_at);
   if (!Number.isFinite(fetchedAt)) return 'expired';
 
@@ -176,57 +166,23 @@ export async function getPlaces(placeIds: string[]): Promise<Map<string, Place>>
 // ─── Yazma (upsert_place RPC'si) ───────────────────────────────────────────────
 
 /**
- * Place Details sonucunu cache'e yazar.
- *
- * `fallbackName`: Google detayda isim döndürmezse kullanılır. POI dokunuşunda
- * isim native event'ten geliyor, elimizde olan bir bilgiyi çöpe atmayalım.
- */
-export async function upsertPlaceFromDetails(
-  placeId: string,
-  details: PlaceDetailsResult,
-  opts?: { fallbackName?: string }
-): Promise<void> {
-  const name = (details.name ?? opts?.fallbackName ?? '').trim();
-  if (!name) {
-    // RPC de bunu reddediyor (name not null); hatayı burada net verelim.
-    throw new Error(
-      `[placeCache] "${placeId}" için isim yok — ne Place Details ne fallback döndü.`
-    );
-  }
-
-  const photoRefs = (details.photos ?? [])
-    .map((p) => p.photo_reference)
-    .filter((ref): ref is string => typeof ref === 'string' && ref.trim() !== '')
-    .slice(0, 10); // RPC de kırpıyor, ama boşuna büyük payload göndermeyelim
-
-  const { error } = await supabase.rpc('upsert_place', {
-    p_place_id: placeId,
-    p_name: name,
-    p_formatted_address: details.formatted_address ?? null,
-    // parseCoord: NaN / aralık dışı değerleri null'a çevirir. RPC de aynı
-    // kontrolü yapıyor ama orada uyarı üretiyor — buradan temiz gönderiyoruz.
-    p_latitude: parseCoord(details.geometry?.location?.lat, 'lat'),
-    p_longitude: parseCoord(details.geometry?.location?.lng, 'lng'),
-    p_types: details.types && details.types.length > 0 ? details.types : null,
-    p_google_rating: typeof details.rating === 'number' ? details.rating : null,
-    p_user_ratings_total:
-      typeof details.user_ratings_total === 'number' ? details.user_ratings_total : null,
-    p_price_level: typeof details.price_level === 'number' ? details.price_level : null,
-    p_photo_refs: photoRefs.length > 0 ? photoRefs : null,
-  });
-
-  if (error) {
-    throw new Error(`[placeCache] upsert_place başarısız (${placeId}): ${error.message}`);
-  }
-}
-
-/**
  * Google'dan çeker, cache'e yazar, yazılan satırı döndürür.
  *
- * Satırı geri okuyoruz çünkü RPC koordinatı `coalesce` ile koruyor — istemci
- * tarafında ne yazıldığını tahmin etmek yanlış sonuç verirdi.
+ * ── AŞAMA 2: GOOGLE'A ARTIK BURADAN GİDİLMİYOR ─────────────────────────────
+ * Eskiden bu fonksiyon Google'ı çağırıp `upsert_place` RPC'sine yazıyordu.
+ * Artık tek iş `google-places` Edge Function'ını çağırmak: anahtar sunucuda,
+ * çağrı Supabase JWT'siyle kimliğe bağlı. EF hem Google'ı çağırıyor hem RPC'ye
+ * yazıyor hem fotoğraf 302'lerini çözüyor.
  *
- * Hata YUTULMUYOR: Google patlarsa fırlatır, çağıran ekran hata şeridini gösterir.
+ * Yan fayda: EF yazdığı satırı GERİ DÖNDÜRÜYOR, yani eskiden zorunlu olan
+ * "yaz, sonra tekrar oku" turu (`getPlace`) kalktı — bir Supabase gidiş-dönüşü
+ * daha az.
+ *
+ * `fallbackName` EF'e GÖNDERİLİYOR: POI dokunuşunda isim native event'ten
+ * geliyor ve Google detayda isim döndürmezse tek kaynağımız o. Göndermeseydik
+ * EF isimsiz kalır ve satırı yazamazdı.
+ *
+ * Hata YUTULMUYOR: EF patlarsa fırlatır, çağıran ekran hata şeridini gösterir.
  */
 export function refreshPlace(
   placeId: string,
@@ -236,16 +192,33 @@ export function refreshPlace(
   if (pending) return pending;
 
   const task = (async () => {
-    const details = await getPlaceDetails(placeId, PLACE_DETAIL_FIELDS);
-    if (!details) {
-      // status OK ama result yok. İsim uydurup satır yazsak NOT_FOUND'u
+    const { data, error } = await supabase.functions.invoke<{
+      place: Place | null;
+    }>('google-places', {
+      body: {
+        action: 'details',
+        placeId,
+        fallbackName: opts?.fallbackName ?? null,
+      },
+    });
+
+    if (error) {
+      // Ham hata konsola; çağıran ekran kendi kısa metnini gösteriyor.
+      console.error(`[placeCache] google-places başarısız (${placeId}):`, error);
+      throw new Error(`[placeCache] mekan bilgisi alınamadı (${placeId})`);
+    }
+
+    const place = data?.place ?? null;
+    if (!place) {
+      // Google OK dedi ama sonuç yok. İsim uydurup satır yazsak NOT_FOUND'u
       // 7 gün boyunca maskelemiş olurduk.
       throw new Error(
         `[placeCache] Place Details boş döndü (${placeId}) — place_id değişmiş olabilir.`
       );
     }
-    await upsertPlaceFromDetails(placeId, details, opts);
-    return getPlace(placeId);
+
+    // EF'in döndürdüğü satır kanonik; L1'e doğrudan koyuyoruz.
+    return remember(place);
   })();
 
   inFlight.set(placeId, task);
