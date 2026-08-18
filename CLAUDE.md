@@ -3549,9 +3549,45 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > Build 1'de gitmişti: **keyboard-controller** (native taraf) · **kaydırmalı
 > sekmeler** · **`expo` yama farkı** · **deep link + Google girişi**.
 >
-> ### 📦 BUILD 3'ÜN PAKETİ — iki madde, ikisi de acil değil
-> **Bugün build gerektiren başka bir iş YOK**; aşağıdaki ikisi de kendi
-> tetikleyicisini bekliyor.
+> ### 📦 BUILD 3'ÜN PAKETİ — üç madde
+> Bağımlılık denetimi 2026-08-17'de yapıldı (`expo install --check` +
+> `expo-doctor`); çıkan her şey buraya toplandı.
+>
+> 0. 🔴 **ÜÇ NATIVE YAMA — biri GÜVENLİK.** Build alınınca ilk komut
+>    `npx expo install --fix`:
+>    | Paket | Bugün | Beklenen | Ne |
+>    |---|---|---|---|
+>    | `expo-updates` | 29.0.19 | ~29.0.20 | 🔴 **path traversal düzeltmesi** |
+>    | `expo` | 54.0.36 | ~54.0.37 | rutin yama |
+>    | `expo-file-system` | 19.0.23 | ~19.0.24 | yalnızca iOS `ph://` — bize dokunmuyor |
+>
+>    **`expo-updates` 29.0.20'nin içeriği:** asset key'i ya da uzantısı yol
+>    ayracı içeren güncellemeler artık reddediliyor; öncesinde kötü niyetli bir
+>    manifest updates dizininin **dışına dosya yazıp silebiliyordu**.
+>    Bizim için istismar yolu **dar** — saldırganın manifest servis edebilmesi,
+>    yani EAS hesabının ele geçmesi gerekiyor ve o noktada zaten rastgele JS
+>    çalıştırabilir. Yine de OTA bu projenin ana dağıtım yolu ve **kod
+>    imzalama kapalı**, yani tek savunma TLS + hesap güvenliği.
+>
+>    ⚠️ **ÜÇÜ DE NATIVE, yani OTA ile GİDEMEZ** — ve şimdi güncellenmemeli.
+>    Saha 1.3.0'da ve OTA kanalı AÇIK; sıradaki işler saf JS (kamera menüsü,
+>    engelleme). Bunları güncelleyip ardından OTA göndermek **eski native'e
+>    yeni JS indirmek** olur, yani `expo-font@57` çökmesinin sınıfı.
+>
+>    ⏱️ **EŞİK (2026-08-17'de kondu): rebrand 2-3 hafta içinde netleşmezse
+>    Build 3'ü BAKIM BUILD'İ olarak al** — üç yama + aşağıdaki 1. madde,
+>    rebrand'i beklemeden. Bir güvenlik yaması, süresi belirsiz bir isim
+>    kararını bekleyemez. Paket adı değişmediği için yeni APK üzerine kurulur,
+>    kimse uygulamayı kaldırmak zorunda kalmaz.
+>
+>    ⚪ **DOKUNULMAYACAK: `expo-constants` duplicate.** expo-doctor uyarıyor
+>    ("node_modules bozuk olabilir") ama iki kopya da **18.0.13**, aynı android
+>    dosya sayısı — birebir aynı kod. §5.1'i çökerten şey **farklı ve uyumsuz**
+>    sürümlerdi. `npm dedupe` ölçüldü (`--dry-run`): 20 ekliyor, 18 siliyor,
+>    16 değiştiriyor — `@react-native/codegen`, `hermes-parser`,
+>    `babel-preset-expo` dahil, yani doğrulanmış ağacı build zinciri
+>    seviyesinde değiştirir. **Tedavi hastalıktan riskli.**
+>
 > 1. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9). `.fingerprintignore`
 >    hazır ve kanıtlı (Fark 1); kalan iş **Fark 2'nin bir build ile teşhisi**.
 >    Build 1'e bilinçli alınmadı — o build Fark 2'yi besleyen kategoriden
@@ -3567,8 +3603,8 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > OTA'dan koparmak ve o bedel zaten ödenmiş olacak.
 >
 > ⚠️ Build alınırken **§2'deki sürüm yükseltme ritüeli** ihmal edilmemeli:
-> `versionCode` +1 her zaman, `version` +1 native değişiklik varsa. Kalan iki
-> maddenin **ikisi de** native değişiklik.
+> `versionCode` +1 her zaman, `version` +1 native değişiklik varsa.
+> **Üç maddenin üçü de** native değişiklik.
 >
 > ### ✅ KAPANDI: hesap silme + arama ekranı (2026-08-17)
 > - **Hesap silme** yapıldı (Edge Function + istemci). KVKK/GDPR silme hakkını
@@ -3622,6 +3658,16 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   `left(v_base, 21)` ile kırpsın ve kısa tabanı doldursun, SONRA kısıt
 >   daraltılsın. Alt sınır eklenecekse aynı kural. Bugün somut bir zarar
 >   üretmiyor (sahadaki en uzun ad 23, en kısa 3) — düşük öncelik.
+> - **OTA kod imzalama** (`expo-updates` → `codeSigningCertificate`) —
+>   bugün **kapalı** (`eas update:list` çıktısında `Code Signing Key: N/A`).
+>   Açmak, güncelleme kanalını EAS hesabının güvenliğinden **bağımsız** hale
+>   getiriyor: cihaz yalnızca bizim özel anahtarımızla imzalanmış manifest'i
+>   kabul eder. `expo-updates` 29.0.20'nin kapattığı path traversal açığının
+>   ait olduğu sınıfa karşı asıl **yapısal** savunma bu — yama o açığı
+>   kapatıyor, imzalama ise kötü niyetli manifest'in en baştan kabul
+>   edilmemesini sağlıyor. Kendi işi; anahtar üretimi + `app.config.js` +
+>   sertifikanın build'e girmesi demek, yani **build gerektirir**. Düşük-orta
+>   öncelik.
 > - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
 > - **Şifre sıfırlamadaki İKİNCİ captcha turunun gerekli olup olmadığını ölç**
 >   (2026-08-17'den kalan). `verifyOtp`'den token'ı geçici olarak çıkarıp
