@@ -196,6 +196,73 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // ── ⚠️ ACTION: backfill — GEÇİCİ, Aşama 3 bitince SİLİNECEK ────────────
+    //
+    // Aşama 2'nin "photo_base_urls null → expired" kuralının satırları kendi
+    // kendine dolduracağı sanılmıştı. ÖLÇÜM YALANLADI: 57 mekandan 3'ü doldu.
+    // Sebep yapısal — kural yalnızca `resolvePlace`'ten geçen, yani kullanıcının
+    // AÇTIĞI mekanlarda işliyor; liste ekranları `getPlaces()` ile toplu okuma
+    // yapıyor ve yenileme tetiklemiyor (doğru davranış, aksi hâlde 57 satırlık
+    // bir liste 57 EF çağrısı üretirdi).
+    //
+    // 🔑 GOOGLE DETAILS ÇAĞRISI YAPMIYOR: satırlarda `photo_refs` ZATEN var,
+    // eksik olan yalnızca 302'lerin çözülmesi. Details'i tekrar çekmek hem
+    // gereksiz hem Atmosphere SKU'sundan faturalanırdı.
+    //
+    // Çağrı başına sınırlı çalışıyor: EF'in duvar saati limiti var ve mekan
+    // başına 10'a kadar fotoğraf çözümü yapılıyor. Kalan sayısı dönüyor,
+    // çağıran bitene kadar tekrarlıyor.
+    if (body.action === 'backfill') {
+      const limit = Math.min(
+        typeof body.limit === 'number' && body.limit > 0 ? body.limit : 10,
+        25
+      );
+
+      const { data: rows, error: readError } = await admin
+        .from('places')
+        .select('place_id, photo_refs')
+        .is('photo_base_urls', null)
+        .limit(limit);
+
+      if (readError) {
+        console.error('[google-places] backfill okuma hatası:', readError);
+        return json({ error: 'read_failed' }, 500);
+      }
+
+      let processed = 0;
+      for (const row of rows ?? []) {
+        const refs = ((row.photo_refs ?? []) as string[]).slice(0, MAX_PHOTOS);
+        // Mekanlar SIRAYLA, mekan içindeki fotoğraflar paralel: Google'ı
+        // gereksiz yere dövmeden makul hızda ilerliyor.
+        const baseUrls =
+          refs.length > 0 ? await Promise.all(refs.map(resolvePhoto)) : [];
+
+        const { error: upError } = await admin
+          .from('places')
+          // Fotoğrafsız mekan da boş dizi alıyor — null bırakmak onu sonsuz
+          // yenileme döngüsüne sokardı (yukarıdaki aynı gerekçe).
+          .update({ photo_base_urls: baseUrls })
+          .eq('place_id', row.place_id);
+
+        if (upError) {
+          console.error(
+            `[google-places] backfill yazılamadı (${row.place_id}):`,
+            upError
+          );
+        } else {
+          processed++;
+        }
+      }
+
+      const { count } = await admin
+        .from('places')
+        .select('place_id', { count: 'exact', head: true })
+        .is('photo_base_urls', null);
+
+      console.log(`[google-places] backfill: ${processed} işlendi, ${count} kaldı`);
+      return json({ processed, remaining: count ?? 0 });
+    }
+
     // ── ACTION: details ────────────────────────────────────────────────────
     if (body.action === 'details') {
       const placeId =
@@ -277,7 +344,19 @@ Deno.serve(async (req) => {
 
       const { error: urlError } = await admin
         .from('places')
-        .update({ photo_base_urls: baseUrls.length > 0 ? baseUrls : null })
+        /**
+         * ⚠️ BOŞ DİZİ YAZILIYOR, null DEĞİL — bu bir hata düzeltmesi.
+         *
+         * Önce `baseUrls.length > 0 ? baseUrls : null` yazılıyordu ve fotoğrafı
+         * HİÇ olmayan bir mekan null alıyordu. `freshnessOf` null'ı 'expired'
+         * saydığı için o mekan HER açılışta yeniden yenileniyordu: sonsuz ve
+         * faturalanan bir döngü.
+         *
+         * Boş dizi null değil, yani tazelik normal işliyor; okuma tarafında da
+         * `photo_base_urls?.[0]` zaten `undefined` veriyor. null'ın tek anlamı
+         * artık "bu satır hiç işlenmedi" olmalı — kuralın dayandığı şey bu.
+         */
+        .update({ photo_base_urls: baseUrls })
         .eq('place_id', placeId);
 
       if (urlError) {
