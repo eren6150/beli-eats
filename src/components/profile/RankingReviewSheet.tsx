@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UserRanking } from '../../types';
-import { photoUrl } from '../../lib/places';
+import { placePhotoUrl } from '../../lib/places';
 import { Colors, Elevation, Radius, Spacing, Type } from '../../constants/theme';
 import StarRating from '../ui/StarRating';
 import Icon from '../ui/Icon';
@@ -96,7 +96,10 @@ export default function RankingReviewSheet({
   const { height: windowHeight } = useWindowDimensions();
 
   const review = ranking?.review_text?.trim();
-  const thumb = photoUrl(ranking?.photo_reference ?? null, PHOTO_WIDTH);
+  const thumb = placePhotoUrl(
+    ranking?.places?.photo_base_urls?.[0],
+    PHOTO_WIDTH
+  );
 
   return (
     <Modal

@@ -14,7 +14,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useRankings } from '../../hooks/useRankings';
 import { useLists, itemCountOf } from '../../hooks/useLists';
 import { UserRanking, ListWithItemCount } from '../../types';
-import { photoUrl } from '../../lib/places';
+import { placePhotoUrl } from '../../lib/places';
 import { Colors, Elevation, Radius, Spacing, Type } from '../../constants/theme';
 import SectionHeader from '../ui/SectionHeader';
 import Icon from '../ui/Icon';
@@ -164,7 +164,10 @@ export default function MapSummarySheet({
                   rank={index + 1}
                   name={ranking.restaurant_name}
                   rating={ranking.rating}
-                  photoUrl={photoUrl(ranking.photo_reference, THUMB_PHOTO_WIDTH)}
+                  photoUrl={placePhotoUrl(
+                    ranking.places?.photo_base_urls?.[0],
+                    THUMB_PHOTO_WIDTH
+                  )}
                   onPress={() => onPressRanking(ranking)}
                   // Sıra kontrolü ve silme YOK — özet salt okunur.
                 />

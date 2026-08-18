@@ -16,7 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { UserRanking, Profile, HomeStackParamList } from '../types';
-import { photoUrl, placePhotoUrl } from '../lib/places';
+import { placePhotoUrl } from '../lib/places';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
 import { SkeletonCard, SkeletonListItem } from '../components/ui/SkeletonLoader';
 import RestaurantCard from '../components/ui/RestaurantCard';
@@ -90,7 +90,8 @@ export default function HomeScreen() {
     // 1. Trending Places
     const { data: trending, error: trendingError } = await supabase
       .from('user_rankings')
-      .select('*')
+      // Gerekçe `useRankings` ile aynı: fotoğraf `places.photo_base_urls`'ten.
+      .select('*, places(*)')
       .order('rating', { ascending: false })
       .limit(6);
 
@@ -357,7 +358,10 @@ export default function HomeScreen() {
                   key={place.id}
                   name={place.restaurant_name}
                   rating={place.rating}
-                  photoUrl={photoUrl(place.photo_reference, CARD_PHOTO_WIDTH)}
+                  photoUrl={placePhotoUrl(
+                    place.places?.photo_base_urls?.[0],
+                    CARD_PHOTO_WIDTH
+                  )}
                   onPress={() => goToDetail(place)}
                   width={(width - GRID_INSET) / 2}
                 />

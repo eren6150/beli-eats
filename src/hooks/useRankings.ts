@@ -17,7 +17,15 @@ export function useRankings(userId: string | undefined) {
 
     const { data, error: queryError } = await supabase
       .from('user_rankings')
-      .select('*')
+      // `places(*)` gömülü: fotoğraf adresleri artık `places.photo_base_urls`'ten
+      // geliyor (Aşama 3). Denormalize `photo_reference` bu turdan sonra hiçbir
+      // yerde okunmuyor.
+      //
+      // ⚠️ Alt küme (`places(photo_base_urls)`) seçilmedi: `UserRanking.places`
+      // tipi tam `Place` ilan ediyor ve `MapScreen` de `places(*)` kullanıyor.
+      // Alt küme, tipi sessizce yalancı yapar ve ileride `places.name` okuyan
+      // biri undefined alırdı. Bedeli satır başına birkaç KB.
+      .select('*, places(*)')
       .eq('user_id', userId)
       .order('rank_index', { ascending: true });
 

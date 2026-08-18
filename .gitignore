@@ -31,3 +31,7 @@ crash*.txt
 # `npx expo prebuild` çalıştırılırsa oluşur ve kazara commit edilmemeli.
 /android
 /ios
+
+# curl ile elle test dosyalari (kimlik bilgisi icerebilir)
+login.json
+request.json

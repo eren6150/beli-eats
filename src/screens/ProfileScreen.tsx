@@ -21,7 +21,7 @@ import {
   ProfileStackParamList,
   ProfileTabKey,
 } from '../types';
-import { photoUrl, placePhotoUrl } from '../lib/places';
+import { placePhotoUrl } from '../lib/places';
 import { Colors, Spacing } from '../constants/theme';
 import { SkeletonListItem } from '../components/ui/SkeletonLoader';
 import EmptyState from '../components/ui/EmptyState';
@@ -571,7 +571,10 @@ export default function ProfileScreen() {
               rank={index + 1}
               name={item.restaurant_name}
               rating={item.rating}
-              photoUrl={photoUrl(item.photo_reference, THUMB_PHOTO_WIDTH)}
+              photoUrl={placePhotoUrl(
+                      item.places?.photo_base_urls?.[0],
+                      THUMB_PHOTO_WIDTH
+                    )}
               reviewText={item.review_text}
               onPress={() => handleOpenRanking(item)}
               isFirst={index === 0}
