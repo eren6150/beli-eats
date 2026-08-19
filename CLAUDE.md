@@ -1557,6 +1557,56 @@ Bir sıralama kaydının puanı + **tam yorum metni**. Bilinen Açık İşler'de
   bakarken istenen şey mekanın kendisi. Üçüncü bir yerde farklı davranış olduğu
   doğru; rahatsız ederse ayrı bir diff.
 
+### `RankingReviewSheet` fotoğraf şeridi (2026-08-19, ⏳ cihazda DOĞRULANMADI)
+Puanın okuma görünümüne, o kullanıcının o mekana yüklediği kareler eklendi.
+Ziyaret tarafında bu simetri zaten vardı (`DiaryEntryDetail` kendi ziyaretinin
+fotoğraflarını gösteriyor), puan tarafında yoktu.
+
+- **Sheet ZATEN fotoğraf gösteriyordu** — açık iş maddesi bunu atlamıştı.
+  Başlıktaki küçük resim `places.photo_base_urls[0]`, yani **Google'ın**
+  fotoğrafı. Eksik olan kullanıcının kendi kareleriydi.
+- 🔑 **BAŞLIK "BU PUANLAMANIN FOTOĞRAFLARI" DEĞİL, "Bu mekandaki
+  fotoğrafların".** Küme iki kaynağı birden içeriyor ve **şema onları ayırt
+  edemiyor**: "Puanı Kaydet" formundan yüklenenler (gerçekten puanlama anına
+  ait) ve ızgaranın "Menü ekle" yolundan yüklenenler (**mekana katkı**, puanla
+  ilgisi yok). İkisinde de `entry_id` null, `ranking_id` diye bir kolon yok.
+  Kareyi puanın malı gibi etiketlemek, bu projenin dört kez pahalıya
+  patlattığı isim/davranış uyumsuzluğu olurdu.
+  - **Reddedilen alternatif — şemaya kaynak işareti eklemek:** doğru ayrımı
+    verirdi ama geçmiş için **backfill imkânsız** (hangi eski karenin hangi
+    puanlamaya ait olduğu bilinemez) — `entry_id` backfill'inin reddedildiği
+    aynı gerekçe.
+- **`useRankingPhotos(userId, placeId)` AYRI hook, `usePlacePhotos` DEĞİL:** o
+  hook mekandaki HERKESİN fotoğrafını çekiyor ve dört tür sekmesini besliyor.
+  `usePlaceVisits`'in `useDiary` yanında ayrı durmasıyla birebir aynı gerekçe.
+- 🚩 **GÖMÜLÜ KAYNAK YOK — PGRST201 yüzeyine hiç girilmiyor.** `photo_reports`
+  `place_photos` ile `profiles` arasında bir ARA TABLO, yani düz `profiles(*)`
+  yazmak patlardı (`usePlacePhotos` tam bu yüzden FK adı yazmak zorunda).
+  Bütün satırlar tek kullanıcıya ait olduğu için gömmeye gerek de yoktu.
+- **`hidden` süzülüyor:** RLS başkasının gizlenmiş karesini zaten göstermiyor
+  ama KENDİ gizlenmiş karesini gösteriyor. Bu şerit "Gizlendi" etiketini
+  çizmiyor; süzmeseydik gizlenmiş bir kare canlıymış gibi görünürdü. Etiketli
+  gösterimin evi mekan sayfasının ızgarası.
+- **Şerit yorum `ScrollView`'unun DIŞINDA ve sabit yükseklikte** —
+  `DiaryEntrySheet`'in dersi: sheet `maxHeight` ile sınırlı, uzun bir yorumda
+  kırpılan ilk şey en alttaki eleman olur.
+- **Sheet ARTIK SORGU ATIYOR — "anlık görüntü" kuralının bilinçli delinmesi.**
+  Fotoğrafları çağırandan almak, iki profil ekranının listedeki HER sıralama
+  için fotoğraf yüklemesi demekti (N+1). Burada sorgu kullanıcı dokunuşuyla,
+  tek kayıt için atılıyor — `usePlaceVisits`'in kabul edilmiş deseni.
+
+#### ⏳ CİHAZDA DOĞRULANACAK İLK ŞEY: İÇ İÇE `Modal`
+`PhotoViewer` kendisi bir `Modal` ve burada sheet'in `Modal`'ının **içinde**
+render ediliyor. Diğer iki çağrı yeri (`PhotoGrid`, `DiaryEntryDetailScreen`)
+düz EKRAN — yani bu desen projede **ilk kez** kuruluyor ve Android'de iç içe
+`Modal` bilinen bir kırılganlık.
+- **Kareleri tıklanamaz bırakmak REDDEDİLDİ:** ziyaret detayında tam olarak bu
+  sahada şikayet olmuştu ("dokunuyorum, hiçbir şey olmuyor"). Üstelik
+  fotoğraflar diğer iki yüzeyde tıklanabilir; burada olmaması üçüncü bir
+  davranış farkı yaratırdı.
+- **GERİ ÇEKİLME TEK SATIR:** çalışmazsa `setViewing(photo)` yerine `onClose()`
+  + mekan sayfasına yönlendirme.
+
 ### "Senin Ziyaretlerin" — mekan sayfası (2026-08-08, cihazda DOĞRULANDI)
 `user_rankings` ile `diary_entries` arayüzde **ilk kez buluşuyor**: ikisi
 veritabanında `place_id` ile bağlıydı ama "bu mekana kaç kez gittin" bilgisi
@@ -3720,18 +3770,15 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   ziyarete ait olduğu bilinemez; `created_at` yakınlığı tahmin olurdu (aynı
 >   güne birden çok ziyaret girilebiliyor).
 >
-> **⬜ YENİ AÇIK İŞ — puan kaydının fotoğrafları hiçbir okuma görünümünde yok.**
-> "Puanı Kaydet" ile yüklenen kareler (`entry_id` boş) yalnızca mekan
-> sayfasının ızgarasında yaşıyor; puanın okuma görünümü olan
-> `RankingReviewSheet` **fotoğraf göstermiyor**. Ziyaret tarafında simetrisi
-> var (ziyaret detayı kendi fotoğraflarını gösteriyor), puan tarafında yok.
-> - **Bugün bir hata üretmiyor** — fotoğraflar kayıp değil, mekan sayfasında
->   duruyorlar. Bu yüzden kapsam dışı bırakıldı.
-> - Yapılırsa: sheet'e `place_photos`'tan `user_id + place_id` eşleşen ve
->   `entry_id`'si BOŞ kareler; `usePlacePhotos` zaten bu veriyi getiriyor ama
->   sheet'in elinde yok (parametreyle besleniyor, sorgu atmıyor) — yani asıl
->   soru "sheet sorgu atmalı mı" ve bu onun **anlık görüntü kuralını** deler.
->   Küçük ama düşünülmesi gereken bir tasarım kararı.
+> ~~**⬜ YENİ AÇIK İŞ — puan kaydının fotoğrafları hiçbir okuma görünümünde
+> yok.**~~ → ✅ **KAPANDI (2026-08-19).** `RankingReviewSheet` artık bir
+> fotoğraf şeridi çiziyor. Detay: Mimari Notlar →
+> **`RankingReviewSheet` fotoğraf şeridi**.
+> 🔑 **Teşhis maddeyi DÜZELTTİ:** burada önerilen sorgu (`user_id + place_id` +
+> `entry_id` boş) **iki farklı kaynağı karıştırıyordu** — "Puanı Kaydet"ten
+> gelenler ve ızgaradan yüklenen MEKAN KATKILARI. Şema ikisini ayırt edemiyor
+> (`ranking_id` yok) ve ayırt etmek geçmişi backfill etmeyi gerektirirdi —
+> imkânsız. Çözüm ayrımı kabul edip **dürüst etiketlemek** oldu.
 >
 > ---
 > **(Tarihsel) 📦 PARK EDİLDİ: fotoğrafların incelemeye bağlanması (2026-08-11)**
@@ -4239,10 +4286,20 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 - **`SearchScreen` autocomplete cache'lenmiyor** ve cache'lenmemesi doğru (sorguya özel,
   ToS açısından da tartışmalı). Ama her 400ms debounce'ta faturalanan bir istek gidiyor;
   session token kullanımı ileride incelenmeli.
-- **`MapScreen`'in overlay kartı `ErrorBanner`'a geçmedi** (adım 7'de bilinçli ertelendi).
-  Stil aynı token'lara bağlı, yapı ayrı. Geçiş kartın sol sütun / sağ yuva düzeninin
-  yeniden kurulmasını gerektiriyor — sağ yuvayı spinner ve "N puanlanan" sayacı da
-  paylaşıyor. Ayrı bir diff olmalı.
+- ~~**`MapScreen`'in overlay kartı `ErrorBanner`'a geçmedi**~~ → ✅ **KAPANDI:
+  BİLİNÇLİ OLARAK YAPILMAYACAK** (2026-08-19). Uzun süre "ertelenmiş açık iş"
+  diye durdu; teşhis edilince dönüşümün **kullanıcıya hiçbir kazancı olmadığı**
+  ortaya çıktı. Kartın sağ yuvası üç yönlü (spinner / "Tekrar dene" /
+  "N puanlanan"), sol sütunu üç ayrı satır çizebiliyor; `ErrorBanner` ise tek
+  mesaj + tek buton çizen, KENDİ ZEMİNİ OLAN bir şerit. Geçiş ya kart içinde
+  çerçeve üretir ya da hata anında kartın yerini alıp kullanıcının **özet
+  sheet'ine erişimini koparır** (kart o sheet'in tek giriş noktası).
+  Kalan tek tekrar üç stil satırı ve `RetryButton` çıkarımı projenin kendi
+  eşiğinin ALTINDA (ortak parça ölçütü "ikiden fazla yer", burada iki yer var).
+  Gerekçenin tamamı `ErrorBanner.tsx`'in yorumunda.
+  🔑 **Yöntem dersi:** bu madde de kapsamı ölçülmeden listede duruyordu ve
+  ölçülünce "yapılacak iş" değil "yapılmayacak karar" çıktı — `backfill` ve
+  kamera menüsü maddeleriyle aynı aile.
 - ~~Auth ekranlarındaki stil tekrarı~~ — **KAPANDI (2026-08-07), önce Expo
   Go'da sonra GERÇEK APK'da (OTA sonrası) DOĞRULANDI.** İkisinin ayrı ayrı
   yazılması bilinçli: bu oturumun en pahalı dersi "hangi ortamda doğrulandığı"

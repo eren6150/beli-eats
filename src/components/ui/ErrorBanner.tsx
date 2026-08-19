@@ -11,13 +11,22 @@ import Icon from './Icon';
  * (kullanıcı ekrandan çıkmak zorunda), `MapScreen` kendi buton stilini
  * kuruyor, `ProfileScreen` `EmptyState` üzerinden çözüyor. Tek desen.
  *
- * `MapScreen` İSTİSNASI (ERTELENDİ, açık iş): harita üstü bilgi kartı hâlâ
- * kendi "Tekrar dene" butonunu çiziyor. Faz 1b adım 7'de o butonun STİLİ
- * buradakiyle aynı token'lara bağlandı (`Radius.sm` + `Spacing.xs/xxs` +
- * `hitSlop`), yani görsel drift yok — ama YAPI ayrı kaldı. Sebep: o kartta
- * hata metni sol sütunda, buton sağ yuvada duruyor ve aynı yuvayı spinner ile
- * "N puanlanan" sayacı paylaşıyor. `ErrorBanner`'a geçmek kartın düzenini
- * yeniden kurmak demek — tasarım değil yapı değişikliği, ayrı diff olmalı.
+ * `MapScreen` İSTİSNASI — ✅ **KAPANDI: BİLİNÇLİ OLARAK YAPILMAYACAK**
+ * (2026-08-19). Harita üstü bilgi kartı kendi "Tekrar dene" butonunu çizmeye
+ * DEVAM EDECEK. Uzun süre "ertelenmiş açık iş" diye duruyordu; teşhis edilince
+ * dönüşümün kullanıcıya hiçbir kazancı olmadığı, karşılığında gerçek
+ * regresyon riski taşıdığı görüldü:
+ *   • Kartın SAĞ YUVASI üç yönlü (spinner / "Tekrar dene" / "N puanlanan"),
+ *     sol sütunu üç ayrı satır çizebiliyor (fallback · hata · POI bildirimi).
+ *     `ErrorBanner` tek mesaj + tek buton çizen bir şerit; yuva kavramı yok.
+ *   • Kartın kendi zemini var — şeridi içine koymak KART İÇİNDE ÇERÇEVE olur.
+ *   • Hata anında kartın YERİNE geçmek ise kullanıcının özet sheet'ine
+ *     erişimini koparırdı (kart o sheet'in tek giriş noktası).
+ * Geriye kalan tek gerçek tekrar üç stil satırı ve `RetryButton` çıkarımı
+ * projenin kendi eşiğinin ALTINDA: ortak parça ölçütü "İKİDEN FAZLA yerde
+ * aynı eşleşme" ve burada iki yer var. Stiller Faz 1b adım 7'de zaten aynı
+ * token'lara bağlandı, yani görsel drift riski de yok.
+ * **Tetikleyici:** kartın düzeni başka bir sebeple elden geçerse yeniden bak.
  *
  * `onRetry` verilmezse buton hiç çizilmez — her hata yeniden denenebilir
  * değil (ör. doğrulama hatası).

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,15 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { UserRanking } from '../../types';
+import { PlacePhoto, UserRanking } from '../../types';
 import { placePhotoUrl } from '../../lib/places';
+import { photoPublicUrl } from '../../lib/placePhotos';
+import { buildPhotoInfo } from '../../lib/photoInfo';
+import { useRankingPhotos } from '../../hooks/useRankingPhotos';
 import { Colors, Elevation, Radius, Spacing, Type } from '../../constants/theme';
 import StarRating from '../ui/StarRating';
 import Icon from '../ui/Icon';
+import PhotoViewer from '../photos/PhotoViewer';
 
 /**
  * Bir sıralama kaydının okuma görünümü: puan + TAM yorum metni.
@@ -84,6 +88,9 @@ export interface RankingReviewSheetProps {
 /** Mekan görselinin genişliği — Places Photo endpoint'ine gider. */
 const PHOTO_WIDTH = 200;
 
+/** Şeritteki karelerin kenarı. `thumb_path` uzun kenarı 400, yani fazlasıyla yeter. */
+const STRIP_THUMB_SIZE = 76;
+
 /** Sheet ekranın tamamını kaplamasın; uzun yorumda içerik kendi içinde kayar. */
 const MAX_SHEET_RATIO = 0.8;
 
@@ -100,6 +107,43 @@ export default function RankingReviewSheet({
     ranking?.places?.photo_base_urls?.[0],
     PHOTO_WIDTH
   );
+
+  /**
+   * ⚠️ SHEET ARTIK SORGU ATIYOR — "anlık görüntü" kuralının BİLİNÇLİ delinmesi.
+   *
+   * Bileşen bugüne kadar yalnızca parametreyle besleniyordu. Fotoğrafları
+   * çağırandan almak `ProfileScreen`/`UserProfileScreen`'in listedeki HER
+   * sıralama için fotoğraf yüklemesi demekti (N+1 ya da gereksiz toplu sorgu);
+   * oysa burada sorgu kullanıcı dokunuşuyla, tek kayıt için atılıyor.
+   * `usePlaceVisits`'in kabul edilmiş deseni.
+   */
+  const { photos, error: photosError, fetchPhotos, clearPhotos } =
+    useRankingPhotos(ranking?.user_id, ranking?.place_id);
+
+  /** Tam ekran görüntüleyicide açık olan kare. */
+  const [viewing, setViewing] = useState<PlacePhoto | null>(null);
+
+  useEffect(() => {
+    if (ranking) {
+      fetchPhotos();
+    } else {
+      // Sheet kapandı: hem kareler hem görüntüleyici sıfırlanıyor, yoksa
+      // bir sonraki açılışta önceki mekanın fotoğrafları bir kare görünürdü.
+      clearPhotos();
+      setViewing(null);
+    }
+  }, [ranking, fetchPhotos, clearPhotos]);
+
+  /**
+   * `buildPhotoInfo`'nun puan dalını besliyor. Sheet'in elindeki kayıt zaten
+   * doğru olanı — ayrıca sorgulamaya gerek yok.
+   *
+   * Bu şeritteki her karenin `entry_id`'si null olduğu için `buildPhotoInfo`
+   * ziyaret dalına HİÇ girmiyor; şeritte puan + yorum çıkıyor, tarih ÇIKMIYOR
+   * (bir puanın ziyaret tarihi yoktur — o kararın gerekçesi `photoInfo.ts`'te).
+   */
+  const rankingOf = (userId: string) =>
+    ranking && ranking.user_id === userId ? ranking : null;
 
   return (
     <Modal
@@ -155,6 +199,60 @@ export default function RankingReviewSheet({
                 </Pressable>
               </View>
 
+              {/* ── Fotoğraf şeridi ──────────────────────────────────────
+                  YORUM `ScrollView`'UNUN DIŞINDA ve SABİT YÜKSEKLİKTE.
+                  İçine koymak `DiaryEntrySheet`'in dersini tekrarlamak
+                  olurdu: sheet `maxHeight` ile sınırlı ve uzun bir yorumda
+                  kırpılan ilk şey en alttaki eleman olur.
+
+                  ⚠️ BAŞLIK "BU PUANLAMANIN FOTOĞRAFLARI" DEĞİL — kümede
+                  ızgaradan yüklenmiş mekan katkıları da var ve şema ikisini
+                  ayırt edemiyor (gerekçe `useRankingPhotos`'ta). Kareyi
+                  puanın malı gibi etiketlemek, bu projenin dört kez pahalıya
+                  patlattığı isim/davranış uyumsuzluğu olurdu. */}
+              {photos.length > 0 && (
+                <View style={styles.photoSection}>
+                  <Text style={styles.photoTitle}>Bu mekandaki fotoğrafların</Text>
+                  {/* Sanallaştırma YOK (`ListPicker`'ın dersi): birkaç kare
+                      için `FlatList` sıfır fayda, karşılığında bayat hücre
+                      hata sınıfı getiriyor. */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.photoStrip}
+                  >
+                    {photos.map((photo) => {
+                      const uri = photoPublicUrl(photo.thumb_path);
+                      return (
+                        <Pressable
+                          key={photo.id}
+                          onPress={() => setViewing(photo)}
+                          style={({ pressed }) => pressed && styles.pressed}
+                          accessibilityRole="button"
+                          accessibilityLabel="Fotoğrafı tam ekran aç"
+                        >
+                          {uri ? (
+                            <Image source={{ uri }} style={styles.stripThumb} />
+                          ) : (
+                            <View style={[styles.stripThumb, styles.thumbFallback]}>
+                              <Icon name="photo" size={20} color={Colors.textMuted} />
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Yükleme durumunda hiçbir şey çizilmiyor ("Senin Ziyaretlerin"
+                  ile aynı karar): birkaç karelik bir şerit için iskelet,
+                  yalnızca yerleşim zıplaması üretirdi. Hata ise sessiz
+                  geçilmiyor. */}
+              {photosError && (
+                <Text style={styles.photoError}>{photosError}</Text>
+              )}
+
               {/* Yorum — `flexShrink: 1` ŞART. RN'de varsayılan `flexShrink` 0,
                   onsuz uzun bir yorum sheet'in `maxHeight`'ini aşar ve kırpılan
                   ilk şey alttaki eylem satırı olurdu. `DiaryEntrySheet`'in
@@ -191,11 +289,68 @@ export default function RankingReviewSheet({
           )}
         </View>
       </View>
+
+      {/**
+        * ⚠️ İÇ İÇE `Modal` — bu dosyanın CİHAZDA İLK DOĞRULANACAK yeri.
+        *
+        * `PhotoViewer` kendisi bir `Modal` ve burada sheet'in `Modal`'ının
+        * İÇİNDE render ediliyor. Uygulamadaki diğer iki çağrı yeri
+        * (`PhotoGrid`, `DiaryEntryDetailScreen`) düz EKRAN, yani bu desen
+        * projede ilk kez kuruluyor.
+        *
+        * Alternatifler ve neden seçilmediler:
+        *   • Kareleri tıklanamaz bırakmak → ziyaret detayında tam olarak bu
+        *     sahada şikayet olmuştu ("dokunuyorum, hiçbir şey olmuyor").
+        *   • Dokununca sheet'i kapatıp mekan sayfasına gitmek → zaten alttaki
+        *     "Mekan sayfasına git" butonunun işi; ikinci bir kopya olurdu.
+        *
+        * İç içe `Modal` beklendiği gibi çalışmazsa (Android'de bilinen bir
+        * kırılganlık) GERİ ÇEKİLME TEK SATIR: `setViewing(photo)` yerine
+        * `onClose()` + mekan sayfasına yönlendirme.
+        */}
+      <PhotoViewer
+        photo={viewing}
+        info={viewing ? buildPhotoInfo(viewing, rankingOf) : null}
+        onClose={() => setViewing(null)}
+        /**
+         * `onPressAuthor` VERİLMİYOR — ad düz metin kalıyor. Kareler zaten bu
+         * sıralamanın sahibine ait ve sheet onun profilinden/ya da onun
+         * kaydından açılıyor; oraya bir daha gitmeyi önermek döngü olurdu.
+         * Ayrıca bir `Modal`'ın içinden `navigate` etmek sheet'i de kapatmayı
+         * gerektirirdi (`MapSummarySheet`'in dersi).
+         */
+      />
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  /** Şerit bloğu — SABİT yükseklik, yorumun kaydırma alanına dahil değil. */
+  photoSection: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+  },
+  photoTitle: {
+    ...Type.captionStrong,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  photoStrip: {
+    gap: Spacing.xs,
+    paddingRight: Spacing.lg,
+  },
+  stripThumb: {
+    width: STRIP_THUMB_SIZE,
+    height: STRIP_THUMB_SIZE,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.canvas,
+  },
+  photoError: {
+    ...Type.caption,
+    color: Colors.danger,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+  },
   root: {
     flex: 1,
     justifyContent: 'flex-end',
