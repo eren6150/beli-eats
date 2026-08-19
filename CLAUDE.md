@@ -803,10 +803,17 @@ tetiklemiyor — doğru davranış, aksi hâlde 57 satırlık bir liste 57 EF ç
 ⚠️ **Sonuç: Aşama 3 bu haliyle sahaya inseydi mekanların çoğunda fotoğraf
 görünmezdi.**
 
-✅ **Çözüldü — geçici `backfill` action'ı** (EF'e eklendi, seri bitince
-silinecek): `photo_base_urls` null olan satırları çağrı başına 10-25 tanesini
-işliyor. 🔑 **Google `details` çağrısı YAPMIYOR** — satırlarda `photo_refs`
+✅ **Çözüldü — geçici `backfill` action'ı** (EF'e eklendi, işini bitirince
+silindi): `photo_base_urls` null olan satırları çağrı başına 10-25 tanesini
+işliyordu. 🔑 **Google `details` çağrısı YAPMIYORDU** — satırlarda `photo_refs`
 zaten var, eksik olan yalnızca 302'lerin çözülmesi. 57/57 dolduruldu.
+
+🧹 **Action 2026-08-19'da EF'ten SİLİNDİ ve deploy edildi.** Silmeden önce
+`select count(*) from places where photo_base_urls is null;` → **0**.
+Yeni satırlar için gerekmiyor: `details` yolu her zaman dizi yazıyor, yazma
+patlarsa da `freshnessOf` null'ı 'expired' sayıp satırı kendi kendine
+iyileştiriyor. `resolvePhoto` ve `MAX_PHOTOS` silinmedi — `details` onları
+kullanmaya devam ediyor.
 
 🔴 **Aynı turda SAHADA CANLI bir hata bulundu:** EF, fotoğrafı hiç olmayan
 mekana `photo_base_urls = null` yazıyordu ve `freshnessOf` null'ı 'expired'
@@ -3882,9 +3889,9 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   öncelik.
 > - ~~**Places anahtarını istemciden çıkarma**~~ → ✅ **KAPANDI** (dört aşama,
 >   2026-08-17). Detay: Mimari Notlar → **Places anahtarını istemciden çıkarma**.
->   Serinin bıraktığı iki küçük iş: EF'teki geçici `backfill` action'ı silinmeli,
->   ve `user_rankings.photo_reference` artık hiçbir yerde okunmuyor → düşürülmeye
->   aday (ayrı migration).
+>   Seriden kalan tek iş: `user_rankings.photo_reference` artık hiçbir yerde
+>   okunmuyor → düşürülmeye aday (ayrı migration). (EF'teki geçici `backfill`
+>   action'ı 2026-08-19'da silindi.)
 >   ⚠️ **Aşama 4 OTA DEĞİL panel işi ve ZORUNLU:** anahtarı Google Console'da
 >   döndürmek. Sahadaki APK'ya gömülü anahtar aksi hâlde yaşamaya devam eder ve
 >   o anahtar ayrıca bir sohbet oturumunda düz metin paylaşıldı.
