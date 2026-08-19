@@ -64,7 +64,8 @@ Açık İşler → **Rebrand**.
 **Fotoğraf akışının yeniden tasarımı BİTTİ ve sahada** (hepsi OTA, migration
 020 dışında yeni migration yok, native değişiklik yok). Sırayla:
 
-1. ✅ `usePendingPhotos` + `PendingPhotoStrip` çıkarıldı (`37f4343`)
+1. ✅ `usePendingPhotos` + `PendingPhotoStrip` **ayrı modüle çıkarıldı**
+   (`37f4343`) — silinmediler, iki form onları PAYLAŞIYOR
 2. ✅ "Puanı Kaydet" akışından da fotoğraf eklenebiliyor (`c0a5163`)
 3. ✅ **Dokunma çözümlemesi** — sonra **tersine çevrildi** (aşağıda)
 4. ✅ **`PhotoViewer`**: tam ekran fotoğraf + üst/alt bilgi şeritleri, üç
@@ -2006,6 +2007,53 @@ yerelde koşturuldu: bundle üretildi ve `[captcha]` · `captchaToken` ·
   yakmasını üst sınırlıyor. Tavana çarpan meşru kullanıcı
   `over_email_send_rate_limit` alıyor ve o kod zaten Türkçe metne eşli.
 
+### 📷 Fotoğraf kaynağı seçimi — kamera/galeri (2026-08-17, DOĞRULANDI)
+`src/lib/photoPicker.ts`: `pickPhotoAsset(source)` + `promptPhotoSource(cb)`.
+Fotoğraf akışının son pürüzü kapandı.
+
+#### ⚠️ İŞ, AÇIK İŞ LİSTESİNİN SÖYLEDİĞİNDEN ÇOK DAHA KÜÇÜKTÜ
+Madde *"sıradaki en büyük kullanıcı değeri"* diye kayıtlıydı. Teşhis bunu
+yalanladı: **üç yükleme giriş noktasından ikisi menüyü zaten taşıyordu.**
+
+| # | Yer | Menü | Tür |
+|---|---|---|---|
+| 1 | `DiaryEntrySheet` ("Ziyaret Ekle") | ✅ vardı | `PhotoKindSheet`, her fotoğrafa ayrı |
+| 2 | `RestaurantDetailScreen` "Puanı Kaydet" şeridi | ✅ vardı | aynı |
+| 3 | `RestaurantDetailScreen` **fotoğraf ızgarası** | ❌ yalnızca galeri | aktif sekmeden |
+
+Gerçek kalan iş 3. yoldu. 🔑 **Ders: bir açık iş maddesi, yazıldığı gün
+ölçülmediyse hem kapsamını hem önceliğini yanlış taşıyabilir.** Sıraya
+alırken önce koda bakılmalı.
+
+#### HOOK 3. YOLA TAKILAMADI — modelleri farklı
+`usePendingPhotos`'u ızgaraya bağlamak ilk akla gelendi ve YANLIŞTI:
+- **hook yolu:** seçilenleri BEKLEYEN listeye topluyor, tür soruyor, yüklemeyi
+  form kaydedilince yapıyor (ziyaret yolunda `entry_id` bir FK, giriş satırı
+  önce var olmalı).
+- **ızgara yolu:** seçimden hemen sonra ANINDA yüklüyor, türü aktif sekmeden
+  alıyor.
+
+Hook'u takmak ızgaranın yükleme modelini değiştirmek olurdu — bir ürün kararı,
+kamera menüsü işi değil. Bu yüzden ortak olan TEK şey (kaynak seçimi) modül
+seviyesine çıkarıldı; `addPlaceToList`'in `useListItems` dışında durmasıyla
+aynı gerekçe: **çağıranın elinde hook örneği yok.** `usePendingPhotos`'un
+davranışı hiç değişmedi.
+
+#### Kararlar
+- **Izgara yolu TÜR SORMUYOR**, aktif sekmeden türetiyor. Kullanıcı zaten
+  "Menü" sekmesindeyken "Menü ekle"ye basıyor; tekrar sormak fazladan adım.
+  Hook yolunda soruluyor çünkü orada fotoğraflar sekmesiz bir forma toplanıyor.
+- **Üç seçenek Android `Alert`'in TAM SINIRINDA** (en fazla üç buton). Dördüncü
+  bir seçenek eklenirse Android sessizce birini yutar — o gün sheet'e geçilmeli.
+  Tür seçimi dörde çıktığı için ORADA zaten sheet var.
+- **`ImagePicker` artık tek dosyada** import ediliyor; izin metinleri ve
+  `quality: 1` kararı (sıkıştırmayı `makePhotoRenditions` yapıyor, iki kez
+  sıkıştırmak çift kayıp) de orada tek yerde.
+- **Kamera izni BUILD GEREKTİRMİYOR:** `expo-image-picker` `CAMERA`'yı kendi
+  AndroidManifest'inde ilan ediyor, izin versionCode 4'ten beri APK'da. Bu bir
+  prebuild mod'u, yani `npx expo config` çıktısında GÖRÜNMÜYOR — oraya bakıp
+  "izin yok" sonucuna varmak yanlış olur.
+
 ### `PhotoViewer` — tam ekran fotoğraf, üç katman (2026-08-13, sahada DOĞRULANDI)
 Fotoğrafa dokunma akışının **yeniden tasarımı**. Bileşen:
 `src/components/photos/PhotoViewer.tsx`, iki yüzeyden çağrılıyor
@@ -3794,11 +3842,15 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >
 > ### 🚀 OTA İLE GİDEBİLECEK BİRİKMİŞ İŞLER (build beklemiyor)
 > Sıradakilerin hepsi saf JS ve/veya migration:
-> - **Kamera/galeri "+" menüsü** (istek: 2026-08-11). ⚠️ Bu maddenin diğer
->   yarısı — *fotoğraf akışının yeniden tasarımı* — **2026-08-13'te bitti ve
->   sahada**; kalan tek parça çekim/seçim menüsü. Kamera izni versionCode
->   4'ten beri APK'da (`expo-image-picker` kendi manifest'inde ilan ediyor),
->   yani **build gerekmiyor**. **Sıradaki en büyük kullanıcı değeri.**
+> - ~~**Kamera/galeri "+" menüsü**~~ → ✅ **KAPANDI** (2026-08-17).
+>   ⚠️ **BU MADDE BAYATTI ve "sıradaki en büyük kullanıcı değeri" NİTELEMESİ
+>   YANLIŞTI.** Teşhis, üç yükleme giriş noktasından İKİSİNİN menüyü zaten
+>   taşıdığını gösterdi: `usePendingPhotos.promptAdd()` "Ziyaret Ekle" ve
+>   "Puanı Kaydet" formlarında kamerayı çoktan sunuyordu. Gerçek kalan iş
+>   yalnızca **mekan sayfasının fotoğraf ızgarası**ydı. Detay: Mimari Notlar →
+>   **Fotoğraf kaynağı seçimi**.
+>   🔑 **Ders:** bir açık iş maddesi, yazıldığı gün ölçülmediyse kapsamını da
+>   önceliğini de yanlış taşıyabilir. Sıraya alırken önce koda bak.
 > - **Kullanıcı engelleme** (bu listede, park edilmiş — kendi planını istiyor).
 > - **`ProfileScreen`'de kaydırmalı sekme** (bu listede, ertelenmiş).
 > - **keyboard-controller'ın KALAN ekranlara uygulanması** — ⚠️ *ölçülmüş
