@@ -20,10 +20,10 @@
 /**
  * NATIVE harita anahtarı — YALNIZCA Maps SDK için.
  *
- * ⚠️ Places REST çağrıları BU ANAHTARI KULLANMIYOR. Onlar
- * `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY`'i okuyor (`src/lib/places.ts`,
- * `src/screens/SearchScreen.tsx`) ve o değişken buraya HİÇ girmiyor —
- * Metro onu doğrudan JS bundle'ına gömüyor.
+ * ⚠️ Places REST çağrıları BU ANAHTARI KULLANMIYOR — ve artık İSTEMCİDE
+ * HİÇBİR Places anahtarı yok. `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY` Aşama 4'te
+ * kaldırıldı; çağrılar `google-places` Edge Function'ından geçiyor ve anahtar
+ * yalnızca Supabase secret'ı olarak duruyor.
  *
  * Ayrımın sebebi: Maps SDK isteğe paket adını + imzayı kendisi eklediği için
  * "Android apps (paket + SHA-1)" kısıtlaması bu anahtarda ÇALIŞIYOR; düz

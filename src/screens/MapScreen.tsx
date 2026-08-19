@@ -20,7 +20,7 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../hooks/useAuth';
 import { useLocation } from '../hooks/useLocation';
 import { supabase } from '../lib/supabaseClient';
-import { GOOGLE_API_KEY, isFoodPlace, parseCoord } from '../lib/places';
+import { isFoodPlace, parseCoord } from '../lib/places';
 import { peekPlace, resolvePlace } from '../lib/placeCache';
 import {
   Place,
@@ -260,27 +260,18 @@ export default function MapScreen() {
     setDataError(null);
 
     try {
-      // Pinler artık tamamen Supabase'den geliyor; eksik API key bu yolu
-      // ETKİLEMİYOR. Eskiden burada erken return vardı ve key yoksa harita
-      // bomboş kalıyordu — artık yalnızca POI detayları ve fotoğraflar bozulur,
-      // o yüzden uyarı gösterip pinleri yüklemeye devam ediyoruz.
-      if (!GOOGLE_API_KEY) {
-        // Bu bir KURULUM hatası, kullanıcının çözebileceği bir şey değil —
-        // çözüm adımları (.env, Metro) geliştiriciye, konsola.
-        // Buradaki `GOOGLE_API_KEY` `places.ts`'ten geliyor, yani PLACES
-        // anahtarı — haritanın kendisini çizen native anahtar AYRI
-        // (`EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, AndroidManifest'ten). Bu yüzden
-        // uyarı yalnızca POI detayları ve fotoğraflar için geçerli; pinler ve
-        // harita karoları bundan etkilenmiyor.
-        console.warn(
-          '[MapScreen] EXPO_PUBLIC_GOOGLE_PLACES_API_KEY tanımsız — mekan ' +
-            'detayları ve fotoğraflar çalışmaz (harita karoları ayrı ' +
-            'anahtarla çiziliyor, onlar etkilenmez). .env dosyasını kontrol ' +
-            'edip Metro\'yu yeniden başlat.'
-        );
-        setDataError('Mekan detayları şu an kullanılamıyor.');
-      }
-
+      // ── ANAHTAR KONTROLÜ KALDIRILDI (Aşama 4) ──────────────────────────
+      // Burada bir dönem `if (!GOOGLE_API_KEY)` bloğu vardı: eksik Places
+      // anahtarını konsola yazıp ekrana "Mekan detayları şu an kullanılamıyor"
+      // şeridi koyuyordu.
+      //
+      // Artık İSTEMCİDE PLACES ANAHTARI YOK — çağrılar `google-places` Edge
+      // Function'ından geçiyor. Kontrolü bırakmak, anahtar `.env`'den
+      // çıkarıldığı an haritada KALICI ve yanlış bir hata şeridi üretirdi.
+      //
+      // Yaptığı iş sunucuya taşındı: EF secret'ı eksikse `not_configured`
+      // dönüyor ve o hata zaten normal hata yolundan ekrana ulaşıyor. Yani
+      // teşhis, yapılandırmayı gerçekten bilen tarafta üretiliyor.
       await fetchRankedPlaces();
     } catch (e) {
       console.error('[MapScreen] veri yükleme hatası:', e);

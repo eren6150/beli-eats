@@ -1,38 +1,20 @@
-// Google Places API (legacy) — merkezi istemci
+// Mekan yardımcıları — GOOGLE'A ARTIK HİÇ GİTMİYOR.
 //
-// Bu modülün tek varlık sebebi: Places API hatayı HTTP 200 + gövdedeki
-// "status" alanı ile bildirir. Doğrudan fetch eden kod json.status'ü
-// kontrol etmezse REQUEST_DENIED / OVER_QUERY_LIMIT gibi hatalar sessizce
-// "sonuç yok"a dönüşür. Buradaki her çağrı status'ü kontrol eder.
-
-const BASE = 'https://maps.googleapis.com/maps/api/place';
-
-/**
- * ⚠️ NATIVE HARİTA ANAHTARINDAN AYRI — `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` DEĞİL.
- *
- * Projede iki farklı Google trafiği var ve kısıtlamaya tepkileri ZIT:
- *
- *   A) Native harita → Maps SDK for Android. SDK isteğe paket adını ve imzayı
- *      kendisi ekliyor, bu yüzden "Android apps (paket + SHA-1)" kısıtlaması
- *      ÇALIŞIYOR. O anahtar `app.config.js` → AndroidManifest yoluyla BUILD
- *      ANINDA gömülüyor ve `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` olarak kalıyor.
- *
- *   B) Bu dosyanın yaptığı Places REST çağrıları → JS'ten düz HTTPS. Bu
- *      isteklerde paket adı/imza YOK, dolayısıyla Android uygulama kısıtlaması
- *      onları tanıyamaz ve konsaydık hepsi REQUEST_DENIED olurdu.
- *
- * Bu yüzden B ayrı bir anahtar: Application restrictions = None (mobil REST
- * çağrıları kilitlenemiyor — IP ve HTTP referrer mobilde işe yaramaz),
- * API restrictions = yalnızca Places API. Korumaları: API kısıtı + günlük
- * 2.000 kota + bütçe uyarısı.
- *
- * Kalıcı çözüm CLAUDE.md'de kayıtlı: Google çağrılarını Supabase Edge Function
- * arkasına almak — o gün bu anahtar istemciden tamamen kalkar.
- */
-export const GOOGLE_API_KEY =
-  process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
-
-// ─── Hata tipi ────────────────────────────────────────────────────────────────
+// Bu dosya bir dönem "merkezi Google Places istemcisi"ydi: JSON çağrıları,
+// `status` yorumlama, hata tipi ve API anahtarı hep buradaydı. Aşama 2-4 ile o
+// işlerin tamamı `google-places` Edge Function'ına taşındı ve anahtar
+// bundle'dan ÇIKARILDI — `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY` artık tanımlı
+// değil ve tanımlanmamalı.
+//
+// ⚠️ NATIVE HARİTA ANAHTARI AYRI ve DURUYOR: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`,
+// `app.config.js` → AndroidManifest yoluyla BUILD ANINDA gömülüyor ve harita
+// karolarını çiziyor. Android uygulama kısıtlaması (paket + SHA-1) ONDA
+// çalışıyor, çünkü Maps SDK isteğe paket adını ve imzayı kendisi ekliyor.
+// Buradan kaldırılan anahtar ondan FARKLIYDI: düz HTTPS ile giden REST
+// çağrılarında paket/imza yok, yani hiçbir zaman kısıtlanamıyordu — tek çözüm
+// onu sunucuya almaktı.
+//
+// Geriye kalan üç fonksiyon da saf yerel yardımcı: ağ yok, anahtar yok.
 
 // ─── Tür sınıflandırma ────────────────────────────────────────────────────────
 //
@@ -119,20 +101,7 @@ export function parseCoord(value: unknown, type: 'lat' | 'lng'): number | null {
   return n;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-/**
- * ⚠️ GOOGLE'A JSON İSTEĞİ ATAN FONKSİYONLAR BURADAN KALKTI (Aşama 2).
- *
- * `getPlaceDetails`, `autocomplete` ve `nearbySearch` `google-places` Edge
- * Function'ına taşındı: anahtar artık sunucuda ve çağrılar Supabase JWT'siyle
- * kimliğe bağlı. İstemcide kalan tek Google yolu `photoUrl` — o da Aşama 3'te
- * `places.photo_base_urls`'e geçince `GOOGLE_API_KEY` bundle'dan tamamen
- * çıkacak.
- *
- * `nearbySearch` ayrıca zaten ÖLÜ koddu (hiç çağrılmıyordu) ve EF'e de
- * taşınmadı; ihtiyaç doğarsa orada yazılır.
- */
+// ─── Fotoğraf adresi ──────────────────────────────────────────────────────────
 
 /**
  * `places.photo_base_urls` içindeki taban adrese genişlik ekler.
@@ -158,29 +127,4 @@ export function placePhotoUrl(
 ): string | null {
   if (!baseUrl) return null;
   return `${baseUrl}=w${width}`;
-}
-
-/**
- * ⚠️ ESKİ YOL — kaldırılıyor, YENİ ÇAĞRI EKLEME. Yerine `placePhotoUrl`.
- *
- * Anahtarı URL'e gömüyor, yani `GOOGLE_API_KEY`'i bundle'da tutan son bağ bu.
- * Aşama 3'ün adımları çağrı yerlerini sırayla `placePhotoUrl`'e taşıyor;
- * sonuncusu taşındığında bu fonksiyon ve `GOOGLE_API_KEY` birlikte silinecek.
- *
- * ⚠️ SÖZLEŞMESİ BİLİNÇLİ OLARAK DEĞİŞTİRİLMEDİ: `placePhotoUrl` ile aynı
- * imzayı taşıyor ama FARKLI bir girdi bekliyor (referans ↔ taban adres).
- * İkisini tek fonksiyonda birleştirip girdiyi koklamak (`https://` ile mi
- * başlıyor) cazipti; yapılmadı — bu proje kırılgan sezgisel ayrımları bir kez
- * reddetti. İki ayrı isim, hangi çağrı yerinin taşındığını okunur kılıyor.
- */
-export function photoUrl(
-  photoReference: string | null | undefined,
-  maxWidth: number
-): string | null {
-  if (!photoReference || !GOOGLE_API_KEY) return null;
-  return (
-    `${BASE}/photo?maxwidth=${maxWidth}` +
-    `&photoreference=${encodeURIComponent(photoReference)}` +
-    `&key=${GOOGLE_API_KEY}`
-  );
 }
