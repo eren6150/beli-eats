@@ -1728,6 +1728,21 @@ yüklemeden sonraki **listeyi tazeleme**. Kullanıcı hata görüp tekrar
 deniyor ve **mükerrer kayıt** oluşuyor. Bu sınıf bir kırılmadan sonra
 `place_photos`'ta çift satır kontrolü yapılmalı.
 
+✅ **KONTROL YAPILDI (2026-08-19) — MÜKERRER KAYIT YOK.** Tablo bu ölçekte
+küçük olduğu için sezgisel sorgu yerine tüm satırlar listelendi.
+🔑 **Sonucu güçlü kılan şey:** kırılma penceresi BOŞ ÇIKMADI — tam tersine,
+incelenen fotoğrafların tarihi **2026-08-10**, yani riskli aralığın içi. Yani
+"o dönemde fotoğraf yüklenmemiş" değil, "yüklenmiş ve temiz".
+Ayırt edici kanıt **`kind` kolonuydu**: aynı mekan + saniyeler arayla gelen
+gruplarda her satırın türü FARKLI (`menu` → `food` → `venue` → `other`).
+Mükerrer kaydın imzası "aynı `kind` + aynı `place_id` + saniyeler arayla
+tekrar" olurdu; o desen hiç oluşmadı. En yakın fark 10 saniyeydi ve o da
+meşru bir çoklu yükleme.
+⚠️ **Bu sorgunun yapısal sınırı kayda geçsin:** her yükleme benzersiz bir
+`storage_path`'e gittiği için veritabanı "aynı görsel mi" sorusunu ASLA
+cevaplayamaz. `kind` ayrımı burada işe yaradı; yaramadığı bir vakada kesin
+karar yalnızca uygulamadan, kareye bakarak verilir.
+
 **Düzeltme** tek satır — gömülü kaynağı FK adıyla ayrıştır:
 ```ts
 profiles(id, username, avatar_url)
@@ -3398,6 +3413,20 @@ PGRST201 dersi: Mimari Notlar → **Aktivite akışı**.
     İkinci koşul şart: bugünkü tek kesişim tam beraberlik olduğu için
     "beraberlik nasıl bozulacak" sorusu gerçek dağılım görülmeden
     cevaplanamaz — eşiğin amacı tam olarak o dağılımın oluşmasını beklemek.
+
+    **📅 ÖLÇÜM KAYDI:**
+
+    | Tarih | `kesisen_mekan` | `gercek_krali_olan` | Sonuç |
+    |---|---|---|---|
+    | 2026-08-06 | 1 | 0 | eşiğin altında |
+    | 2026-08-19 | 1 | 0 | **eşiğin altında — 13 günde değişim YOK** |
+
+    ⚠️ **İkinci ölçümün söylediği şey birincisinden fazla:** iki hafta geçti
+    ve kesişim **hiç artmadı**. Yani darboğaz zaman değil **kullanıcı sayısı**;
+    iki cihazlık sahada bu sayının kendiliğinden büyümesini beklemek gerçekçi
+    değil. Leaderboard'un tetikleyicisi fiilen **Kademe 2'ye (davetli çevre)
+    bağlı**, takvime değil. Sorgu ayda bir çalıştırılmaya devam etsin ama
+    sonucun değişmesi ancak kullanıcı tabanı büyüyünce beklenmeli.
   - **ESKİ KARAR (2026-07-31 — artık geçerli DEĞİL, kayıt için duruyor):**
     kapsam arkadaş + şehir, global YOK (büyük kullanıcı kütlesinde global sıralama
     motive edici olmaktan çıkıp caydırıcı oluyor); `follows` tablosu zaten var;
@@ -3585,13 +3614,14 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > **Geçici teşhis logu** (`src/lib/authRedirect.ts`) doğrulamadan sonra
 > **silindi**; dosyada yalnızca bulgunun yorumu kaldı.
 >
-> ### 🧹 YAPILACAK (küçük, panel işi): `exp://` satırlarını sil
-> Supabase → Authentication → URL Configuration → Redirect URLs'te
-> **`exp://…` ile başlayan satırlar** duruyor. Artık **tamamen ölü**:
-> hiçbiri çalışmadı ve `react-native-keyboard-controller` eklendiğinden beri
-> proje Expo Go'da zaten açılmıyor. Silinmeli — geliştirmeye özel bir
-> allowlist deliğini açık bırakmanın karşılığı yok.
-> **Kalması gereken tek satır:** `belieats://auth-callback`.
+> ### ✅ KAPANDI (2026-08-19, panel işi): `exp://` satırları SİLİNDİ
+> Supabase → Authentication → URL Configuration → Redirect URLs'te duran
+> **`exp://…` satırlarının hepsi kaldırıldı**; geriye tek satır kaldı:
+> `belieats://auth-callback`.
+> Ölü oldukları iki yönden kesindi: hiçbiri hiç çalışmadı (üç desen denendi)
+> ve `react-native-keyboard-controller` eklendiğinden beri proje Expo Go'da
+> zaten açılmıyor — yani o adreslere düşecek istemci de yoktu.
+> Geliştirmeye özel bir allowlist deliği kapandı.
 >
 > **YAN BULGU — PKCE `plain`'e düşüyor.** Konsolda her auth çağrısında:
 > `WebCrypto API is not supported. Code challenge method will default to use
@@ -3850,12 +3880,13 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > 2. ~~**`review_text`'in şemada hâlâ CHECK kısıtı yok.**~~ → **KAPANDI**
 >    (migration 021, 2026-08-17): şemada `<= 1000`, istemcideki `REVIEW_MAX`
 >    ile birebir. Ön kontrolde ihlal eden satır yoktu (en uzun 934).
-> 3. **Google Sans Flex'in tabular rakam desteği HÂLÂ doğrulanmadı** — ve
->    ⚠️ 2026-08-17'ye kadar font zaten hiç uygulanmadığı için bu madde o
->    tarihe kadar **test EDİLEMEZDİ**. Artık gerçekten ölçülebilir. `RankRow`'un
->    sıra sütunu ve puan değeri `fontVariant: ['tabular-nums']` kullanıyor;
->    font desteklemiyorsa rakamlar oynayabilir. Sütun genişliği sabit olduğu
->    için **yerleşim bozulmaz**, yalnızca hizalar kayar.
+> 3. ~~**Google Sans Flex'in tabular rakam desteği doğrulanmadı**~~ →
+>    ✅ **DESTEKLİYOR, cihazda doğrulandı (2026-08-19).** Profil → Sıralamam'da
+>    `01`/`11` ve `08`/`18` **aynı hizada** duruyor, kayma yok.
+>    ⚠️ Kayda değer olan, maddenin NEDEN bu kadar beklediği: font 2026-08-17'ye
+>    kadar hiç uygulanmıyordu (`fontWeight` çakışması), yani bu not yazıldığı
+>    günden o güne kadar **test EDİLEMEZ durumdaydı**. Bir doğrulama maddesi,
+>    dayandığı şey sahada çalışmıyorsa sessizce ölçülemez kalabiliyor.
 >
 > ### 🚀 OTA İLE GİDEBİLECEK BİRİKMİŞ İŞLER (build beklemiyor)
 > Sıradakilerin hepsi saf JS ve/veya migration:
