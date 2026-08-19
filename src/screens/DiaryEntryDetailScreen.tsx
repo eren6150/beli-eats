@@ -20,7 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import { usePlacePhotos } from '../hooks/usePlacePhotos';
 import { useEntryLikes } from '../hooks/useEntryLikes';
 import { DiaryEntryDetailParams, PlacePhoto } from '../types';
-import { photoUrl } from '../lib/places';
+import { placePhotoUrl } from '../lib/places';
 import { photoPublicUrl } from '../lib/placePhotos';
 import { buildPhotoInfo } from '../lib/photoInfo';
 import { formatVisitDate } from '../lib/date';
@@ -73,7 +73,7 @@ export default function DiaryEntryDetailScreen() {
     authorUsername,
     placeId,
     placeName,
-    photoReference,
+    photoBaseUrl,
     visitedAt,
     rating,
     note,
@@ -165,14 +165,14 @@ export default function DiaryEntryDetailScreen() {
     }, [fetchLikes, fetchPhotos])
   );
 
-  const heroUrl = photoUrl(photoReference, PLACE_PHOTO_WIDTH);
+  const heroUrl = placePhotoUrl(photoBaseUrl, PLACE_PHOTO_WIDTH);
   const trimmedNote = note?.trim();
 
   const goToPlace = () =>
     navigation.navigate('RestaurantDetail', {
       placeId,
       placeName,
-      photoReference,
+      photoBaseUrl,
     });
 
   /**

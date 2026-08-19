@@ -116,7 +116,7 @@ export default function ListDetailScreen() {
     navigation.navigate('RestaurantDetail', {
       placeId: item.place_id,
       placeName: nameOf(item),
-      photoReference: item.places?.photo_refs?.[0],
+      photoBaseUrl: item.places?.photo_base_urls?.[0] ?? undefined,
     });
   };
 

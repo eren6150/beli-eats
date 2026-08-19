@@ -157,7 +157,7 @@ export default function HomeScreen() {
     navigation.navigate('RestaurantDetail', {
       placeId: place.place_id,
       placeName: place.restaurant_name,
-      photoReference: place.photo_reference ?? undefined,
+      photoBaseUrl: place.places?.photo_base_urls?.[0] ?? undefined,
     });
 
   /**
@@ -184,7 +184,7 @@ export default function HomeScreen() {
       authorUsername: item.author.username,
       placeId: item.entry.place_id,
       placeName: item.entry.places?.name ?? 'Mekan',
-      photoReference: item.entry.places?.photo_refs?.[0],
+      photoBaseUrl: item.entry.places?.photo_base_urls?.[0] ?? undefined,
       visitedAt: item.entry.visited_at,
       rating: item.entry.rating,
       note: item.entry.note,

@@ -183,7 +183,7 @@ export default function ProfileScreen() {
       authorUsername: profile?.username ?? user?.email?.split('@')[0] ?? '',
       placeId: entry.place_id,
       placeName: entry.places?.name ?? 'Mekan',
-      photoReference: entry.places?.photo_refs?.[0],
+      photoBaseUrl: entry.places?.photo_base_urls?.[0] ?? undefined,
       visitedAt: entry.visited_at,
       rating: entry.rating,
       note: entry.note,
@@ -262,7 +262,7 @@ export default function ProfileScreen() {
     navigation.navigate('RestaurantDetail', {
       placeId: ranking.place_id,
       placeName: ranking.restaurant_name,
-      photoReference: ranking.photo_reference ?? undefined,
+      photoBaseUrl: ranking.places?.photo_base_urls?.[0] ?? undefined,
     });
   };
 

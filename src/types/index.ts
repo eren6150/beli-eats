@@ -318,7 +318,12 @@ export type TabParamList = {
 export type RestaurantDetailParams = {
   placeId: string;
   placeName: string;
-  photoReference?: string;
+  /**
+   * Kapak fotoğrafının TABAN adresi (`places.photo_base_urls[0]`), referans
+   * DEĞİL. Hedef ekran mekanı çözene kadar hero'yu anında gösterebilsin diye
+   * taşınıyor; `placePhotoUrl` ile genişlik ekleniyor.
+   */
+  photoBaseUrl?: string;
 };
 
 /**
@@ -448,7 +453,8 @@ export type DiaryEntryDetailParams = {
   /** Mekan — sayfasına gitmek ve fotoğrafları süzmek için. */
   placeId: string;
   placeName: string;
-  photoReference?: string;
+  /** Kapak fotoğrafının taban adresi — bkz. `RestaurantDetailParams`. */
+  photoBaseUrl?: string;
   /** `YYYY-MM-DD`. Bkz. src/lib/date.ts — bu alan hiçbir zaman UTC'ye çevrilmez. */
   visitedAt: string;
   rating: number | null;

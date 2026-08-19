@@ -9,6 +9,7 @@ import {
   LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { placePhotoUrl } from '../../lib/places';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -76,7 +77,8 @@ export interface RestaurantSheetData {
    * yaratırdı.
    */
   googleRating?: number | null;
-  photo_reference: string | null;
+  /** Kapak fotoğrafının taban adresi (`places.photo_base_urls[0]`). */
+  photo_base_url: string | null;
   place_id: string;
   cuisine?: string;
   address?: string;
@@ -93,7 +95,6 @@ export interface RestaurantSheetData {
 interface RestaurantBottomSheetProps {
   restaurant: RestaurantSheetData | null;
   onClose: () => void;
-  googleApiKey: string;
   /** Verilirse "Detayları gör" şeridi çıkar ve detay sayfasına yönlendirir. */
   onPressDetail?: () => void;
 }
@@ -124,7 +125,6 @@ function cuisineLabelOf(raw: string | undefined): string {
 export default function RestaurantBottomSheet({
   restaurant,
   onClose,
-  googleApiKey,
   onPressDetail,
 }: RestaurantBottomSheetProps) {
   // Modül seviyesinde okunan Dimensions rotasyonda güncellenmiyordu.
@@ -217,11 +217,9 @@ export default function RestaurantBottomSheet({
 
   if (!restaurant) return null;
 
-  const photoUrl =
-    restaurant.photo_reference && googleApiKey
-      ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800` +
-        `&photoreference=${restaurant.photo_reference}&key=${googleApiKey}`
-      : null;
+  // Adres artık `places.photo_base_urls`'ten geliyor; anahtar burada YOK.
+  // Bir dönem bu URL elle kuruluyordu ve `photoUrl(` grep'i onu kaçırıyordu.
+  const photoUrl = placePhotoUrl(restaurant.photo_base_url, 800);
 
   // Üç durum: (a) kendi puanım, (b) yoksa Google ortalaması, (c) hiçbiri.
   const ownRating = restaurant.rating;

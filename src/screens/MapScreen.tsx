@@ -88,7 +88,7 @@ function sheetDataFromPlace(place: Place): RestaurantSheetData {
     // yakalanmayan, yani puanlanmamış mekanlar düşüyor.
     rating: null,
     googleRating: place.google_rating,
-    photo_reference: place.photo_refs?.[0] ?? null,
+    photo_base_url: place.photo_base_urls?.[0] ?? null,
     place_id: place.place_id,
     cuisine: primaryCuisine(place.types),
     address: place.formatted_address ?? undefined,
@@ -230,7 +230,6 @@ export default function MapScreen() {
       mapped.push({
         ...ranking,
         restaurant_name: place?.name ?? ranking.restaurant_name,
-        photo_reference: place?.photo_refs?.[0] ?? ranking.photo_reference,
         lat,
         lng,
         cuisine: primaryCuisine(place?.types),
@@ -336,7 +335,7 @@ export default function MapScreen() {
       id: place.id,
       restaurant_name: place.restaurant_name,
       rating: place.rating,
-      photo_reference: place.photo_reference,
+      photo_base_url: place.places?.photo_base_urls?.[0] ?? null,
       place_id: place.place_id,
       cuisine: place.cuisine,
       address: place.address,
@@ -472,13 +471,13 @@ export default function MapScreen() {
   const handleOpenDetail = useCallback(() => {
     if (!selectedRestaurant) return;
 
-    const { place_id, restaurant_name, photo_reference } = selectedRestaurant;
+    const { place_id, restaurant_name, photo_base_url } = selectedRestaurant;
     setSelectedRestaurant(null); // sheet kapanış animasyonunu başlat
 
     navigation.navigate('RestaurantDetail', {
       placeId: place_id,
       placeName: restaurant_name,
-      photoReference: photo_reference ?? undefined,
+      photoBaseUrl: photo_base_url ?? undefined,
     });
   }, [selectedRestaurant, navigation]);
 
@@ -501,7 +500,7 @@ export default function MapScreen() {
       navigation.navigate('RestaurantDetail', {
         placeId: ranking.place_id,
         placeName: ranking.restaurant_name,
-        photoReference: ranking.photo_reference ?? undefined,
+        photoBaseUrl: ranking.places?.photo_base_urls?.[0] ?? undefined,
       });
     },
     [navigation]
@@ -727,7 +726,6 @@ export default function MapScreen() {
         restaurant={selectedRestaurant}
         onClose={handleCloseSheet}
         onPressDetail={handleOpenDetail}
-        googleApiKey={GOOGLE_API_KEY}
       />
     </GestureHandlerRootView>
   );

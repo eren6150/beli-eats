@@ -177,7 +177,7 @@ export default function RestaurantDetailScreen() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { placeId, placeName, photoReference } = route.params;
+  const { placeId, placeName, photoBaseUrl } = route.params;
 
   const {
     rankings,
@@ -942,7 +942,7 @@ export default function RestaurantDetailScreen() {
                       authorUsername: visit.authorUsername,
                       placeId,
                       placeName: place?.name ?? placeName,
-                      photoReference: place?.photo_refs?.[0] ?? photoReference,
+                      photoBaseUrl: place?.photo_base_urls?.[0] ?? photoBaseUrl,
                       visitedAt: visit.visited_at,
                       rating: visit.rating,
                       note: visit.note,
