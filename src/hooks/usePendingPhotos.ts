@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Alert } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { PlacePhotoKind } from '../types';
+import { promptPhotoSource } from '../lib/photoPicker';
 import { makePhotoRenditions, uploadPlacePhoto } from '../lib/placePhotos';
 
 /**
@@ -54,52 +53,24 @@ export function usePendingPhotos() {
   const [kindTarget, setKindTarget] = useState<KindTarget>(null);
   const [uploading, setUploading] = useState(false);
 
-  const pickFrom = async (source: 'camera' | 'library') => {
-    const perm =
-      source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!perm.granted) {
-      Alert.alert(
-        'İzin gerekli',
-        source === 'camera'
-          ? 'Fotoğraf çekmek için kamera erişimine izin vermelisin.'
-          : 'Fotoğraf eklemek için galeri erişimine izin vermelisin.'
-      );
-      return;
-    }
-
-    // `quality: 1` — burada SIKIŞTIRMA YOK. Sıkıştırmayı `makePhotoRenditions`
-    // yapıyor; iki kez sıkıştırmak çift kayıp olurdu.
-    const picked =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ quality: 1 })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 1,
-          });
-
-    if (picked.canceled || !picked.assets?.[0]) return;
-
-    const asset = picked.assets[0];
-    setKindTarget({
-      mode: 'new',
-      asset: { uri: asset.uri, width: asset.width, height: asset.height },
-    });
-  };
-
   /**
-   * "+" menüsü. Üç seçenek Android `Alert`'in tam sınırında (en fazla üç
-   * buton), yani burada sheet yazmaya gerek yok. Tür seçimi dörde çıktığı
-   * için ORADA sheet gerekiyor.
+   * "+" menüsü.
+   *
+   * Kaynak seçimi (izin + picker + iptal) `src/lib/photoPicker.ts`'e taşındı:
+   * mekan sayfasının fotoğraf ızgarası da AYNI menüyü kullanıyor ama bu hook'u
+   * kullanamıyor (yükleme modelleri farklı — gerekçe o dosyanın başında).
+   * Buradaki davranış değişmedi; yalnızca ortak parça dışarı alındı.
+   *
+   * Seçim doğrudan listeye EKLENMİYOR: önce tür soruluyor (`kindTarget`),
+   * seçici kapatılırsa fotoğraf da eklenmiyor.
    */
   const promptAdd = () => {
-    Alert.alert('Fotoğraf ekle', 'Nereden eklemek istersin?', [
-      { text: 'İptal', style: 'cancel' },
-      { text: 'Kamera', onPress: () => pickFrom('camera') },
-      { text: 'Galeriden Seç', onPress: () => pickFrom('library') },
-    ]);
+    promptPhotoSource((asset) => {
+      setKindTarget({
+        mode: 'new',
+        asset: { uri: asset.uri, width: asset.width, height: asset.height },
+      });
+    });
   };
 
   const selectKind = (kind: PlacePhotoKind) => {

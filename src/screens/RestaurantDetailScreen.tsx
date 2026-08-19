@@ -20,7 +20,6 @@ import {
   RouteProp,
 } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as ImagePicker from 'expo-image-picker';
 import {
   Place,
   PlacePhoto,
@@ -51,6 +50,7 @@ import { usePlacePhotos } from '../hooks/usePlacePhotos';
 import { usePlaceRankings } from '../hooks/usePlaceRankings';
 import { usePlaceVisits } from '../hooks/usePlaceVisits';
 import { makePhotoRenditions, uploadPlacePhoto } from '../lib/placePhotos';
+import { promptPhotoSource, PickedPhotoAsset } from '../lib/photoPicker';
 import { buildPhotoInfo } from '../lib/photoInfo';
 
 // Ekran üç stack'te birden kayıtlı; route tipi bu yüzden tek bir stack'in
@@ -375,24 +375,30 @@ export default function RestaurantDetailScreen() {
       return;
     }
 
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(
-        'İzin gerekli',
-        'Fotoğraf eklemek için galeri erişimine izin vermelisin.'
-      );
-      return;
-    }
+    /**
+     * ── KAYNAK SEÇİMİ: KAMERA veya GALERİ ────────────────────────────────
+     * Burada bir dönem doğrudan `launchImageLibraryAsync` vardı, yani ızgara
+     * yolundan fotoğraf ÇEKMEK mümkün değildi — oysa "Ziyaret Ekle" ve
+     * "Puanı Kaydet" formları kamerayı zaten sunuyordu. Menü artık üçünde de
+     * ortak (`src/lib/photoPicker.ts`).
+     *
+     * ⚠️ TÜR SORULMUYOR, aktif sekmeden türetiliyor — bilinçli. Kullanıcı
+     * zaten "Menü" sekmesindeyken "Menü ekle"ye basıyor; tekrar sormak
+     * fazladan bir adım olurdu. Hook yolunda tür soruluyor çünkü orada
+     * fotoğraflar sekmesiz bir forma toplanıyor.
+     */
+    promptPhotoSource((asset) => void uploadPicked(asset));
+  };
 
-    // `quality: 1` — burada SIKIŞTIRMA YOK. Sıkıştırmayı `makePhotoRenditions`
-    // yapıyor; burada da sıkıştırmak çift kayıp olur ve kaliteyi boşuna düşürür.
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-    });
-    if (picked.canceled || !picked.assets?.[0]) return;
-
-    const asset = picked.assets[0];
+  /**
+   * Seçilen görseli ANINDA yükler (ızgara yolunun modeli).
+   *
+   * `handleAddPhoto`'dan ayrıldı çünkü `promptPhotoSource` sonucu bir
+   * callback'le veriyor: kaynak seçimi asenkron ve iptal edilebilir, yükleme
+   * ise yalnızca gerçek bir seçimde başlamalı.
+   */
+  const uploadPicked = async (asset: PickedPhotoAsset) => {
+    if (!user) return;
 
     // Hedef tür SEÇİM ANINDA sabitleniyor: kullanıcı yükleme sürerken sekme
     // değiştirse bile fotoğraf başladığı sekmeye gitmeli.
