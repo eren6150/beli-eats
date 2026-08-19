@@ -217,8 +217,11 @@ export default function MapScreen() {
       const place = ranking.places ?? null;
 
       // `places` kanonik kaynak; user_rankings'teki denormalize kopyalar
-      // (restaurant_name / photo_reference / latitude / longitude) yalnızca
-      // fallback. O kolonlar bir faz daha duruyor, sonra düşürülecek.
+      // (restaurant_name / latitude / longitude) yalnızca fallback ve HÂLÂ
+      // CANLI — aşağıdaki `??` zincirleri onları gerçekten okuyor.
+      // Dördüncüsü (`photo_reference`) okunmadığı için migration 023 ile
+      // düşürüldü; kalan üçü `restaurant_name`'in `not null` olması ve
+      // koordinatsız `places` satırları yüzünden duruyor.
       const lat = parseCoord(place?.latitude ?? ranking.latitude, 'lat');
       const lng = parseCoord(place?.longitude ?? ranking.longitude, 'lng');
 

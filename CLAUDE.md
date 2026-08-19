@@ -244,7 +244,8 @@ takip ettiği kişilerin aktivite akışı olacak.
   `014_place_photos_storage` → `015_public_diary` → `016_entry_likes` →
   `017_optional_ranking_update` → `018_photo_moderation` →
   `019_remove_follower` → `020_photo_entry_link` →
-  `021_text_length_limits` → `022_photo_base_urls`.
+  `021_text_length_limits` → `022_photo_base_urls` →
+  `023_drop_photo_reference`.
   Migration DDL'i schema.sql'e kopyalanmıyor — iki kopya RLS/fonksiyon tanımlarında
   sessiz drift demek.
 - **SQL Editor'da `auth.uid()` null döner** (orada oturum yok), yani RLS'e veya
@@ -260,10 +261,17 @@ takip ettiği kişilerin aktivite akışı olacak.
   geliyordu) ve `useProfile.updateProfile` var olmayan `updated_at`'e yazıyordu —
   ilk çağrıldığında patlayacaktı. `updated_at` mevcut satırlara `created_at`'ten
   dolduruldu; `default now()` ile eklemek "bugün güncellendi" yalanı olurdu.
-- `user_rankings.latitude`/`longitude` (migration 001) **artık okuma yolunda
-  kullanılmıyor**; `places` kanonik kaynak. Kolonlar fallback olarak duruyor,
-  bir faz sonra düşürülecek. Aynı şey `restaurant_name` ve `photo_reference` için de
-  geçerli.
+- `user_rankings.latitude`/`longitude` (migration 001) `places` kanonik kaynak
+  olduğu için ikincil, ama **hâlâ CANLI FALLBACK**: `MapScreen`
+  `place?.latitude ?? ranking.latitude` biçiminde onları gerçekten okuyor.
+  `restaurant_name` de öyle ve ayrıca `not null`. **Bu üçü DURUYOR.**
+  ~~`photo_reference`~~ → **DÜŞÜRÜLDÜ (migration 023, 2026-08-19)**: fotoğraf
+  adresleri `places.photo_base_urls`'ten geldiği için (Aşama 3) o kolonu
+  okuyan hiçbir yol kalmamıştı.
+  ⚠️ Bu dosya bir dönem dördünü birlikte *"bir faz sonra düşürülecek"* diye
+  anıyordu ve o ifade **yanıltıcıydı** — yalnızca biri hazırdı. Kalan üçünü
+  düşürmek `restaurant_name`'in `not null`'ını ve koordinatsız `places`
+  satırlarını ayrıca çözmeyi gerektirir.
 - `addOrUpdateRanking` `rank_index`'i yerel state'ten değil **veritabanından** hesaplıyor.
   Mevcut kayıt güncellenirken sıra korunur, yeni kayıt sona eklenir. (Eskiden liste boşken
   `rank_index` sessizce 0'a düşüyor, sıralama bozuluyordu — veri kaybıydı.)
@@ -822,11 +830,13 @@ faturalanan bir döngü. Artık her zaman dizi yazılıyor, boş olsa bile.
 **null'ın tek anlamı "bu satır hiç işlenmedi" olmalı**; kuralın dayandığı şey
 bu.
 
-⚠️ **Aşama 3'ün gizli maliyeti:** `useRankings` `.select('*')` yapıyor, `places`
-gömmüyor. Yani `ProfileScreen`/`UserProfileScreen`/`MapSummarySheet`/
-`RankingReviewSheet` fotoğrafı denormalize `user_rankings.photo_reference`'tan
-alıyor ve çözülmüş URL'ler oraya ulaşmıyor — dört ekrana `places` satırı
-taşınmalı (`getPlaces()` zaten toplu yüklüyor).
+~~⚠️ **Aşama 3'ün gizli maliyeti:**~~ → **ÇÖZÜLDÜ.** Planlama sırasında
+`useRankings` `.select('*')` yapıyordu, yani `ProfileScreen`/
+`UserProfileScreen`/`MapSummarySheet`/`RankingReviewSheet` fotoğrafı
+denormalize `user_rankings.photo_reference`'tan alıyor ve çözülmüş URL'ler
+oraya ulaşmıyordu. Aşama 3'te sorgu `.select('*, places(*)')` oldu ve dört
+ekran da `places.photo_base_urls`'e geçti; kolonun kendisi de migration 023
+ile düşürüldü (2026-08-19).
 
 ✅ **Aşama 4 TAMAMLANDI — anahtar DÖNDÜRÜLDÜ (2026-08-17).** Aşağıdaki gerekçe
 kayıt için duruyor; sıra birebir uygulandı: yeni anahtar üretildi (Application
@@ -3889,9 +3899,9 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   öncelik.
 > - ~~**Places anahtarını istemciden çıkarma**~~ → ✅ **KAPANDI** (dört aşama,
 >   2026-08-17). Detay: Mimari Notlar → **Places anahtarını istemciden çıkarma**.
->   Seriden kalan tek iş: `user_rankings.photo_reference` artık hiçbir yerde
->   okunmuyor → düşürülmeye aday (ayrı migration). (EF'teki geçici `backfill`
->   action'ı 2026-08-19'da silindi.)
+>   **Serinin bıraktığı iki küçük iş de KAPANDI (2026-08-19):** EF'teki geçici
+>   `backfill` action'ı silindi, ve `user_rankings.photo_reference` migration
+>   023 ile düşürüldü.
 >   ⚠️ **Aşama 4 OTA DEĞİL panel işi ve ZORUNLU:** anahtarı Google Console'da
 >   döndürmek. Sahadaki APK'ya gömülü anahtar aksi hâlde yaşamaya devam eder ve
 >   o anahtar ayrıca bir sohbet oturumunda düz metin paylaşıldı.

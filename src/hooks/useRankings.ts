@@ -18,8 +18,8 @@ export function useRankings(userId: string | undefined) {
     const { data, error: queryError } = await supabase
       .from('user_rankings')
       // `places(*)` gömülü: fotoğraf adresleri artık `places.photo_base_urls`'ten
-      // geliyor (Aşama 3). Denormalize `photo_reference` bu turdan sonra hiçbir
-      // yerde okunmuyor.
+      // geliyor (Aşama 3). Denormalize `photo_reference` kolonu hiçbir yerde
+      // okunmadığı için migration 023 ile DÜŞÜRÜLDÜ.
       //
       // ⚠️ Alt küme (`places(photo_base_urls)`) seçilmedi: `UserRanking.places`
       // tipi tam `Place` ilan ediyor ve `MapScreen` de `places(*)` kullanıyor.

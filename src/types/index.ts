@@ -60,7 +60,6 @@ export interface UserRanking {
   rating: number; // 0.5 - 5.0
   rank_index: number;
   review_text: string | null;
-  photo_reference: string | null;
   /** Place Details koordinat cache'i — eski satırlarda null olabilir. */
   latitude: number | null;
   longitude: number | null;
