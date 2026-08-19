@@ -20,12 +20,13 @@ açıldıktan sonra kayıt · giriş · şifre sıfırlama · tekrar gönder · 
 girişi hepsi doğru çalışıyor (Faz C). Kararlar, dağıtım sırasının neden zorunlu
 olduğu ve ilk build'i patlatan `prop-types`: Mimari Notlar → **Bot koruması**.
 
-✅ **Places anahtarı — Aşama 1 ve 2 sahada** (2026-08-17). Edge Function
-`google-places` + migration 022; `refreshPlace` ve `SearchScreen` EF'e geçti,
-istemci Google'a **JSON için artık hiç gitmiyor**.
-⚠️ **Anahtar HÂLÂ bundle'da** — `photoUrl` ona bağlı (12 çağrı yeri, Aşama 3).
-Asıl kazanç Aşama 4'te: anahtarı çıkarmak **ve Console'da döndürmek**.
-🔴 **Aşama 3'ün ön koşulu kasıtlı backfill** — ölçüldü, 57 mekandan 3'ü dolu.
+✅ **PLACES ANAHTARI İSTEMCİDEN TAMAMEN ÇIKTI — dört aşama da bitti**
+(2026-08-17). Edge Function `google-places` (details + autocomplete) +
+migration 022. İstemci Google'a **hiç gitmiyor**; fotoğraf adresleri sunucuda
+çözülüp `places.photo_base_urls`'te saklanıyor.
+🔒 **Açık GERÇEKTEN kapandı:** anahtar hiçbir bundle'da yok **ve** eski anahtar
+Google Console'dan silindi — yani sahadaki APK'ya build anında gömülü kopya da
+ölü. Sıra doğru uygulandı: yeni anahtar → EF secret → doğrula → sonra sil.
 Detay ve teşhis dersleri: Mimari Notlar → **Places anahtarını istemciden çıkarma**.
 
 ✅ **Migration 021 — metin uzunluğu tavanları** (2026-08-17, panelde çalıştırıldı
@@ -675,11 +676,17 @@ buna bağlanacak.
 - **`city` kolonu var ama her satırda null.** Faz 3 (şehir değiştirici + şehir
   leaderboard) için ayrılmış slot. Doğru kaynağı `address_components`;
   `formatted_address` parse etmek güvenilmez.
-- Nihai doğru çözüm (bu fazda değil): Google çağrılarını Supabase Edge Function
+- ✅ **YAPILDI (2026-08-17):** Google çağrıları Supabase Edge Function
   arkasına almak — hem yazmayı tamamen sunucuya taşır hem "API key bundle'da" açık
   işini kökten çözer.
 
 ### Google Places
+> ⚠️ **BU BÖLÜM TARİHSEL.** Aşağıdaki her şey Google'ı İSTEMCİDEN çağırdığımız
+> döneme ait. 2026-08-17'de tüm JSON trafiği `google-places` Edge Function'ına
+> taşındı ve `places.ts` yalnızca üç yerel yardımcıya indi (`isFoodPlace`,
+> `parseCoord`, `placePhotoUrl`). Güncel mimari: **Places anahtarını istemciden
+> çıkarma** bölümü.
+
 - Tüm çağrılar `src/lib/places.ts` üzerinden. Her çağrıda `json.status` kontrol ediliyor;
   `REQUEST_DENIED` / `OVER_QUERY_LIMIT` gibi durumlar Türkçe açıklamalı `PlacesError`
   fırlatıyor. (Daha önce hatalar üç ayrı yerde sessizce yutuluyordu.)
@@ -704,7 +711,7 @@ buna bağlanacak.
 
 ### 🔑 Places anahtarını istemciden çıkarma — Aşama 1 SAHADA (2026-08-17)
 Edge Function `google-places` + migration 022. **Aşama 1 deploy edildi ve
-doğrulandı; Aşama 2-4 açık.**
+doğrulandı. **Dört aşamanın dördü de tamamlandı (2026-08-17).**
 
 **Neden:** `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY` JS bundle'ına gömülüyor ve
 mobil REST çağrıları için Google'da uygulama kısıtlaması YOK (IP ve referrer
@@ -761,8 +768,8 @@ eş tutulmalı.
 |---|---|---|
 | 1 | EF + migration 022 + EF'in `upsert_place`'i çağırması | ✅ **sahada** |
 | 2 | `refreshPlace` + `SearchScreen` → EF | ✅ **sahada** |
-| 3 | `photoUrl` yeniden yazımı, 12 çağrı yeri + 4 sıralama ekranı | ⬜ |
-| 4 | Anahtarı bundle'dan çıkar → OTA → **Console'da DÖNDÜR** | ⬜ |
+| 3 | `photoUrl` yeniden yazımı, 12 çağrı yeri + 4 sıralama ekranı | ✅ **sahada** |
+| 4 | Anahtarı bundle'dan çıkar → OTA → **Console'da DÖNDÜR** | ✅ **tamamlandı** |
 
 #### ✅ Aşama 2 (2026-08-17) — istemci Google'a artık hiç gitmiyor
 `refreshPlace` ve `SearchScreen` EF'e geçti; 7 testin hepsi cihazda geçti ve
@@ -793,9 +800,19 @@ tetiklemiyor — doğru davranış, aksi hâlde 57 satırlık bir liste 57 EF ç
 üretirdi.
 
 ⚠️ **Sonuç: Aşama 3 bu haliyle sahaya inseydi mekanların çoğunda fotoğraf
-görünmezdi.** Aşama 3'ün ilk adımı, kalan satırları kasıtlı olarak
-doldurmak olmalı (54 satır ≈ 54 faturalanan `details` çağrısı, günlük kota
-2.000 — maliyet ihmal edilebilir).
+görünmezdi.**
+
+✅ **Çözüldü — geçici `backfill` action'ı** (EF'e eklendi, seri bitince
+silinecek): `photo_base_urls` null olan satırları çağrı başına 10-25 tanesini
+işliyor. 🔑 **Google `details` çağrısı YAPMIYOR** — satırlarda `photo_refs`
+zaten var, eksik olan yalnızca 302'lerin çözülmesi. 57/57 dolduruldu.
+
+🔴 **Aynı turda SAHADA CANLI bir hata bulundu:** EF, fotoğrafı hiç olmayan
+mekana `photo_base_urls = null` yazıyordu ve `freshnessOf` null'ı 'expired'
+saydığı için o mekan **her açılışta yeniden yenileniyordu** — sonsuz ve
+faturalanan bir döngü. Artık her zaman dizi yazılıyor, boş olsa bile.
+**null'ın tek anlamı "bu satır hiç işlenmedi" olmalı**; kuralın dayandığı şey
+bu.
 
 ⚠️ **Aşama 3'ün gizli maliyeti:** `useRankings` `.select('*')` yapıyor, `places`
 gömmüyor. Yani `ProfileScreen`/`UserProfileScreen`/`MapSummarySheet`/
@@ -803,7 +820,13 @@ gömmüyor. Yani `ProfileScreen`/`UserProfileScreen`/`MapSummarySheet`/
 alıyor ve çözülmüş URL'ler oraya ulaşmıyor — dört ekrana `places` satırı
 taşınmalı (`getPlaces()` zaten toplu yüklüyor).
 
-🔴 **Aşama 4'te anahtar DÖNDÜRÜLMESİ ZORUNLU, opsiyonel değil.** `.env`'den
+✅ **Aşama 4 TAMAMLANDI — anahtar DÖNDÜRÜLDÜ (2026-08-17).** Aşağıdaki gerekçe
+kayıt için duruyor; sıra birebir uygulandı: yeni anahtar üretildi (Application
+restrictions **None**, API restrictions **Places API**) → EF secret'ı ona
+geçirildi → deploy + cihazda doğrulandı → **sonra** eski anahtar Console'dan
+silindi. Ters sıra EF'i de kırardı, çünkü o da aynı anahtarı kullanıyordu.
+
+Gerekçe (neden silmek yetmiyordu): `.env`'den
 ve EAS'ten kaldırmak yalnızca yeni bundle'ları temizler; sahadaki APK'ya gömülü
 anahtar çalışmaya devam eder. Ayrıca **anahtar 2026-08-17'de bir sohbet
 oturumunda düz metin olarak paylaşıldı**, yani artık kayıt altında — döndürme
@@ -3805,11 +3828,11 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   edilmemesini sağlıyor. Kendi işi; anahtar üretimi + `app.config.js` +
 >   sertifikanın build'e girmesi demek, yani **build gerektirir**. Düşük-orta
 >   öncelik.
-> - **Places anahtarı Aşama 3** (1 ve 2 sahada). `photoUrl` yeniden yazımı,
->   **12 çağrı yeri** + dört sıralama ekranına `places` satırı. Saf JS.
->   🔴 **Ön koşul: kasıtlı backfill** — yenileme kuralı satırları kendi kendine
->   doldurmuyor (ölçüm: 57'de 3), çünkü liste ekranları `getPlaces()` ile
->   yenileme tetiklemeden okuyor.
+> - ~~**Places anahtarını istemciden çıkarma**~~ → ✅ **KAPANDI** (dört aşama,
+>   2026-08-17). Detay: Mimari Notlar → **Places anahtarını istemciden çıkarma**.
+>   Serinin bıraktığı iki küçük iş: EF'teki geçici `backfill` action'ı silinmeli,
+>   ve `user_rankings.photo_reference` artık hiçbir yerde okunmuyor → düşürülmeye
+>   aday (ayrı migration).
 >   ⚠️ **Aşama 4 OTA DEĞİL panel işi ve ZORUNLU:** anahtarı Google Console'da
 >   döndürmek. Sahadaki APK'ya gömülü anahtar aksi hâlde yaşamaya devam eder ve
 >   o anahtar ayrıca bir sohbet oturumunda düz metin paylaşıldı.
@@ -4177,7 +4200,7 @@ her biri bir öncekinin üstüne biniyor:
 |---|---|---|
 | **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
 | **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⬜ — *son kalan koşul, Faz 4'e bağlı* |
-| **3 — genel yayın** | Herkes | Faz 4 (marka) + Google çağrıları **Edge Function** arkasına + Play Store için **AAB** |
+| **3 — genel yayın** | Herkes | Faz 4 (marka) + ~~Google çağrıları Edge Function arkasına~~ ✅ + Play Store için **AAB** |
 
 - **Kademe 2'nin koşulları DÖRDE ÇIKTI, ikisi kapandı (2026-08-09):**
   - ✅ **E-posta onayı akışı** — açıldı ve uçtan uca doğrulandı.
@@ -4202,9 +4225,10 @@ her biri bir öncekinin üstüne biniyor:
   geçersizleşirdi. Detay: Mimari Notlar → **Bot koruması**.
   ⚠️ Ders, custom SMTP'nin kendi dersiyle aynı aileden: *bir koşulu
   işaretlemek, onu ayakta tutan şeyi de işaretlemek anlamına gelmiyor.*
-- **Kademe 3'ün Edge Function maddesi çift işe yarıyor:** hem Places anahtarını
-  istemciden tamamen kaldırıyor (Dağıtım §6/2'nin kökten çözümü) hem `places`
-  yazma yolunu sunucuya taşıyor.
+- ✅ **Kademe 3'ün Edge Function maddesi KAPANDI** (2026-08-17). İki işi birden
+  yaptı: Places anahtarı istemciden tamamen kalktı (Dağıtım §6/2'nin kökten
+  çözümü) ve `places` yazma yolu sunucuya taşındı. Kademe 3'te kalan: Faz 4
+  (marka) + Play Store için AAB.
 
 - **Fotoğraf moderasyonu — VERİ KATMANI HAZIR (migration 018, 2026-08-09),
   İSTEMCİ SIRADA.** Tetikleyici gerçekleşti: uygulama arkadaş çevresi dışına
