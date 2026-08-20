@@ -577,6 +577,18 @@ export type ProfileStackParamList = {
     bio: string | null;
   };
   /**
+   * Engellediklerin — engeli kaldırmanın TEK yolu (engellenen profil
+   * "Bulunamadı" gösterdiği için oradan kaldırılamıyor).
+   *
+   * Parametresiz: liste `useBlocks` context'inden geliyor, çağıranın elinde
+   * taşıyacak bir anlık görüntü yok.
+   *
+   * ⚠️ YALNIZCA `ProfileStack`'te kayıtlı ve öyle kalmalı — tek giriş noktası
+   * `EditProfile`. `RestaurantDetail`/`UserProfile`'ın dört stack'e yayılma
+   * gerekçesi burada yok.
+   */
+  BlockedUsers: undefined;
+  /**
    * Liste formu — modal. TEK ekran iki iş yapıyor:
    *   parametresiz  → yeni liste
    *   `listId` ile  → o listeyi düzenle (alanlar dolu gelir)

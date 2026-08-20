@@ -15,6 +15,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
+import { useBlocks } from '../hooks/useBlocks';
 import { UserRanking, Profile, HomeStackParamList } from '../types';
 import { placePhotoUrl } from '../lib/places';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
@@ -84,6 +85,13 @@ export default function HomeScreen() {
     fetchFeed,
   } = useActivityFeed(userId);
 
+  /**
+   * Engel listesi. `blocksReady` false iken sorgu ATILMIYOR — engelli
+   * kullanıcı "En Çok Puanlayanlar"da bir kare görünüp kaybolmasın.
+   */
+  const { blocked, ready: blocksReady } = useBlocks();
+
+
   const fetchData = useCallback(async () => {
     setLoading(true);
 
@@ -129,6 +137,15 @@ export default function HomeScreen() {
         // satır ne gösterilebilir ne tıklanabilir.
         if (!profile?.id) return;
 
+        // ⚠️ ENGEL FİLTRESİ SAYIMDAN ÖNCE: engelli kullanıcı listeye hiç
+        // girmiyor. Sayımdan SONRA süzmek, "ilk 5" dilimini engelliyle
+        // doldurup ekrana 4 kişi çıkarırdı.
+        //
+        // Bu ekranda türetilmiş filtre kullanılmıyor çünkü sayım zaten fetch
+        // içinde yapılıyor; bunun yerine `fetchData` engel listesi değişince
+        // yeniden çalışıyor (bağımlılık dizisinde `blocked`).
+        if (blocked.has(row.user_id)) return;
+
         if (!counts[row.user_id]) {
           counts[row.user_id] = { profile, count: 0 };
         }
@@ -140,7 +157,7 @@ export default function HomeScreen() {
     }
 
     setLoading(false);
-  }, [userId]);
+  }, [userId, blocked, blocksReady]);
 
   // userId sonradan çözüldüğünde tekrar çalışsın (eskiden [] idi ve kaçırıyordu),
   // ayrıca sekmeye her dönüşte veri tazelensin.

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { useBlocks } from './useBlocks';
 import { UserRanking } from '../types';
 
 /**
@@ -57,11 +58,25 @@ export function usePlaceRankings(placeId: string | undefined) {
     setRankings((data ?? []) as UserRanking[]);
   }, [placeId]);
 
-  /** Bir kullanıcının bu mekandaki puan kaydı — yoksa `null`. */
+  const { blocked, ready: blocksReady } = useBlocks();
+
+  /**
+   * Bir kullanıcının bu mekandaki puan kaydı — yoksa `null`.
+   *
+   * ⚠️ Burada filtrelenen bir LİSTE yok, bir ARAMA var: engelli kullanıcı
+   * için `null` dönüyor ve çağıran bunu "puanı yok" ile aynı şekilde
+   * karşılıyor — yani ek bir dal gerekmiyor.
+   *
+   * `blocksReady` false iken de `null`: bilinmezken bilgi göstermemek,
+   * gösterip sonra geri almaktan iyi (`PhotoViewer`'ın bilgi şeritleri bu
+   * fonksiyona dayanıyor ve şerit bir kare görünüp kaybolurdu).
+   */
   const rankingOf = useCallback(
-    (userId: string | undefined): UserRanking | null =>
-      (userId && rankings.find((r) => r.user_id === userId)) || null,
-    [rankings]
+    (userId: string | undefined): UserRanking | null => {
+      if (!userId || !blocksReady || blocked.has(userId)) return null;
+      return rankings.find((r) => r.user_id === userId) || null;
+    },
+    [rankings, blocked, blocksReady]
   );
 
   return { rankingOf, fetchPlaceRankings };

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { useBlocks } from './useBlocks';
 
 /**
  * Takip sistemi hook'ları (`follows` tablosu, `supabase_schema.sql`).
@@ -169,7 +170,30 @@ export function useFollowList(
   userId: string | undefined,
   type: 'followers' | 'following'
 ) {
-  const [users, setUsers] = useState<FollowUser[]>([]);
+  const [rawUsers, setRawUsers] = useState<FollowUser[]>([]);
+
+  const { blocked, ready: blocksReady } = useBlocks();
+
+  /**
+   * Engelli kullanıcılar takipçi/takip listelerinden düşüyor.
+   *
+   * ⚠️ SAYAÇLAR (`useProfile`'ın takipçi/takip sayıları) DEĞİŞMİYOR —
+   * bilinçli. Zaten migration 024 engellemede takibi iki yönde de siliyor,
+   * yani asıl durumda sayı gerçekten düşüyor; burada kalan tek fark ÜÇÜNCÜ
+   * bir kişinin listesinde engellinin gizlenmesi. Sayaç ile liste arasındaki
+   * bu küçük tutarsızlık, alternatifin (her sayaç sorgusuna engel filtresi)
+   * maliyetine değmiyor.
+   *
+   * ⚠️ Filtre TÜRETİLMİŞ, fetch anında değil: engel listesi asenkron geliyor
+   * ve sorgu ondan önce dönerse engelli kişi bir kare görünürdü.
+   * `blocksReady` false iken boş dönüyor — "engel yok" ile "henüz bilmiyorum"
+   * aynı şey değil.
+   */
+  const users = useMemo(() => {
+    if (!blocksReady) return [];
+    if (blocked.size === 0) return rawUsers;
+    return rawUsers.filter((u) => !blocked.has(u.id));
+  }, [rawUsers, blocked, blocksReady]);
   const [loading, setLoading] = useState(false);
   /** Kullanıcıya GÖSTERİLEN kısa metin. Boş liste ile hata AYRI durumlar. */
   const [error, setError] = useState<string | null>(null);
@@ -215,7 +239,7 @@ export function useFollowList(
       type FollowRow = { profiles: FollowUser | FollowUser[] | null };
       const rows = (data ?? []) as unknown as FollowRow[];
 
-      setUsers(
+      setRawUsers(
         rows
           .map((row) => (Array.isArray(row.profiles) ? row.profiles[0] : row.profiles))
           // Profil satırı silinmişse null gelir. FK `on delete cascade`
@@ -273,7 +297,7 @@ export function useFollowList(
         return { error: new Error('Çıkarılamadı, tekrar dene.') };
       }
 
-      setUsers((prev) => prev.filter((u) => u.id !== otherUserId));
+      setRawUsers((prev) => prev.filter((u) => u.id !== otherUserId));
       return { error: null };
     },
     [userId, type, fetchList]

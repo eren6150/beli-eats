@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, FlatList, StyleSheet } from 'react-native';
+import { View, FlatList, StyleSheet, Pressable, Alert } from 'react-native';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -11,6 +11,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
+import { useBlocks } from '../hooks/useBlocks';
 import { useRankings } from '../hooks/useRankings';
 import { useLists, itemCountOf } from '../hooks/useLists';
 import { useDiary } from '../hooks/useDiary';
@@ -90,6 +91,7 @@ export default function UserProfileScreen() {
   const { userId, username } = route.params;
 
   const { user } = useAuth();
+  const { blocked, ready: blocksReady, blockUser, isBlocked } = useBlocks();
   const { profile, error: profileError, fetchProfile } = useProfile(userId);
   const {
     rankings,
@@ -205,6 +207,16 @@ export default function UserProfileScreen() {
 
   const renderHeader = () => (
     <View>
+      {/* ── Engelleme: UZUN BASIŞ ─────────────────────────────────────
+          `FollowersList`'in deseniyle tutarlı. Kendi profilinde
+          `onLongPress` HİÇ verilmiyor (kendini engelleyemezsin).
+
+          ⚠️ Uzun basış başlığın BOŞ alanlarında çalışıyor; sayaçlar ve
+          takip butonu kendi `Pressable`'ları olduğu için dokunuşu
+          yutuyorlar. Kabul edildi — `pointerEvents` ile "delmek" bu
+          projede bir kez sahada kırılmıştı (`PhotoViewer`'ın box-none
+          dersi), o yola tekrar girilmiyor. */}
+      <Pressable onLongPress={isSelf ? undefined : handleBlock} delayLongPress={400}>
       <ProfileHeader
         // Parametreden gelen ad ilk karede doğru yazıyor; profil dönünce
         // kanonik değere geçiyor.
@@ -245,6 +257,7 @@ export default function UserProfileScreen() {
               }
         }
       />
+      </Pressable>
 
       {profileError && (
         <ErrorBanner
@@ -274,6 +287,50 @@ export default function UserProfileScreen() {
       ))}
     </View>
   );
+
+  /**
+   * Engelle — uzun basış → onay.
+   *
+   * `FollowersList`'in "uzun basış → tek adımlı onay" deseniyle tutarlı:
+   * burada da tek bir eylem var, çok maddeli bir menü gürültü olurdu. Onay
+   * yine duruyor çünkü eylem yıkıcı (iki yöndeki takibi de siliyor).
+   *
+   * ⚠️ Metin ne olduğunu TAM söylüyor. Engelleme üç şey birden yapıyor
+   * (içerik gizlenir · takipler silinir · etkileşim kapanır); yalnızca birini
+   * söylemek, projenin dört kez pahalıya patlattığı isim/davranış
+   * uyumsuzluğu olurdu.
+   *
+   * ⚠️ "Geri alınamaz" DEMİYORUZ — engel kaldırılabilir. Geri gelmeyen tek
+   * şey takip (migration 024) ve metin bunu ayrıca söylüyor.
+   */
+  const handleBlock = () => {
+    if (isSelf) return;
+    const label = profile?.username ?? username;
+
+    Alert.alert(
+      `@${label} engellensin mi?`,
+      'Birbirinizin içeriğini göremezsiniz ve birbirinizi takip edemez, ' +
+        'beğenemezsiniz. Aranızdaki takipler silinir — engeli kaldırsan da ' +
+        'takipler geri gelmez.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Engelle',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await blockUser(userId);
+            if (error) {
+              Alert.alert('Engellenemedi', error);
+              return;
+            }
+            // Engellenen profilde kalmanın anlamı yok: ekran zaten
+            // "Bulunamadı"ya dönecekti, geri gitmek daha az sürpriz.
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
 
   const renderError = (title: string, message: string, onRetry: () => void) => (
     <View style={styles.emptyWrap}>
@@ -334,6 +391,35 @@ export default function UserProfileScreen() {
 
   const listData: ProfileRow[] =
     activeTab === 'rankings' ? rankings : activeTab === 'lists' ? lists : entries;
+
+  /**
+   * ── ENGELLİ PROFİL: "Bulunamadı" ────────────────────────────────────────
+   *
+   * İKİ YÖN de bu kapıya düşüyor (`blocked` simetrik): ben onu engellediysem
+   * de o beni engellediyse de aynı ekran çıkıyor.
+   *
+   * ⚠️ BOŞ PROFİL DEĞİL "Bulunamadı" — ürün kararı. Boş bir profil "bu kişi
+   * var ama hiçbir şey paylaşmamış" der ve engellemenin varlığını dolaylı
+   * olarak sızdırır; "Bulunamadı" daha nötr ve daha az bilgi veriyor.
+   *
+   * ⚠️ `blocksReady` beklenmiyor — liste gelmeden `blocked` boş olduğu için
+   * bu kapı açılmıyor ve profil normal görünüyor. Kabul edildi: alternatif,
+   * HER profil açılışında engel listesi gelene kadar boş ekran göstermek
+   * olurdu. İçerik listeleri zaten kendi `blocksReady` kapılarını taşıyor.
+   */
+  if (isBlocked(userId)) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.emptyWrap}>
+          <EmptyState
+            icon="person"
+            title="Kullanıcı bulunamadı"
+            subtitle="Bu profil görüntülenemiyor."
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

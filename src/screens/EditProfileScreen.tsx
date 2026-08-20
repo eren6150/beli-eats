@@ -14,10 +14,12 @@ import {
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ProfileStackParamList } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
+import Icon from '../components/ui/Icon';
 import TextField from '../components/ui/TextField';
 import Button from '../components/ui/Button';
 import ErrorBanner from '../components/ui/ErrorBanner';
@@ -83,7 +85,15 @@ const USERNAME_MAX = 30;
 
 
 export default function EditProfileScreen() {
-  const navigation = useNavigation();
+  /**
+   * ⚠️ TİPLİ: eskiden `useNavigation()` idi, yani `navigate()` hedefi
+   * DENETLENMİYORDU. `ProfileStackParamList`'e bağlamak, var olmayan bir
+   * rotaya gitmeyi ÇALIŞMA ANI yerine DERLEME ANI hatasına çeviriyor —
+   * `UserProfile`'ın dört stack'in ikisinde kayıtlı olmadığı uyuyan çökmenin
+   * aynı sınıfı.
+   */
+  const navigation =
+    useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
   const route = useRoute<RouteType>();
   const { user, deleteAccount } = useAuth();
   const { updateProfile } = useProfile(user?.id);
@@ -306,6 +316,20 @@ export default function EditProfileScreen() {
             style={styles.saveButton}
           />
 
+          {/* ── Gizlilik ve güvenlik ──
+              Tehlikeli bölgenin ÜSTÜNDE: yıkıcı değil, sıradan bir ayar.
+              Engellenen kişinin profili "Bulunamadı" gösterdiği için engeli
+              oradan kaldırmak imkânsız — bu satır TEK çıkış yolu. */}
+          <Pressable
+            onPress={() => navigation.navigate('BlockedUsers')}
+            style={({ pressed }) => [styles.settingRow, pressed && styles.pressed]}
+            accessibilityRole="button"
+          >
+            <Icon name="person" size={18} color={Colors.textSecondary} />
+            <Text style={styles.settingText}>Engellediklerin</Text>
+            <Icon name="forward" size={18} color={Colors.textMuted} />
+          </Pressable>
+
           {/* ── Yasal ──
               YERİ BİLİNÇLİ: Kaydet ile "Tehlikeli bölge" ARASINA konmadı —
               oraya girmek o iki bloğun arasındaki geniş boşluğu yer ve
@@ -450,6 +474,20 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.textMuted,
   },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.xl,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+  },
+  settingText: { ...Type.body, color: Colors.textPrimary, flex: 1 },
+
   dangerZone: {
     marginTop: Spacing['3xl'],
     paddingTop: Spacing.lg,

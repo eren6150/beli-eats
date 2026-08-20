@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { useBlocks } from './useBlocks';
 import { removePhotoObjects } from '../lib/placePhotos';
 import { PlacePhoto, PlacePhotoKind } from '../types';
 
@@ -18,7 +19,26 @@ type MutationError = PostgrestError | Error;
  * sayfalama gerekirse sorgu türe göre daraltılabilir, indeks hazır.
  */
 export function usePlacePhotos(placeId: string | undefined) {
-  const [photos, setPhotos] = useState<PlacePhoto[]>([]);
+  const [rawPhotos, setRawPhotos] = useState<PlacePhoto[]>([]);
+/**
+ * ⚠️ ENGEL FİLTRESİ TÜRETİLMİŞ, fetch anında DEĞİL.
+ *
+ * Sorguya `.not(...)` eklemek cazipti ama yarışı çözmüyor: engel listesi
+ * (`useBlocks`) asenkron geliyor ve sorgu ondan ÖNCE dönerse engellenen
+ * içerik ekrana düşer. Türetilmiş filtre, liste geç gelse bile kendiliğinden
+ * yeniden süzüyor.
+ *
+ * ⚠️ `ready` KONTROLÜ ŞART: `blocked` boş olmak "engel yok" demek DEĞİL,
+ * "henüz bilmiyorum" da olabilir. Bilinmezken ham listeyi göstermek, tam
+ * olarak gizlenmesi gereken şeyi bir kare göstermek olurdu.
+ */
+  const { blocked, ready: blocksReady } = useBlocks();
+
+  const photos = useMemo(() => {
+    if (!blocksReady) return [];
+    if (blocked.size === 0) return rawPhotos;
+    return rawPhotos.filter((p) => !blocked.has(p.user_id));
+  }, [rawPhotos, blocked, blocksReady]);
   const [loading, setLoading] = useState(false);
   /** Kullanıcıya GÖSTERİLEN kısa metin — ham hata mesajı değil. */
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +107,7 @@ export function usePlacePhotos(placeId: string | undefined) {
 
       const rows = (data ?? []) as unknown as PhotoRow[];
 
-      setPhotos(
+      setRawPhotos(
         rows.map((row) => ({
           ...(row as PlacePhoto),
           diary_entries: Array.isArray(row.diary_entries)
@@ -141,7 +161,7 @@ export function usePlacePhotos(placeId: string | undefined) {
     // nesneleri bırakıyor). İki kopya zamanla ayrışırdı.
     await removePhotoObjects([photo.storage_path, photo.thumb_path]);
 
-    setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+    setRawPhotos((prev) => prev.filter((p) => p.id !== photo.id));
     return { error: null };
   };
 

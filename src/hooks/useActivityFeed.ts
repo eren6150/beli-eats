@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { useBlocks } from './useBlocks';
 import { DiaryEntry, Profile } from '../types';
 
 /**
@@ -167,5 +168,26 @@ export function useActivityFeed(userId: string | undefined) {
     setLoading(false);
   }, [userId]);
 
-  return { items, loading, error, followsAnyone, fetchFeed };
+
+/**
+ * ⚠️ ENGEL FİLTRESİ TÜRETİLMİŞ, fetch anında DEĞİL.
+ *
+ * Sorguya `.not(...)` eklemek cazipti ama yarışı çözmüyor: engel listesi
+ * (`useBlocks`) asenkron geliyor ve sorgu ondan ÖNCE dönerse engellenen
+ * içerik ekrana düşer. Türetilmiş filtre, liste geç gelse bile kendiliğinden
+ * yeniden süzüyor.
+ *
+ * ⚠️ `ready` KONTROLÜ ŞART: `blocked` boş olmak "engel yok" demek DEĞİL,
+ * "henüz bilmiyorum" da olabilir. Bilinmezken ham listeyi göstermek, tam
+ * olarak gizlenmesi gereken şeyi bir kare göstermek olurdu.
+ */
+  const { blocked, ready: blocksReady } = useBlocks();
+
+  const visibleItems = useMemo(() => {
+    if (!blocksReady) return [];
+    if (blocked.size === 0) return items;
+    return items.filter((it) => !blocked.has(it.entry.user_id));
+  }, [items, blocked, blocksReady]);
+
+  return { items: visibleItems, loading, error, followsAnyone, fetchFeed };
 }

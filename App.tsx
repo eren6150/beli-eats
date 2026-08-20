@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider } from './src/hooks/useAuth';
+import { BlocksProvider } from './src/hooks/useBlocks';
 
 // SafeAreaProvider kökte olmak zorunda: useSafeAreaInsets ve
 // safe-area-context'in SafeAreaView'ı inset değerlerini buradan alır.
@@ -36,8 +37,13 @@ export default function App() {
       <KeyboardProvider>
         <SafeAreaProvider>
           <AuthProvider>
-            <StatusBar style="dark" />
-            <RootNavigator />
+            {/* BlocksProvider AuthProvider'ın İÇİNDE olmak zorunda: engel
+                listesi `user.id` ile çekiliyor, yani oturumu tüketiyor.
+                Dışına konsaydı `useAuth` sağlayıcısını bulamazdı. */}
+            <BlocksProvider>
+              <StatusBar style="dark" />
+              <RootNavigator />
+            </BlocksProvider>
           </AuthProvider>
         </SafeAreaProvider>
       </KeyboardProvider>

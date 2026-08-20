@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ProfileStackParamList } from '../types';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 import ListFormScreen from '../screens/lists/ListFormScreen';
 import ListDetailScreen from '../screens/lists/ListDetailScreen';
 import RestaurantDetailScreen from '../screens/RestaurantDetailScreen';
@@ -59,6 +60,13 @@ export default function ProfileStack() {
           // kendi "İptal / Kaydet" şeridini çiziyor.
           presentation: 'modal',
         }}
+      />
+      {/* `EditProfile`'dan açılıyor. Modal DEĞİL: bir liste ekranı ve
+          geri tuşuyla profil düzenlemeye dönmesi doğru davranış. */}
+      <Stack.Screen
+        name="BlockedUsers"
+        component={BlockedUsersScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="ListDetail"
