@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
+  Text,
+  View,
 } from 'react-native';
 // react-native'in SafeAreaView'ı Android'de no-op — daima bu paketten al.
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +22,18 @@ import TextField from '../components/ui/TextField';
 import Button from '../components/ui/Button';
 import ErrorBanner from '../components/ui/ErrorBanner';
 import DeleteAccountSheet from '../components/profile/DeleteAccountSheet';
+
+/**
+ * Gizlilik metni — GitHub Pages'te barınıyor (`docs/gizlilik.html`).
+ *
+ * ⚠️ Uygulama içinde barındırılmadı, bilinçli: metin güncellendiğinde OTA
+ * beklemeden yayına girsin. Bu, metnin "önemli değişiklikte uygulama içinde
+ * bildiririz" sözüyle de tutarlı — bildirim OTA ister, metnin kendisi istemez.
+ *
+ * ⚠️ Repo adına BAĞLI. Rebrand'de kırılacak üç yerden biri (diğerleri:
+ * Supabase Site URL ve varsa mağazadaki gizlilik bağlantısı).
+ */
+const PRIVACY_URL = 'https://eren6150.github.io/beli-eats/gizlilik.html';
 import {
   normalizeUsername,
   validateUsername,
@@ -292,6 +306,17 @@ export default function EditProfileScreen() {
             style={styles.saveButton}
           />
 
+          {/* ── Yasal ──
+              YERİ BİLİNÇLİ: Kaydet ile "Tehlikeli bölge" ARASINA konmadı —
+              oraya girmek o iki bloğun arasındaki geniş boşluğu yer ve
+              "kaydetmeye gelen parmak yıkıcı butona kazara ulaşmasın" ayrımını
+              zayıflatırdı. Bunun yerine tehlikeli bölgenin ALTINDA, sayfanın
+              en sonunda duruyor: nötr, aranınca bulunan bir bağlantı.
+
+              ⚠️ URL GitHub Pages'e sabit. Rebrand repo adını değiştirirse
+              BURASI DA KIRILIR — rebrand kontrol listesinde not düşülü
+              (Site URL · gizlilik metni URL'i · buradaki bağlantı). */}
+
           {/* ── Tehlikeli bölge ──
               YERİ BİLİNÇLİ: ayarlar menüsü yerine burası. O menü bugün iki
               maddelik bir `Alert` ("İptal / Çıkış Yap") ve oraya yıkıcı bir
@@ -318,6 +343,27 @@ export default function EditProfileScreen() {
               <Text style={styles.dangerButtonText}>Hesabımı sil</Text>
             </Pressable>
           </View>
+
+          <Pressable
+            onPress={() => {
+              // `catch` ŞART: tarayıcısı olmayan/kısıtlanmış bir cihazda
+              // `openURL` reddediyor ve yakalanmazsa uygulama çöker.
+              // Ekrana kısa metin, konsola tam nesne (projenin hata kuralı).
+              Linking.openURL(PRIVACY_URL).catch((e) => {
+                console.error('[EditProfile] gizlilik metni açılamadı:', e);
+                Alert.alert(
+                  'Bağlantı açılamadı',
+                  'Gizlilik metnini tarayıcında şu adresten okuyabilirsin: ' +
+                    PRIVACY_URL
+                );
+              });
+            }}
+            style={({ pressed }) => [styles.legalLink, pressed && styles.pressed]}
+            accessibilityRole="link"
+            accessibilityLabel="Gizlilik Politikasını tarayıcıda aç"
+          >
+            <Text style={styles.legalLinkText}>Gizlilik Politikası</Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -389,6 +435,21 @@ const styles = StyleSheet.create({
    * ayrılıyor. Amaç yakınlık kurmamak: kaydetmeye gelen parmak buraya
    * kazara ulaşmamalı.
    */
+  /**
+   * Nötr ve sessiz: `caption` + `textMuted`, altı çizili DEĞİL. Bir gizlilik
+   * bağlantısı aranınca bulunmalı, dikkat çekmek için yarışmamalı — hemen
+   * üstündeki yıkıcı butondan görsel ağırlık çalmasın.
+   */
+  legalLink: {
+    marginTop: Spacing.xl,
+    alignSelf: 'center',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+  },
+  legalLinkText: {
+    ...Type.caption,
+    color: Colors.textMuted,
+  },
   dangerZone: {
     marginTop: Spacing['3xl'],
     paddingTop: Spacing.lg,
