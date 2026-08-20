@@ -2066,12 +2066,26 @@ yerelde koşturuldu: bundle üretildi ve `[captcha]` · `captchaToken` ·
   kayıt · giriş · şifre sıfırlama · tekrar gönder · Google girişi.
   `size: 'invisible'` beklendiği gibi çalışıyor — meşru kullanımda görünür
   bulmaca çıkmıyor.
-- ⚠️ **`/verify` ucunun captcha'yı gerçekten ZORUNLU tuttuğu HÂLÂ ölçülmedi.**
-  Şifre sıfırlama uçtan uca çalışıyor ama biz token gönderdiğimiz için bu,
-  "isteniyor" ile "istenmiyor ama zararsız" arasında ayrım yapmıyor. Bedeli
-  duruyor: akışta **iki tur** doğrulama var (kod isterken + kodu doğrularken).
-  Ölçmek için `verifyOtp`'den token'ı geçici olarak çıkarıp denemek gerekir;
-  gereksizse kaldırmak bir tur UX kazandırır. Düşük öncelikli, ayrı bir iş.
+- ✅ **`/verify` captcha İSTEMİYOR — ÖLÇÜLDÜ (2026-08-19), tur KALDIRILDI.**
+  Panel anahtarı AÇIKKEN `/auth/v1/verify` ucuna captcha token'ı olmadan
+  doğrudan istek atıldı → **HTTP 200 + access_token**. Akış artık **iki değil
+  tek tur** doğruluyor; `verifyOtp`'den `requireCaptcha()` ve
+  `options.captchaToken` kalktı.
+  - 🔑 **YÖNTEM DERSİ — ölçüm uygulamaya HİÇ DOKUNMADAN yapıldı.** Bu dosyanın
+    kendi önerisi *"`verifyOtp`'den token'ı geçici olarak çıkarıp dene"* idi ve
+    o bir OTA demekti: token gerçekten gerekliyse **şifre sıfırlama sahada
+    kırılırdı**. `/verify` düz bir REST ucu olduğu için curl ile ölçüldü —
+    sıfır saha riski. Uygulamadan yalnızca kodu ISTEMEK için geçildi (o tur
+    zaten captcha'lı), doğrulama adımı terminalden atıldı.
+  - ⚠️ **Ölçüm ilk denemede `otp_expired` verdi** — bu bir captcha sonucu
+    DEĞİL, kodun süresi. Yeni kodla 200 alındı. Sonuç okunurken 400'ün hangi
+    `error_code` ile geldiğine bakmak şart; her 400 "captcha gerekli" demek
+    değil.
+  - **İLK TURDAKİ captcha DURUYOR ve durmalı:** `resetPasswordForEmail` mail
+    GÖNDERİYOR, yani SendGrid kotasını yakabilecek uç o. Korumanın asıl yeri
+    orası; `/verify` yalnızca eldeki tek kullanımlık kodu doğruluyor.
+  - Supabase bir gün bu ucu da bağlarsa belirti net: `captcha_failed` (metni
+    `AUTH_ERROR_TEXT`'te zaten eşli). Geri dönüş iki satır.
 - ✅ **Build alınmadan hiçbiri doğrulanamıyordu ve öyle de oldu** — Expo Go bu
   projeyi zaten açmıyor (keyboard-controller), WebView de native. "Expo Go'daki
   ölçüm kanıt değildir" dersinin dördüncü tekrarı, bu kez baştan kabul edilmiş
@@ -3984,10 +3998,10 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   döndürmek. Sahadaki APK'ya gömülü anahtar aksi hâlde yaşamaya devam eder ve
 >   o anahtar ayrıca bir sohbet oturumunda düz metin paylaşıldı.
 > - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
-> - **Şifre sıfırlamadaki İKİNCİ captcha turunun gerekli olup olmadığını ölç**
->   (2026-08-17'den kalan). `verifyOtp`'den token'ı geçici olarak çıkarıp
->   akışın hâlâ çalıştığına bak; çalışıyorsa bir tur UX kazanılır. Düşük
->   öncelik, gerekçe: Mimari Notlar → **Bot koruması** → doğrulananlar.
+> - ~~**Şifre sıfırlamadaki İKİNCİ captcha turunun gerekli olup olmadığını
+>   ölç**~~ → ✅ **ÖLÇÜLDÜ ve TUR KALDIRILDI (2026-08-19).** `/verify` captcha
+>   istemiyor (curl ile, uygulamaya dokunmadan doğrulandı). Detay: Mimari
+>   Notlar → **Bot koruması** → doğrulananlar.
 >
 > ### 🎨 Marka işi: neyin OTA gittiği, neyin build istediği (tespit: 2026-08-08)
 > `app.json` ve `app.config.js` okunarak çıkarıldı, tahmin değil. Faz 4'e

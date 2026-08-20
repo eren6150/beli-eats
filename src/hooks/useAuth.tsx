@@ -566,26 +566,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = useCallback(
     async (email: string, code: string, newPassword: string) => {
       /**
-       * ⚠️ Bu, şifre sıfırlama akışındaki İKİNCİ doğrulama turu (ilki kodu
-       * gönderirken). Token tek kullanımlık ve kısa ömürlü, yani ilkini
-       * saklayıp buraya taşımak mümkün değil — her uç kendi turunu istiyor.
-       * `size: 'invisible'` olduğu için kullanıcı çoğu turda hiçbir şey
-       * görmüyor; görünür bulmaca çıkarsa akış iki kez sorar.
+       * ⚠️ BURADA CAPTCHA TURU YOK — ve bu ÖLÇÜLMÜŞ bir karar (2026-08-19).
        *
-       * `/verify` ucunun sunucu tarafında gerçekten captcha istediği
-       * DOĞRULANMADI — supabase-js tipi alanı kabul ediyor, o kadar. Token
-       * göndermek iki durumda da güvenli (istemiyorsa yok sayılır),
-       * göndermemek istiyorsa akışı kırardı. Anahtar açıldığı gün ölçülüp
-       * gereksizse buradan kaldırılabilir — o zaman bu tur da UX'ten düşer.
+       * Akış bir dönem İKİ tur doğrulama çalıştırıyordu: biri kodu isterken
+       * (`sendPasswordResetCode`), biri burada. İkincisinin gerekli olup
+       * olmadığı bilinmiyordu — supabase-js tipi alanı kabul ediyor, o kadar.
+       *
+       * ÖLÇÜM: panel captcha anahtarı AÇIKKEN `/auth/v1/verify` ucuna
+       * captcha token'ı OLMADAN doğrudan istek atıldı → **HTTP 200 +
+       * access_token**. Yani uç captcha İSTEMİYOR; tur bedava değildi ve
+       * karşılığı yoktu, kaldırıldı.
+       *
+       * 🔑 ÖLÇÜM YÖNTEMİ KAYDA DEĞER: token'ı koddan çıkarıp OTA ile
+       * denemek, gerekliyse şifre sıfırlamayı SAHADA kırardı. `/verify` düz
+       * bir REST ucu olduğu için ölçüm uygulamaya hiç dokunmadan, curl ile
+       * yapıldı — sıfır saha riski.
+       *
+       * ⚠️ İLK ÇAĞRIDA CAPTCHA HÂLÂ VAR ve kalmalı: `resetPasswordForEmail`
+       * mail GÖNDERİYOR, yani SendGrid kotasını yakabilecek uç o. Korumanın
+       * asıl durması gereken yer orası; burası yalnızca eldeki kodu
+       * doğruluyor ve kod zaten tek kullanımlık + kısa ömürlü.
+       *
+       * Supabase bir gün bu ucu da captcha'ya bağlarsa belirti net olur:
+       * `captcha_failed` (metni `AUTH_ERROR_TEXT`'te zaten eşli). Geri
+       * dönüş = `requireCaptcha()` + `options.captchaToken`'ı geri koymak.
        */
-      const captcha = await requireCaptcha();
-      if (!captcha.ok) return { error: captcha.error };
-
       const { error: verifyError } = await supabaseRecovery.auth.verifyOtp({
         email,
         token: code,
         type: 'recovery',
-        options: { captchaToken: captcha.token },
       });
 
       if (verifyError) {
