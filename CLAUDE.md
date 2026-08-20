@@ -2,7 +2,46 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-17
+## 📍 Nerede kaldık — 2026-08-20
+
+**İSİM KARARI BEKLERKEN: temizlik + Dalga 0 + Dalga 1 bitti, hepsi sahada.**
+Kullanıcı TÜRKPATENT / alan adı araştırmasında; bu turda isme bağlı OLMAYAN
+işler yapıldı. Sıraya `Bilinen Açık İşler` yerine **isimden bağımsız yol
+haritası** yön veriyor (aşağıda, dalgalar hâlinde).
+
+| Dalga | İş | Sonuç |
+|---|---|---|
+| — | EF'teki geçici `backfill` action'ı silindi | `ebadf49` |
+| — | `user_rankings.photo_reference` düşürüldü (**migration 023**) | `cb3c905` |
+| 0 | `exp://` redirect satırları silindi (panel) | ✅ |
+| 0 | `place_photos` çift satır kontrolü | ✅ **temiz** |
+| 0 | Leaderboard eşiği 2. ölçüm (1/0) | ⏸️ eşiğin altında |
+| 0 | `tabular-nums` doğrulaması | ✅ **destekliyor** |
+| 1 | `RankingReviewSheet` fotoğraf şeridi | `d2991ce` |
+| 1 | Şifre sıfırlamada **2. captcha turu kaldırıldı** | `3d6424c` |
+| 1 | `MapScreen` → `ErrorBanner` | ❌ **yapılmayacak** |
+
+**Üçü tek OTA'da gitti ve cihazda doğrulandı** (A: şifre sıfırlama + regresyon,
+B: fotoğraf şeridi + iç içe Modal, C: `photo_reference` teyidi).
+
+🔑 **Bu turun kalıcı üç dersi:**
+1. **İç içe `Modal` artık doğrulanmış bir desen** — `PhotoViewer` bir sheet'in
+   `Modal`'ı içinde çalışıyor (detay: `RankingReviewSheet` fotoğraf şeridi).
+2. **Açık iş maddeleri kapsamlarını yanlış taşıyor.** Üç madde ölçülünce
+   değişti: `backfill` (zaten bitmişti) · `ErrorBanner` (yapılmayacak çıktı) ·
+   `RankingReviewSheet` (önerilen sorgu YANLIŞ olurdu). Sıraya alırken **önce
+   koda bak**.
+3. **Saha riski olmadan ölçmenin yolu genelde var.** 2. captcha turu, koddan
+   çıkarıp OTA ile denemek yerine `/verify`'a curl atılarak ölçüldü.
+
+⏭️ **SIRADA: Dalga 2 — gizlilik metni.** Bugün **hiç yok**; `docs/` altında
+yalnızca onay maili iniş sayfası var. Kullanıcı engellemeden (Dalga 4) önce
+geliyor çünkü "hangi veri kimde görünür" envanterini zorunlu kılıyor ve
+engelleme tam o envanterin her satırına dokunuyor.
+
+---
+
+## 📍 (Önceki) Nerede kaldık — 2026-08-17
 
 **Bağımsız işler turu bitti ve sahada** (hepsi OTA, migration yok):
 
@@ -1557,7 +1596,7 @@ Bir sıralama kaydının puanı + **tam yorum metni**. Bilinen Açık İşler'de
   bakarken istenen şey mekanın kendisi. Üçüncü bir yerde farklı davranış olduğu
   doğru; rahatsız ederse ayrı bir diff.
 
-### `RankingReviewSheet` fotoğraf şeridi (2026-08-19, ⏳ cihazda DOĞRULANMADI)
+### `RankingReviewSheet` fotoğraf şeridi (2026-08-19, cihazda DOĞRULANDI)
 Puanın okuma görünümüne, o kullanıcının o mekana yüklediği kareler eklendi.
 Ziyaret tarafında bu simetri zaten vardı (`DiaryEntryDetail` kendi ziyaretinin
 fotoğraflarını gösteriyor), puan tarafında yoktu.
@@ -1595,17 +1634,22 @@ fotoğraflarını gösteriyor), puan tarafında yoktu.
   için fotoğraf yüklemesi demekti (N+1). Burada sorgu kullanıcı dokunuşuyla,
   tek kayıt için atılıyor — `usePlaceVisits`'in kabul edilmiş deseni.
 
-#### ⏳ CİHAZDA DOĞRULANACAK İLK ŞEY: İÇ İÇE `Modal`
+#### ✅ İÇ İÇE `Modal` ÇALIŞIYOR — Android'de doğrulandı (2026-08-19)
 `PhotoViewer` kendisi bir `Modal` ve burada sheet'in `Modal`'ının **içinde**
 render ediliyor. Diğer iki çağrı yeri (`PhotoGrid`, `DiaryEntryDetailScreen`)
-düz EKRAN — yani bu desen projede **ilk kez** kuruluyor ve Android'de iç içe
-`Modal` bilinen bir kırılganlık.
-- **Kareleri tıklanamaz bırakmak REDDEDİLDİ:** ziyaret detayında tam olarak bu
-  sahada şikayet olmuştu ("dokunuyorum, hiçbir şey olmuyor"). Üstelik
+düz EKRAN — yani bu desen projede **ilk kez** kuruldu ve Android'de iç içe
+`Modal` bilinen bir kırılganlık olduğu için turun en kritik testiydi.
+**Sonuç temiz:** kareye dokunmak tam ekranı açıyor, çarpı ve donanım geri
+tuşu yalnızca görüntüleyiciyi kapatıyor, **sheet altta açık kalıyor**.
+- 🔑 **Kayda geçsin: iç içe `Modal` bu projede artık DOĞRULANMIŞ bir desen.**
+  Benzer bir ihtiyaç doğarsa (bir sheet'in içinden tam ekran bir şey açmak)
+  sıfırdan teşhis gerekmiyor — emsal burası.
+- **Kareleri tıklanamaz bırakmak REDDEDİLMİŞTİ:** ziyaret detayında tam olarak
+  bu sahada şikayet olmuştu ("dokunuyorum, hiçbir şey olmuyor"). Üstelik
   fotoğraflar diğer iki yüzeyde tıklanabilir; burada olmaması üçüncü bir
   davranış farkı yaratırdı.
-- **GERİ ÇEKİLME TEK SATIR:** çalışmazsa `setViewing(photo)` yerine `onClose()`
-  + mekan sayfasına yönlendirme.
+- Gerekmedi ama kayıt için: geri çekilme tek satırdı (`setViewing(photo)`
+  yerine `onClose()` + mekan sayfasına yönlendirme).
 
 ### "Senin Ziyaretlerin" — mekan sayfası (2026-08-08, cihazda DOĞRULANDI)
 `user_rankings` ile `diary_entries` arayüzde **ilk kez buluşuyor**: ikisi
