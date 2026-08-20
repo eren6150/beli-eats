@@ -20,6 +20,8 @@ haritası** yön veriyor (aşağıda, dalgalar hâlinde).
 | 1 | `RankingReviewSheet` fotoğraf şeridi | `d2991ce` |
 | 1 | Şifre sıfırlamada **2. captcha turu kaldırıldı** | `3d6424c` |
 | 1 | `MapScreen` → `ErrorBanner` | ❌ **yapılmayacak** |
+| 2 | **Gizlilik metni** + uygulama içi bağlantı + günlük ipucu | `3e7c51b` · `bca00e3` |
+| 3 | **Build 3** — üç native yama (`expo-updates` güvenlik) | `7c444e2` · `7000403` |
 
 **Üçü tek OTA'da gitti ve cihazda doğrulandı** (A: şifre sıfırlama + regresyon,
 B: fotoğraf şeridi + iç içe Modal, C: `photo_reference` teyidi).
@@ -34,10 +36,16 @@ B: fotoğraf şeridi + iç içe Modal, C: `photo_reference` teyidi).
 3. **Saha riski olmadan ölçmenin yolu genelde var.** 2. captcha turu, koddan
    çıkarıp OTA ile denemek yerine `/verify`'a curl atılarak ölçüldü.
 
-⏭️ **SIRADA: Dalga 2 — gizlilik metni.** Bugün **hiç yok**; `docs/` altında
-yalnızca onay maili iniş sayfası var. Kullanıcı engellemeden (Dalga 4) önce
-geliyor çünkü "hangi veri kimde görünür" envanterini zorunlu kılıyor ve
-engelleme tam o envanterin her satırına dokunuyor.
+🏷️ **İSİM KARARI VERİLDİ (2026-08-20): PLATESTAMP.** Mağaza/marka/alan adı
+taraması temiz çıktı ve `platestamp.com` **tescilsiz** (RDAP ile doğrulandı).
+Rebrand **bilinçli olarak ertelendi** — kullanıcı "isme geçelim" diyene kadar
+başlamıyoruz. Plan ve üç gizli bağ: Bilinen Açık İşler → **Rebrand**.
+
+⏭️ **SIRADA: Dalga 4 — kullanıcı engelleme.** OTA ile gidebilir (migration +
+RLS + arayüz), ama maliyeti tabloda değil `blocks`'tan haberdar edilmesi
+gereken HER OKUMA YOLUNDA. Gizlilik metninin envanteri (Dalga 2) tam olarak
+o listeyi çıkardığı için sıra doğru kuruldu.
+🚩 `blocks` **DÖRDÜNCÜ ARA TABLO** olacak → PGRST201 kuralı geçerli.
 
 ---
 
@@ -75,7 +83,8 @@ istemcideki 30 **değil** — 30 koymak uzun e-postalı kullanıcının hiç
 kaydolamamasına yol açardı; gerekçe migration dosyasında, daraltma işi (022)
 açık işlerde.
 
-⚠️ **OTA RUNTIME'I ARTIK 1.3.0.** Sahadaki iki cihaz da versionCode 6'ya
+⚠️ **(BAYAT — güncel runtime 1.3.1, bkz. Build 3.)** OTA RUNTIME'I ARTIK
+1.3.0. Sahadaki iki cihaz da versionCode 6'ya
 geçtiği için OTA yeniden akıyor. 1.2.0'a gönderilemez ve gönderilmemeli:
 bundle `react-native-webview` import ediyor, o modül eski binary'de yok.
 
@@ -3916,12 +3925,36 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > Build 1'de gitmişti: **keyboard-controller** (native taraf) · **kaydırmalı
 > sekmeler** · **`expo` yama farkı** · **deep link + Google girişi**.
 >
-> ### 📦 BUILD 3'ÜN PAKETİ — üç madde
-> Bağımlılık denetimi 2026-08-17'de yapıldı (`expo install --check` +
-> `expo-doctor`); çıkan her şey buraya toplandı.
+> ### ✅ BUILD 3 ALINDI ve SAHADA (2026-08-20) — versionCode 7 / `version` 1.3.1
+> **Bakım build'i: tek içeriği üç native yamaydı.** Minimal tutuldu; `fingerprint`
+> ve Faz 4 native'i bilinçli olarak dışarıda bırakıldı (aşağıda 1 ve 2, ikisi de
+> rebrand build'ine).
 >
-> 0. 🔴 **ÜÇ NATIVE YAMA — biri GÜVENLİK.** Build alınınca ilk komut
->    `npx expo install --fix`:
+> **Doğrulandı:** açılış · giriş · harita · arama · fotoğraf yükleme ·
+> kayıt/giriş/şifre sıfırlama. 🔴 **Test OTA'sı gönderildi ve indiği görüldü** —
+> bu adım zorunluydu, çünkü güncellenen modül OTA'yı TAŞIYAN modülün kendisi;
+> bozulsaydı kanal ölür ve düzeltmek yeni bir build gerektirirdi.
+> Sahadaki iki cihaz da versionCode 7'ye geçti.
+>
+> ⏱️ **EŞİK KULLANILMADI — dayanağı ortadan kalktı.** Eşik *"bir güvenlik
+> yaması süresi belirsiz bir isim kararını bekleyemez"* diye konmuştu; isim
+> 2026-08-20'de netleşti (**PLATESTAMP**). Yine de build MİNİMAL tutuldu:
+> rebrand yalnızca bir build değil, **sıralı bir panel operasyonu** (yeni
+> anahtar → doğrula → sonra eskisini sil · Supabase scheme · repo adı + Site URL
+> + gizlilik URL'i aynı oturumda). Yamayı ona bağlamak, eşiğin kırmak için var
+> olduğu bağımlılığı yeniden kurmak olurdu. Bedeli: ikinci bir kurulum turu,
+> iki kişi için bir kez.
+>
+> 🔴 **BULGU — `expo-constants` duplicate'i DEĞİŞTİ, aşağıdaki gerekçe
+> BAYATLADI.** İki kopya artık aynı sürüm DEĞİL: `expo/` altındaki **18.0.14**
+> (expo 54.0.37 ile geldi), `expo-linking/` altındaki **18.0.13**. Riskli
+> sınıftan değil — §5.1'i çökerten fark **major** seviyesindeydi (57.0.1 ↔
+> 14.0.12), bu **yama** seviyesi ve autolinking'in seçtiği kopya yeni `expo`
+> ile tutarlı; `expo install --check` de temiz. Dokunulmadı. **Build tuhaf
+> davranırsa bakılacak ilk yer burası.**
+>
+> 0. ✅ **ÜÇ NATIVE YAMA — biri GÜVENLİK. ALINDI (`7c444e2`).**
+>    `npx expo install --fix` ile:
 >    | Paket | Bugün | Beklenen | Ne |
 >    |---|---|---|---|
 >    | `expo-updates` | 29.0.19 | ~29.0.20 | 🔴 **path traversal düzeltmesi** |
@@ -3936,24 +3969,16 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >    çalıştırabilir. Yine de OTA bu projenin ana dağıtım yolu ve **kod
 >    imzalama kapalı**, yani tek savunma TLS + hesap güvenliği.
 >
->    ⚠️ **ÜÇÜ DE NATIVE, yani OTA ile GİDEMEZ** — ve şimdi güncellenmemeli.
->    Saha 1.3.0'da ve OTA kanalı AÇIK; sıradaki işler saf JS (kamera menüsü,
->    engelleme). Bunları güncelleyip ardından OTA göndermek **eski native'e
->    yeni JS indirmek** olur, yani `expo-font@57` çökmesinin sınıfı.
+>    **Uçuş öncesi üç kontrol de geçti** (hepsi build ALMADAN, projenin kendi
+>    dersleri): autolinking duplicate taraması (§5.1 — `expo-font@57` ilk APK'yı
+>    açılışta çökertmişti ve build hatasız geçmişti) · typecheck · **yerel
+>    `expo export`** (§ bot koruması — `prop-types` Build 2'yi "Bundle
+>    JavaScript" aşamasında patlatmıştı ve typecheck o sınıfı YAKALAYAMAZ).
 >
->    ⏱️ **EŞİK (2026-08-17'de kondu): rebrand 2-3 hafta içinde netleşmezse
->    Build 3'ü BAKIM BUILD'İ olarak al** — üç yama + aşağıdaki 1. madde,
->    rebrand'i beklemeden. Bir güvenlik yaması, süresi belirsiz bir isim
->    kararını bekleyemez. Paket adı değişmediği için yeni APK üzerine kurulur,
->    kimse uygulamayı kaldırmak zorunda kalmaz.
->
->    ⚪ **DOKUNULMAYACAK: `expo-constants` duplicate.** expo-doctor uyarıyor
->    ("node_modules bozuk olabilir") ama iki kopya da **18.0.13**, aynı android
->    dosya sayısı — birebir aynı kod. §5.1'i çökerten şey **farklı ve uyumsuz**
->    sürümlerdi. `npm dedupe` ölçüldü (`--dry-run`): 20 ekliyor, 18 siliyor,
->    16 değiştiriyor — `@react-native/codegen`, `hermes-parser`,
->    `babel-preset-expo` dahil, yani doğrulanmış ağacı build zinciri
->    seviyesinde değiştirir. **Tedavi hastalıktan riskli.**
+>    ⚪ **`npm dedupe` HÂLÂ YAPILMAYACAK:** ölçülmüştü (`--dry-run`): 20
+>    ekliyor, 18 siliyor, 16 değiştiriyor — `@react-native/codegen`,
+>    `hermes-parser`, `babel-preset-expo` dahil, yani doğrulanmış ağacı build
+>    zinciri seviyesinde değiştirir. **Tedavi hastalıktan riskli.**
 >
 > 1. **`fingerprint` `runtimeVersion`'a dönüş** (Dağıtım §9). `.fingerprintignore`
 >    hazır ve kanıtlı (Fark 1); kalan iş **Fark 2'nin bir build ile teşhisi**.
