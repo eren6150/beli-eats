@@ -3879,6 +3879,13 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > 3. **GitHub repo adı → GitHub Pages URL → Supabase Site URL.** Repo yeniden
 >    adlandırılırsa onay maili iniş sayfası kırılır; ikisi **aynı oturumda**
 >    yapılmalı.
+>    ⚠️ **AYNI BAĞ ARTIK GİZLİLİK METNİ İÇİN DE GEÇERLİ (2026-08-20):**
+>    `docs/gizlilik.html` de aynı Pages URL'inden yayınlanıyor. Repo adı
+>    değişirse **iki sayfa birden** kırılır ve gizlilik metninin bağlantısı
+>    mağazaya/uygulamaya verilmiş olabilir. Rebrand turunda kontrol listesi:
+>    Site URL · gizlilik metni URL'i · varsa Play Store'daki gizlilik bağlantısı.
+>    ⚠️ Ayrıca `docs/index.html` HÂLÂ ESKİ marka yeşilini (`#22c55e`) kullanıyor,
+>    `gizlilik.html` ise güncel zeytini — **ikisi rebrand turunda hizalanmalı**.
 >
 > **Panel işlerinin sırası:** EAS projesi yeniden adlandır → SHA-1'i al →
 > Google Cloud'a **yeni paketi EKLE** (eskisini SİLME) → Supabase'e **yeni
@@ -4429,6 +4436,23 @@ her biri bir öncekinin üstüne biniyor:
     iki hesapla ve gerçek APK'da doğrulandı). Kullanıcı başkasının
     fotoğrafını uzun basıp bildirebiliyor, moderasyon panelden yapılıyor,
     gizlenen fotoğraf yükleyicisinde "Gizlendi" etiketiyle duruyor.
+  - ✅ **Gizlilik metni** — `docs/gizlilik.html` (2026-08-20). Kademe 2'nin
+    koşulu olarak listelenmemişti ama bucket'ın public olması ve hesap
+    silmenin öksüz dosya bırakabilmesi **yazılı olarak açıklanmak
+    zorundaydı**; Play Store da istiyor. Envanter şemadan ve RLS
+    politikalarından çıkarıldı, tahminle değil.
+    🔴 **Metnin en sert maddesi ürün kararını da değiştirdi:** `diary_entries`
+    migration 009'da bilinçli olarak KAPALI tasarlanmıştı ("en kişisel veri"),
+    migration 015 sosyal akış için onu HERKESE AÇTI ve kullanıcı bunu
+    hiçbir yerde görmüyordu. Metinle **aynı turda** `DiaryEntrySheet`'in not
+    alanına "Notun profilinde herkese açık görünür" ipucu eklendi — metin tek
+    başına, sahada var olmayan bir farkındalığı varsayardı.
+    ⚠️ İKİ YER TUTUCU açık: `[İLETİŞİM E-POSTASI]` ve rebrand sonrası
+    uygulama adı. Yayına almadan önce doldurulmalı.
+    ⚠️ **Öksüz fotoğraf sorunu KABUL EDİLDİ, düzeltilmedi** (kullanıcı kararı,
+    2026-08-20): `delete-account` Storage hatasında silmeyi bloklamıyor, yani
+    dosya erişilebilir kalabiliyor. Metin bunu dürüstçe yazıyor. Retry/kuyruk
+    mekanizması ölçek büyüyünce yeniden değerlendirilecek.
   - ⬜ **Kendi alan adı** — SPF/DKIM olmadan onay mailleri spam'e düşebilir.
     Faz 4'le birleşiyor: marka adı kararlaşınca alan adı alınır.
     **Kademe 2'nin TEK kalan koşulu bu.**

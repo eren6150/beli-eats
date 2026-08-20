@@ -425,6 +425,25 @@ export default function DiaryEntrySheet({
                 multiline
                 textAlignVertical="top"
               />
+              {/**
+                * ⚠️ GÖRÜNÜRLÜK UYARISI — süs değil, DÜZELTME.
+                *
+                * `diary_entries` migration 009'da bilinçli olarak KAPALI
+                * tasarlanmıştı (SELECT'te sahiplik istiyordu) ve gerekçesi
+                * şuydu: "`note` bugüne kadarki en kişisel veri; sızmış bir notu
+                * geri almak mümkün değil." **Migration 015 o kararı GERİ ALDI**
+                * — sosyal akış için günlük herkese açıldı.
+                *
+                * Yani not artık HERKESE AÇIK ama kullanıcı bunu yazarken
+                * görmüyordu. Gizlilik metnine yazmak tek başına yetmez: metin,
+                * sahada var olmayan bir farkındalığı varsayardı.
+                *
+                * `placeholder`'a EKLENMEDİ: kullanıcı yazmaya başlayınca
+                * kaybolur, oysa bilginin en çok gerektiği an tam o an.
+                */}
+              <Text style={styles.noteVisibility}>
+                Notun profilinde herkese açık görünür.
+              </Text>
 
               {/* ── Fotoğraflar (yalnızca EKLEME modunda) ──
                   Gerekçe `photos` state'inin başında. */}
@@ -564,6 +583,16 @@ const styles = StyleSheet.create({
     ...Type.micro,
     color: Colors.textMuted,
     fontVariant: ['tabular-nums'],
+  },
+  /**
+   * TEK SATIR ve `micro` — bilinçli olarak en küçük dikey maliyet.
+   * Bu sheet'in yerleşimi yazı tipi ölçeğine DUYARLI (`maxHeight: 85%` + sabit
+   * footer); her eklenen satır büyük ölçekte footer'ı sıkıştırma riski taşıyor.
+   */
+  noteVisibility: {
+    ...Type.micro,
+    color: Colors.textMuted,
+    marginTop: Spacing.xs,
   },
 
   dateButton: {

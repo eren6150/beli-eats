@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Gizlilik Politikası — Beli Eats</title>
+<!--
+  ────────────────────────────────────────────────────────────────────────────
+  GİZLİLİK POLİTİKASI — BAŞLANGIÇ TASLAĞI
+
+  ⚠️ HUKUKİ İNCELEMEDEN GEÇMEDİ. Bu metin, uygulamanın ŞEMASINDAN ve
+  KODUNDAN çıkarılmış bir envantere dayanıyor (RLS politikaları tek tek
+  okundu). Teknik olarak doğru; hukuki olarak yeterli olduğu iddia EDİLMİYOR.
+  Davetli çevreye açılmadan önce gözden geçirilmeli.
+
+  ⚠️ index.html'in aksine "noindex" YOK — gizlilik metninin bulunabilir olması
+  gerekiyor (Play Store ve kullanıcılar için).
+
+  ⚠️ MARKA RENKLERİ theme.ts'ten BİREBİR (zeytin ramp'i, 2026-08-13 görsel
+  kimlik turu). docs/index.html HÂLÂ ESKİ yeşili (#22c55e) kullanıyor ve
+  bayat — rebrand turunda ikisi birlikte güncellenmeli.
+
+  ⚠️ REBRAND BAĞIMLILIĞI: bu sayfanın URL'i GitHub repo adına bağlı
+  (kullanici.github.io/REPO/gizlilik.html). Repo yeniden adlandırılırsa URL
+  KIRILIR ve uygulamadan/mağazadan verilen bağlantı ölür.
+
+  ⚠️ İKİ YER TUTUCU var, yayına almadan önce doldurulmalı:
+  [İLETİŞİM E-POSTASI] ve (rebrand sonrası) uygulama adı.
+
+  BAĞIMLILIK YOK: tek dosya, harici font/script/stil yok.
+  ────────────────────────────────────────────────────────────────────────────
+-->
+<style>
+  :root {
+    --brand: #5F7527;
+    --brand-strong: #506520;
+    --brand-subtle: #EBEFE1;
+    --canvas: #F9F8F5;
+    --surface: #FFFFFF;
+    --text: #111827;
+    --text-soft: #4B5563;
+    --text-muted: #6B7280;
+    --border: #E5E7EB;
+    --warn-bg: #FEF9C3;
+    --warn-border: #FDE68A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 20px 64px;
+    background: var(--canvas);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 28px;
+  }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 4px; }
+  h2 {
+    font-size: 19px;
+    margin: 36px 0 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+  h2:first-of-type { border-top: 0; padding-top: 0; }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p, li { color: var(--text-soft); }
+  .updated { color: var(--text-muted); font-size: 14px; margin: 0 0 8px; }
+  .lede {
+    background: var(--brand-subtle);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 20px 0 0;
+  }
+  .lede p { color: var(--text); margin: 0; }
+  .note {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 18px 0;
+  }
+  .note p { color: var(--text); margin: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text); font-weight: 600; }
+  td { color: var(--text-soft); }
+  .wrap { overflow-x: auto; }
+  ul { padding-left: 20px; }
+  li { margin: 5px 0; }
+  code {
+    background: var(--canvas);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  footer {
+    max-width: 720px;
+    margin: 20px auto 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+  }
+  a { color: var(--brand-strong); }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>Gizlilik Politikası</h1>
+  <p class="updated">Son güncelleme: 20 Ağustos 2026</p>
+
+  <div class="lede">
+    <p>
+      Bu metin <strong>Beli Eats</strong> uygulamasının hangi verileri
+      topladığını, bu verilerin <strong>kimlere görünür olduğunu</strong> ve
+      hesabını sildiğinde ne olduğunu anlatır. Uygulama şu anda küçük bir test
+      çevresinde kullanılıyor.
+    </p>
+  </div>
+
+  <div class="note">
+    <p>
+      ⚠️ <strong>Önce en önemlisi:</strong> Beli Eats'te paylaştığın içeriklerin
+      neredeyse tamamı <strong>uygulamadaki herkese açıktır</strong> — puanların,
+      yorumların, listelerin, <strong>ziyaret notların</strong> ve fotoğrafların
+      dahil. Seni takip etmeyen kullanıcılar da bunları görebilir. Bugün
+      uygulamada “yalnızca ben görebileyim” diye bir seçenek <em>yoktur</em>.
+    </p>
+  </div>
+
+  <h2>1. Hangi verileri topluyoruz</h2>
+
+  <div class="wrap">
+  <table>
+    <tr><th>Veri</th><th>Nereden geliyor</th></tr>
+    <tr><td>E-posta adresi ve şifre</td><td>Kayıt olurken. Şifre şifrelenmiş olarak saklanır, biz düz metnini göremeyiz.</td></tr>
+    <tr><td>Kullanıcı adı, ad, “hakkında” metni, profil görseli</td><td>Kayıt ve profil düzenleme</td></tr>
+    <tr><td>Puanların ve yorumların</td><td>Bir mekana puan verdiğinde</td></tr>
+    <tr><td>Ziyaretlerin: tarih, puan ve <strong>not</strong></td><td>“Ziyaret Ekle” ile</td></tr>
+    <tr><td>Listelerin ve içerikleri</td><td>Liste oluşturduğunda</td></tr>
+    <tr><td>Fotoğrafların</td><td>Yüklediğinde (her fotoğraf iki boyutta saklanır)</td></tr>
+    <tr><td>Takip ettiklerin ve seni takip edenler</td><td>Takip ettiğinde</td></tr>
+    <tr><td>Beğenilerin</td><td>Bir ziyareti beğendiğinde</td></tr>
+    <tr><td>Şikayet kayıtların</td><td>Bir fotoğrafı bildirdiğinde (kimin bildirdiği kaydedilir)</td></tr>
+    <tr><td>Arama geçmişin (son 10 arama)</td><td>Arama yaptığında — <strong>yalnızca kendi telefonunda saklanır</strong>, sunucuya gönderilmez</td></tr>
+  </table>
+  </div>
+
+  <h3>Konumun</h3>
+  <p>
+    Konum iznini verirsen, konumun arama sonuçlarını <strong>yakınındaki yerlere
+    öncelik vermek</strong> için kullanılır.
+  </p>
+  <ul>
+    <li><strong>Konumunu veritabanımızda saklamıyoruz.</strong></li>
+    <li>Ancak arama yaptığında konumun, sonuçları yakınlaştırmak amacıyla
+      <strong>Google’a iletilir</strong> (aşağıda “Üçüncü taraflar”).</li>
+    <li>İzin vermezsen uygulama çalışmaya devam eder; aramalar varsayılan olarak
+      Ankara çevresine göre sıralanır.</li>
+  </ul>
+  <p>
+    Puanladığın mekanların koordinatları saklanır — bunlar <em>mekanın</em>
+    konumudur, senin konumun değil.
+  </p>
+
+  <h2>2. Bu veriler kime görünür</h2>
+
+  <div class="wrap">
+  <table>
+    <tr><th>Veri</th><th>Kim görebilir</th></tr>
+    <tr><td>Profilin (kullanıcı adı, ad, hakkında, görsel)</td><td>Uygulamadaki herkes</td></tr>
+    <tr><td>Puanların ve yorumların</td><td>Uygulamadaki herkes</td></tr>
+    <tr><td><strong>Ziyaret notların</strong></td><td><strong>Uygulamadaki herkes</strong></td></tr>
+    <tr><td>Listelerin</td><td>Uygulamadaki herkes</td></tr>
+    <tr><td>Fotoğrafların</td><td>Uygulamadaki herkes — <strong>ve doğrudan bağlantıyı bilen internetteki herkes</strong> (bkz. bölüm 3)</td></tr>
+    <tr><td>Takip ilişkilerin ve beğenilerin</td><td>Uygulamadaki herkes</td></tr>
+    <tr><td>E-posta adresin</td><td><strong>Yalnızca sen ve biz.</strong> Diğer kullanıcılara gösterilmez.</td></tr>
+    <tr><td>Bir fotoğrafı şikayet ettiğin</td><td><strong>Yalnızca biz.</strong> Şikayet ettiğin kişi kim olduğunu göremez.</td></tr>
+    <tr><td>Arama geçmişin</td><td>Yalnızca sen (telefonunda kalır)</td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <p>
+      ⚠️ <strong>Ziyaret notları hakkında:</strong> Notlar başlangıçta yalnızca
+      sana görünecek şekilde tasarlanmıştı. Takip ettiğin kişilerin
+      paylaşımlarını gösteren <strong>aktivite akışı</strong> eklendiğinde bu
+      değişti ve notlar herkese açık hale geldi. Bir ziyarete not yazarken
+      <strong>bunu okuyabilecek kişilerin sayısının sınırlı olmadığını</strong>
+      varsay.
+    </p>
+  </div>
+
+  <h3>Kullanıcı adın e-posta adresini ele verebilir</h3>
+  <p>
+    Kayıt olurken kullanıcı adı seçmezsen, kullanıcı adın <strong>e-posta
+    adresinin <code>@</code> işaretinden önceki kısmından</strong> üretilir.
+    Kullanıcı adları herkese açık olduğu için bu, e-postanın bir bölümünü
+    dolaylı olarak görünür kılabilir. Dilediğin zaman <strong>Profili
+    Düzenle</strong> ekranından değiştirebilirsin.
+  </p>
+
+  <h2>3. Fotoğraflar — açıkça bilmen gerekenler</h2>
+  <p>
+    Fotoğraflar, <strong>bağlantısı olan herkesin erişebileceği</strong> bir
+    depolama alanında tutuluyor. Bu, uygulamanın fotoğrafları hızlı göstermesini
+    sağlıyor ama üç önemli sonucu var:
+  </p>
+  <ul>
+    <li>
+      <strong>Bir fotoğrafın “gizlenmesi” onu internetten kaldırmaz.</strong>
+      Şikayet üzerine gizlenen fotoğraf uygulamada görünmez olur, ancak doğrudan
+      bağlantısını bilen biri erişmeye devam edebilir.
+    </li>
+    <li>
+      <strong>Hesabını silmek de her dosyanın kaldırılacağını garanti
+      etmez.</strong> Hesap silinirken fotoğraf dosyalarını da silmeye
+      çalışıyoruz; bu adım teknik bir nedenle başarısız olursa hesabın yine de
+      silinir ve bazı dosyalar erişilebilir kalabilir. Bunu biliyoruz ve
+      dürüstçe yazıyoruz.
+    </li>
+    <li>
+      <strong>Paylaştığın bir fotoğraf bağlantısı kalıcıdır.</strong>
+    </li>
+  </ul>
+  <p>
+    Bu nedenle: başkalarının izni olmadan yüzlerinin göründüğü fotoğrafları,
+    kimlik veya adres gibi kişisel bilgi içeren görselleri ya da herkese açık
+    olmasını istemeyeceğin hiçbir kareyi yükleme.
+  </p>
+
+  <h2>4. Verileri kimlerle paylaşıyoruz</h2>
+  <p>
+    Verilerini <strong>satmıyoruz</strong> ve reklam amacıyla kimseyle
+    paylaşmıyoruz. Uygulamanın çalışması için şu hizmetleri kullanıyoruz:
+  </p>
+
+  <div class="wrap">
+  <table>
+    <tr><th>Hizmet</th><th>Ne için</th><th>Ne iletiliyor</th></tr>
+    <tr><td>Supabase</td><td>Veritabanı, hesaplar, fotoğraf depolama</td><td>Yukarıdaki verilerin tamamı</td></tr>
+    <tr><td>Google Places</td><td>Mekan arama ve mekan bilgileri</td><td>Arama metni ve (izin verdiysen) konumun</td></tr>
+    <tr><td>SendGrid</td><td>Onay ve şifre sıfırlama e-postaları</td><td>E-posta adresin</td></tr>
+    <tr><td>hCaptcha</td><td>Otomatik kayıt/giriş denemelerini engellemek</td><td>Giriş ve kayıt sırasında cihaz sinyalleri</td></tr>
+    <tr><td>Expo</td><td>Uygulama güncellemeleri</td><td>IP adresi ve temel cihaz bilgisi</td></tr>
+  </table>
+  </div>
+
+  <p>
+    Bu hizmetlerin her birinin kendi gizlilik politikası vardır ve verini kendi
+    kuralları çerçevesinde işlerler.
+  </p>
+
+  <h2>5. Hesabını silmek</h2>
+  <p>
+    Hesabını uygulama içinden silebilirsin:
+    <strong>Profil → Profili Düzenle → Tehlikeli bölge → Hesabımı sil</strong>.
+    Onaylamak için kullanıcı adını yazman istenir. <strong>Bu işlem geri
+    alınamaz.</strong>
+  </p>
+
+  <h3>Silinenler</h3>
+  <ul>
+    <li>Hesabın ve giriş bilgilerin</li>
+    <li>Profilin</li>
+    <li>Puanların ve yorumların</li>
+    <li>Ziyaretlerin ve notların</li>
+    <li>Listelerin ve içerikleri</li>
+    <li>Fotoğraf kayıtların</li>
+    <li>Takip ilişkilerin (iki yönde de)</li>
+    <li>Beğenilerin ve şikayet kayıtların</li>
+  </ul>
+
+  <h3>Silinmeyebilecekler</h3>
+  <ul>
+    <li>
+      <strong>Fotoğraf dosyalarının kendisi</strong>, silme sırasında teknik bir
+      sorun olursa (bkz. bölüm 3).
+    </li>
+    <li>
+      <strong>Telefonundaki arama geçmişin</strong> — bu veri sunucuda değil
+      cihazında. Uygulamayı kaldırdığında silinir.
+    </li>
+    <li>
+      Yukarıdaki hizmetlerin kendi sistem kayıtları, kendi saklama süreleri
+      boyunca.
+    </li>
+  </ul>
+
+  <h2>6. Verileri ne kadar saklıyoruz</h2>
+  <ul>
+    <li><strong>Hesap verilerin:</strong> sen silene kadar.</li>
+    <li><strong>Mekan bilgileri:</strong> Google’dan alınan mekan bilgileri en
+      fazla 30 gün saklanır, sonra yenilenir. Bu veri sana ait değildir.</li>
+    <li><strong>Arama geçmişin:</strong> yalnızca son 10 arama, telefonunda.</li>
+  </ul>
+
+  <h2>7. Hakların</h2>
+  <ul>
+    <li><strong>Görme ve düzeltme:</strong> profil bilgilerini, puanlarını,
+      ziyaretlerini ve listelerini uygulama içinden görebilir ve
+      düzenleyebilirsin.</li>
+    <li><strong>Silme:</strong> tek tek içerikleri veya hesabının tamamını
+      silebilirsin (bölüm 5).</li>
+    <li><strong>İtiraz ve soru:</strong> aşağıdaki adresten bize yazabilirsin.</li>
+  </ul>
+
+  <h2>8. Çocuklar</h2>
+  <p>
+    Beli Eats 13 yaşın altındaki kullanıcılar için tasarlanmamıştır ve bilerek
+    bu yaş grubundan veri toplamayız.
+  </p>
+
+  <h2>9. Güvenlik</h2>
+  <p>
+    Bağlantılar şifrelenir, şifreler geri döndürülemez biçimde saklanır ve
+    veritabanı kuralları herkesin yalnızca kendi verisini değiştirebilmesini
+    sağlar. Bununla birlikte <strong>hiçbir sistem tamamen güvenli
+    değildir</strong> — özellikle bölüm 2 ve 3'te anlatılan görünürlük
+    kurallarını göz önünde bulundur.
+  </p>
+
+  <h2>10. Bu metin değişirse</h2>
+  <p>
+    Politikayı güncellersek bu sayfadaki “son güncelleme” tarihini değiştiririz.
+    Önemli bir değişiklik olursa uygulama içinde bildiririz.
+  </p>
+
+  <h2>11. İletişim</h2>
+  <p>
+    Soruların veya verinle ilgili bir talebin için:
+    <strong>[İLETİŞİM E-POSTASI]</strong>
+  </p>
+
+  <div class="note">
+    <p>
+      ℹ️ <strong>Şeffaflık notu:</strong> Bu metin, uygulamanın nasıl çalıştığına
+      dair teknik bir incelemeye dayanılarak hazırlanmış bir <strong>başlangıç
+      sürümüdür</strong> ve bir hukuk uzmanı tarafından gözden geçirilmemiştir.
+      Amacı, olduğundan iyi görünmek değil <strong>ne olup bittiğini açıkça
+      anlatmaktır</strong>. Eksik veya yanlış bulduğun bir yer olursa bize yaz.
+    </p>
+  </div>
+
+</main>
+
+<footer>Beli Eats</footer>
+</body>
+</html>
