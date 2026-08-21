@@ -22,6 +22,7 @@ haritası** yön veriyor (aşağıda, dalgalar hâlinde).
 | 1 | `MapScreen` → `ErrorBanner` | ❌ **yapılmayacak** |
 | 2 | **Gizlilik metni** + uygulama içi bağlantı + günlük ipucu | `3e7c51b` · `bca00e3` |
 | 3 | **Build 3** — üç native yama (`expo-updates` güvenlik) | `7c444e2` · `7000403` |
+| 4 | **Kullanıcı engelleme** (migration 024 + istemci) | `0cbba9f` |
 
 **Üçü tek OTA'da gitti ve cihazda doğrulandı** (A: şifre sıfırlama + regresyon,
 B: fotoğraf şeridi + iç içe Modal, C: `photo_reference` teyidi).
@@ -41,11 +42,16 @@ taraması temiz çıktı ve `platestamp.com` **tescilsiz** (RDAP ile doğruland�
 Rebrand **bilinçli olarak ertelendi** — kullanıcı "isme geçelim" diyene kadar
 başlamıyoruz. Plan ve üç gizli bağ: Bilinen Açık İşler → **Rebrand**.
 
-⏭️ **SIRADA: Dalga 4 — kullanıcı engelleme.** OTA ile gidebilir (migration +
-RLS + arayüz), ama maliyeti tabloda değil `blocks`'tan haberdar edilmesi
-gereken HER OKUMA YOLUNDA. Gizlilik metninin envanteri (Dalga 2) tam olarak
-o listeyi çıkardığı için sıra doğru kuruldu.
-🚩 `blocks` **DÖRDÜNCÜ ARA TABLO** olacak → PGRST201 kuralı geçerli.
+⏭️ **SIRADA: kullanıcı arama.** Dalga 4 bitince ortaya çıkan gözlem: bugün
+birinin profiline ulaşmanın tek yolu ona RASTLAMAK, ada göre arama yok.
+🔑 Bu, Kademe 2'nin (davetli çevre) **fiili ön koşulu** — davet edilen 10 kişi
+birbirini bulamazsa sosyal katman ölü doğar. Küçük-orta iş, isimden bağımsız.
+🔴 `useBlocks` filtresi oraya DA gerekli, yoksa kapattığımız altı yolun yanına
+yedincisi açılır. Detay: Bilinen Açık İşler → **KULLANICI ARAMA**.
+
+⏸️ **Dalga 5 (belirsizlik giderme)** duruyor: `ProfileScreen` kaydırmalı sekme
+(kütüphane araştırması) · PKCE polyfill (⚠️ `expo-crypto` NATIVE, build ister
+— liste bir dönem yanlış sınıflandırıyordu) · `username` 100→30.
 
 ---
 
@@ -1876,6 +1882,82 @@ teşhis için gereken kısımdı.
   > `'profiles!diary_entries_user_id_fkey', 'profiles!entry_likes'`
 - Teşhis yardımcısı **geçiciydi ve düzeltmeyle birlikte geri çekildi**; dosya
   tek `console.error` satırına döndü. Tekrar gerekirse deseni bu bölümden kur.
+
+### Kullanıcı engelleme (migration 024, 2026-08-20, sahada DOĞRULANDI)
+`UserProfile`'da uzun basış → onay → içerik iki yönde gizleniyor, takipler
+siliniyor, etkileşim kapanıyor. Engeli kaldırma: `EditProfile` →
+**Engellediklerin**.
+
+#### 🔑 EN ÖNEMLİ KARAR: BU BİR GÜVENLİK SINIRI DEĞİL
+Park kaydı görünürlüğün de RLS'e konacağını varsayıyordu. Teşhis bunu
+yalanladı: sosyal tabloların **hepsi** `select using (true)` ve anon key JS
+bundle'ının içinde — engellenen biri uygulamayı hiç açmadan, düz bir REST
+çağrısıyla veriyi okuyabiliyor.
+
+Sonuç bölüşümü:
+
+| Katman | Nerede | Neden |
+|---|---|---|
+| **Görünürlük** | İstemci (`useBlocks`) | Zaten zorlanamıyor; RLS'e koymak her okumaya alt sorgu bindirip **sahte güvence** vermek olurdu |
+| **Etkileşim** | RLS (`as restrictive`) | Takip ve beğeni gerçekten zorlanabiliyor |
+
+Gizlilik metni bunun zorlanamadığını açıkça yazıyor — gizleyemediğimiz bir
+şeyi gizliyormuş gibi yapmıyoruz.
+
+#### ⚠️ `as restrictive` — projede İLK KEZ
+Postgres permissive politikaları OR'luyor ve migration 019 bunu bir AVANTAJ
+olarak kullanmıştı ("değiştirme, ikincisini EKLE"). Burada istenen
+**daraltmak** ve permissive bir politika eklemek tam tersini yapardı.
+`as restrictive` AND'leniyor: mevcut politikaya hiç dokunmadan koşul
+ekleniyor, `drop` yok, yani migration yarıda kalsa bile `follows` bir an
+korumasız kalmıyor.
+
+#### 🔑 `is_blocked_pair()` `security definer` — sessiz bir tuzağı kapatıyor
+Fonksiyon RLS politikalarının İÇİNDEN çağrılıyor ve Postgres politika
+ifadesindeki alt sorgulara da RLS uyguluyor. Definer olmasaydı `blocks`
+üzerindeki SELECT politikası zorlamanın kapsamını sessizce belirlerdi; o
+politika bir gün daraltılırsa engelleme **hiç hata vermeden** çalışmaz hale
+gelirdi (migration 019'un "RLS reddi sessiz 0 satır" dersinin bir başka yüzü).
+
+#### `blocks` SELECT iki tarafa da açık — bilinçli takas
+Simetrik gizleme istemcide yapıldığı için, engellenen kişinin istemcisi
+engelleyeni **gizleyebilmek üzere** o satırı okumak zorunda. Bedeli:
+engellenen kişi sorgulayarak engellendiğini anlayabilir. Kabul edildi, çünkü
+zaten anlayacak — profil ona "Bulunamadı" dönüyor.
+
+#### Filtre TÜRETİLMİŞ, fetch anında DEĞİL
+`.not(...)` ile sorguya gömmek yarışı çözmüyor: engel listesi asenkron ve
+sorgu ondan önce dönerse engellenen içerik **bir kare** görünür. `useMemo`
+ile liste geç gelse bile kendiliğinden yeniden süzülüyor.
+- **`ready` AYRI bir alan:** `blocked` boş olmak "engel yok" demek DEĞİL,
+  "henüz bilmiyorum" da olabilir. `useAuth`'un Context'e çevrilme
+  gerekçesinin aynısı, ama semptomu daha kötü — gizlenmesi gereken içerik
+  görünüyor.
+- **`useBlocks` hata hâlinde kümeleri KORUYOR:** geçici bir ağ hatasında
+  sıfırlamak, engellenen içeriğin ekrana düşmesi demekti. Fazladan gizlemek
+  az zararlı; eksik gizlemek asıl kusur.
+- **`HomeScreen` istisna:** filtre SAYIMDAN ÖNCE, çünkü sonra süzmek "ilk 5"
+  dilimini engelliyle doldurup ekrana 4 kişi çıkarırdı.
+- **`usePlaceRankings` istisna:** orada liste değil ARAMA var; engelliye
+  `null` dönüyor ve çağıran bunu "puanı yok" ile aynı dalda karşılıyor.
+
+#### Ürün kararları
+- **Simetrik** (iki yönlü gizleme) · **engelleme iki yöndeki takibi de siler**
+  · engellenen profil **"Bulunamadı"** (boş profil DEĞİL — daha az bilgi
+  sızdırıyor) · engeli kaldırmak **takibi geri getirmiyor** ("hangi takip geri
+  gelmeli" migration 011'in reddettiği cevapsız soru).
+- **`BlockedUsersScreen` yalnızca `blockedByMe` listeliyor.** Beni engelleyeni
+  göstermek, tıklanabilir görünüp sessizce 0 satır silen bir buton olurdu
+  (024'ün DELETE politikası yalnızca `blocker_id`'ye izin veriyor).
+- **`photo_reports` bilinçli olarak kilitlenmedi:** şikayet bir moderasyon
+  kanalı; engellenen birinin uygunsuz içerik bildirmesini engellemek,
+  korumak istediğimiz kişiyi korumasız bırakır.
+
+#### 🚩 PGRST201 — dördüncü ara tablo, kontrol yapıldı
+`grep -rn -A6 "from('profiles')" src/ | grep "profiles("` → **TEMİZ**.
+Daha güçlü kanıt: `follows` ZATEN profiles↔profiles ara tablosu ve bugün
+çalışıyor, yani bu şeklin mevcut sorguları kırmadığı sahada ispatlı.
+⚠️ İzlenecek tek yer `HomeScreen`'in ayrıştırılmamış `profiles(...)` gömmesi.
 
 ### Takipçi çıkarma (migration 019, 2026-08-11, sahada DOĞRULANDI)
 Takipçi listesinde uzun basış → onay → o kişi artık seni takip etmiyor.
@@ -3782,20 +3864,20 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   `blockedPermissions`'a koyuyor — kütüphane sürümü değişse bile mikrofon
 >   izni sızmıyor. Yanında iOS izin metinleri Türkçe olarak yerleşiyor.
 >
-> ### 📦 PARK EDİLDİ: kullanıcı engelleme (2026-08-11)
-> **Takipçi çıkarma kısmı KAPANDI** (migration 019, sahada doğrulandı) —
-> detay: Mimari Notlar → **Takipçi çıkarma**. Kalan iş engelleme.
-> - **BUILD GEREKMİYOR** — migration + RLS + arayüz, OTA ile gider.
-> - **Maliyeti tabloda değil**, `blocks`'tan haberdar edilmesi gereken **her
->   okuma yolunda**: aktivite akışı, profil, takipçi listeleri, beğeniler,
->   fotoğraflar, leaderboard. Artı ürün kararları (engellenen profili
->   görebilir mi · mevcut takip ne olacak · çift taraflı mı).
-> - 🚩 **`blocks` DÖRDÜNCÜ ARA TABLO olur** (`follows`, `entry_likes`,
->   `photo_reports` ile birlikte): iki FK, ikisi de `profiles`'a, bileşik PK —
->   tanıma birebir uyuyor. PGRST201 kuralı geçerli, ayrıştırma **aynı diff'te**.
-> - ⚠️ **Takipçi çıkarma engellemenin YERİNE GEÇMİYOR** ve arayüz bunu açıkça
->   söylüyor ("Dilerse tekrar takip edebilir"). Engelleme geldiğinde o metin
->   yeniden değerlendirilmeli.
+> ### ✅ KAPANDI: kullanıcı engelleme (2026-08-20, migration 024, sahada)
+> Detay ve mimari kararlar: Mimari Notlar → **Kullanıcı engelleme**.
+> Doğrulandı: engellenen profile ulaşılamıyor · içeriği hiçbir yüzeyde
+> görünmüyor · "Kaldır" ile içerik geri geliyor.
+>
+> 🔑 **Teşhis, işin şeklini değiştirdi.** Park kaydı görünürlüğün de RLS'e
+> konacağını varsayıyordu; ölçüm bunu yalanladı: sosyal tabloların hepsi
+> `using (true)` ve anon key bundle'da, yani engellenen biri veriyi `curl`
+> ile zaten okuyabiliyor. **RLS'e görünürlük koymak sahte bir güvence satın
+> almak olurdu.** Bölüşüm: görünürlük İSTEMCİDE, etkileşim (takip/beğeni)
+> RLS'te — o gerçekten zorlanabiliyor.
+>
+> ⚠️ **Takipçi çıkarma metni HÂLÂ doğru** ("Dilerse tekrar takip edebilir") —
+> çıkarma ile engelleme ayrı eylemler ve ikisi de duruyor.
 >
 > ### ✅ KAPANDI: fotoğrafların incelemeye bağlanması (2026-08-13)
 > Aşağıdaki park kaydı **tarihsel**; iş bitti ve sahada. Sonuç ilk istekten
@@ -4073,7 +4155,37 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   ⚠️ **Aşama 4 OTA DEĞİL panel işi ve ZORUNLU:** anahtarı Google Console'da
 >   döndürmek. Sahadaki APK'ya gömülü anahtar aksi hâlde yaşamaya devam eder ve
 >   o anahtar ayrıca bir sohbet oturumunda düz metin paylaşıldı.
+> - 🔴 **KULLANICI ARAMA — YOK ve bu Kademe 2'nin FİİLİ ÖN KOŞULU**
+>   (gözlem: 2026-08-20). Bugün birinin profiline ulaşmanın tek yolu aktivite
+>   akışında ya da mekan sayfasında ona **rastlamak**; ada göre arama hiçbir
+>   yerde yok.
+>   - **Boyut: küçük-orta.** Migration YOK, build YOK. `SearchScreen` zaten
+>     var ve `SegmentedTabs` primitive'i hazır — "Mekanlar / Kişiler"
+>     segmenti + düz bir `profiles` sorgusu. İsimden BAĞIMSIZ.
+>   - 🔑 **Öncelik gerekçesi ölçek değil YAPI:** Kademe 2 "davetli çevre"
+>     demek ve davet edilen 10 kişi **birbirini bulamazsa** sosyal katman ölü
+>     doğar. Takip, akış, leaderboard — hepsi birinin birini bulabilmesine
+>     dayanıyor. Bu yüzden kalan tek Kademe 2 koşulu (alan adı) ile aynı
+>     rafta duruyor, "iyi olur" listesinde değil.
+>   - 🔴 **ENGELLEME BAĞI — atlanırsa sahada kırılır:** arama YENİ bir okuma
+>     yolu ve `useBlocks` filtresi ORAYA DA gerekli. Engellenen biri arama
+>     sonucunda çıkarsa, kapattığımız altı yolun yanına yedincisi açılmış
+>     olur. Aynı türetilmiş `useMemo` deseni kullanılmalı.
+>   - ⚠️ **Kendini sonuçlardan ele:** kullanıcı kendi profilini arama
+>     sonucunda görüp dokunursa `UserProfile`'a düşer, oysa `isSelf` orada
+>     takip butonunu gizliyor — kafa karıştırıcı bir yarım profil.
+>   - ⚠️ **İNDEKS NOTU:** `profiles.username`'in `unique` kısıtı bir btree
+>     indeksi yaratıyor ama `ilike '%q%'` (baştan joker) onu KULLANAMAZ. Bu
+>     ölçekte önemsiz; büyürse ya önek aramasına (`ilike 'q%'`) geçilmeli ya
+>     da `pg_trgm` indeksi açılmalı. Bugün eklemek kullanılmayan indeks
+>     olurdu (migration 009'un kararı).
+>   - ⚠️ **Gizlilik açısından YENİ bir açığa çıkarma DEĞİL:** profiller zaten
+>     `select using (true)` ve gizlilik metni "profilin herkese açık" diyor.
+>     Değişen tek şey pratik bulunabilirlik; metin güncellemesi gerekmiyor.
 > - **PKCE `plain` polyfill'i** (`expo-crypto`), düşük öncelik.
+>   ⚠️ CLAUDE.md bunu bir dönem "OTA ile gidebilir" diye listeliyordu ve bu
+>   YANLIŞ: `expo-crypto` NATIVE bir modül, yani build ister. Saf JS bir
+>   SHA-256 polyfill'i alternatif ama ek bağımlılık demek — karar verilmedi.
 > - ~~**Şifre sıfırlamadaki İKİNCİ captcha turunun gerekli olup olmadığını
 >   ölç**~~ → ✅ **ÖLÇÜLDÜ ve TUR KALDIRILDI (2026-08-19).** `/verify` captcha
 >   istemiyor (curl ile, uygulamaya dokunmadan doğrulandı). Detay: Mimari
