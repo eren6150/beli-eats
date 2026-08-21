@@ -1,4 +1,4 @@
-// Supabase Type Definitions for Beli Eats
+// Supabase Type Definitions for Platestamp
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
 

@@ -1,5 +1,5 @@
 /**
- * Beli Eats — Global Design System
+ * Platestamp — Global Design System
  *
  * İKİ KATMANLI YAPI:
  *

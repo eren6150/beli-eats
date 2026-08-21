@@ -206,7 +206,7 @@ export default function ForgotPasswordScreen() {
             <View style={styles.logoCircle}>
               <Icon name="restaurant" size={40} color={Colors.brandStrong} />
             </View>
-            <Text style={styles.appName}>Beli Eats</Text>
+            <Text style={styles.appName}>Platestamp</Text>
           </View>
 
           {sentToEmail ? (

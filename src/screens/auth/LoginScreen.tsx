@@ -67,7 +67,7 @@ export default function LoginScreen() {
                 renklendirilemiyor. Marka işareti Faz 4'te gelecek. */}
             <Icon name="restaurant" size={40} color={Colors.brandStrong} />
           </View>
-          <Text style={styles.appName}>Beli Eats</Text>
+          <Text style={styles.appName}>Platestamp</Text>
           <Text style={styles.tagline}>Yemeğin Letterboxd'ı</Text>
         </View>
 

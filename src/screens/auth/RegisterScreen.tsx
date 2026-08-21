@@ -184,7 +184,7 @@ export default function RegisterScreen() {
               {/* Emoji yerine Icon — LoginScreen ile aynı gerekçe ve boyut. */}
               <Icon name="restaurant" size={40} color={Colors.brandStrong} />
             </View>
-            <Text style={styles.appName}>Beli Eats</Text>
+            <Text style={styles.appName}>Platestamp</Text>
             <Text style={styles.tagline}>Lezzetleri keşfet, sırala, paylaş.</Text>
           </View>
 

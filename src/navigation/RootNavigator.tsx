@@ -44,7 +44,7 @@ function SplashScreen() {
       <View style={styles.logoCircle}>
         <Icon name="restaurant" size={40} color={Colors.brandStrong} />
       </View>
-      <Text style={styles.logoName}>Beli Eats</Text>
+      <Text style={styles.logoName}>Platestamp</Text>
       <Text style={styles.logoSub}>Yemeğin Letterboxd'ı</Text>
 
       {/* Skeleton shimmer placeholder */}
