@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>E-posta onaylandı — Beli Eats</title>
+<title>E-posta onaylandı — Platestamp</title>
 <meta name="robots" content="noindex" />
 <!--
   ────────────────────────────────────────────────────────────────────────────
@@ -16,27 +16,27 @@
   — hesap onaylanmış olmasına rağmen "kayıt olamadım" izlenimi veriyordu.
   Bu sayfa o inişi karşılıyor.
 
-  NEDEN UYGULAMAYA YÖNLENDİRMİYOR
-  Deep link (belieats://…) için app.json'a `scheme` eklemek gerekiyor; o NATIVE
-  bir alan, yani yeni bir build şart. Ayrıca uygulamada bağlantıyı karşılayan
-  kod da yok (`detectSessionInUrl: false` — React Native için doğru ayar, ama
-  token'ları elle ayrıştırıp setSession çağırmayı gerektiriyor). İkisi birden
-  "bir sonraki build'in paketi"nde duruyor. O gün geldiğinde bu sayfaya
-  "Uygulamayı aç" butonu eklenebilir.
+  ⚠️ AŞAĞIDAKİ GEREKÇE BAYATLADI (2026-08-21)
+  Bir dönem "deep link yok, o yüzden uygulamaya yönlendirmiyoruz" yazıyordu.
+  Deep link Build 1'de geldi ve sahada doğrulandı; scheme rebrand'de
+  `com.eren.platestamp` oldu. Onay maili artık uygulamayı DOĞRUDAN açıyor,
+  yani bu sayfa çoğu kullanıcının hiç görmediği bir yedek inişe dönüştü —
+  yalnızca bağlantı tarayıcıda açıldığında devreye giriyor.
+  İstenirse buraya "Uygulamayı aç" butonu eklenebilir; bugün gerek yok.
 
   BAĞIMLILIK YOK: tek dosya, harici font/script/stil yok. GitHub Pages'te
   olduğu gibi çalışıyor.
 
-  ⚠️ FAZ 4 (marka) geldiğinde bu sayfa da güncellenmeli: başlık, ad ve renkler
+  ✅ FAZ 4 (marka) 2026-08-21'de UYGULANDI: başlık, ad ve renkler
   theme.ts'teki değerlerin elle kopyalanmış hali.
   ────────────────────────────────────────────────────────────────────────────
 -->
 <style>
   /* Renkler theme.ts'ten birebir: brand / brandStrong / brandSubtle. */
   :root {
-    --brand: #22c55e;
-    --brand-strong: #16a34a;
-    --brand-subtle: #dcfce7;
+    --brand: #5F7527;
+    --brand-strong: #506520;
+    --brand-subtle: #EBEFE1;
     --canvas: #f9fafb;
     --surface: #ffffff;
     --border: #f3f4f6;
