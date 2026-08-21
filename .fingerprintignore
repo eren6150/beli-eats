@@ -27,6 +27,18 @@
 # ⚠️ Dosyanın kendi varlığı tabanı BOZMUYOR — `DEFAULT_IGNORE_PATHS`
 # zaten onu eliyor.
 #
+# ── 🔴 DESEN SÖZDİZİMİ — 2026-08-21'de BİR BUILD PATLATTI ───────────
+# İlk sürümde desenler `android/` ve `ios/` idi ve HİÇBİR ŞEYİ yok
+# saymıyorlardı. `isIgnoredPath()` ile ölçüldü:
+#     'android/'      → android/app/build.gradle  HASH'E GİRİYOR
+#     'android/**/*'  → android/app/build.gradle  yok sayılıyor
+# Varsayılan desenlerin hepsi `**/*` ile bitiyor; bu dosya bitmiyordu.
+# Yani Fark 1 hiç kapanmamıştı ve dosya fiilen BOŞTU.
+#
+# ⚠️ Bu dosya YORUMLARI AYIKLAMIYOR: `@expo/fingerprint` boş olmayan HER
+# satırı desen olarak ekliyor (Options.js:105-109). `#` satırları zararsız
+# çünkü hiçbir yola eşleşmiyorlar — ama bilinsin.
+#
 # ── FARK 2 — bu dosya ÇÖZMÜYOR, hâlâ teşhis edilmedi ────────────────
 # 7 `node_modules` dizininin `rncoreAutolinkingAndroid` hash'i de
 # ıraksıyordu ve hepsi New Architecture codegen kullanan RN
@@ -35,11 +47,29 @@
 # bu paketlerin İÇİNE dosya üretiyor. KANITLANMADI ve yerelde
 # kanıtlanamaz — doğrulamak prebuild + gradle, yani bir build gerektiriyor.
 #
+# 🔴 2026-08-21 ÖLÇÜMÜ HİPOTEZİ GÜÇLENDİRDİ: hash'i farklı çıkan paket
+# sayısı 7'den 10'a çıktı ve eklenenler (keyboard-controller, pager-view,
+# webview) tam da Build 1-2'de eklenen New Architecture codegen
+# kütüphaneleri. Ayrıca ONUNUN DA `node_modules/<paket>/android/` alt
+# dizini var — yani `**/android/**/*` deseni Fark 2'yi de kapsıyor
+# OLABİLİR. Kanıtlanmadı; varsayılanlar `**/android/build/**/*`'ı zaten
+# eliyor, codegen başka bir alt yola yazıyorsa tutar.
+#
+# 🔑 GELECEKTEKİ DENEMENİN İLK HAMLESİ (ölçüldü, 2026-08-21):
+# `android/**/*` PROJE KÖKÜNE bağlı ve `node_modules/<paket>/android/…`
+# yollarını KAPSAMIYOR — test edildi. Fark 2'yi denemek için desen
+# `**/android/**/*` olmalı.
+# ⚠️ Ama bu AGRESİF: node_modules'teki her `android/` alt ağacını eler,
+# yani bir native kütüphanenin gerçekten değişmesi de runtime'ı
+# döndürmez. Fingerprint'in varlık sebebini kısmen zayıflatıyor. Paket
+# sürümü değişimi `package-lock.json` üzerinden yine yakalanır; takas
+# bilinçli yapılmalı.
+#
 # 🔴 BU YÜZDEN BU DOSYA TEK BAŞINA YETMEYEBİLİR. Build "Configure
 # expo-updates" aşamasında yine düşerse sebep Fark 2'dir; geri dönüş
 # `app.config.js`'te politikayı `appVersion`'a çevirmek (tek satır) ve
 # bu dosyayı bırakmak — zararsız.
 # =====================================================================
 
-android/
-ios/
+android/**/*
+ios/**/*

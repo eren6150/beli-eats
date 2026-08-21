@@ -134,7 +134,24 @@ module.exports = ({ config }) => {
      * Geri dönüş tek satır: `{ policy: 'appVersion' }`. `.fingerprintignore`
      * bırakılabilir, zararsız.
      */
-    runtimeVersion: { policy: 'fingerprint' },
+    /**
+     * ⚠️ 2026-08-21: `fingerprint` DENENDİ ve rebrand build'ini PATLATTI
+     * (ikinci kez). `appVersion`'a geri alındı.
+     *
+     * Teşhis: `.fingerprintignore`'daki desenler HİÇBİR ŞEYİ yok
+     * saymıyordu (`android/` yerine `android/**` gerekiyor) — o dosya
+     * düzeltildi ve REPODA DURUYOR. Ama Fark 2 (node_modules'teki 10
+     * native paketin hash ıraksaması) hâlâ teşhis edilmedi.
+     *
+     * 🔑 "Bu build'e binsin, reinstall bedeli zaten ödeniyor" GEREKÇESİ
+     * YANLIŞTI: fingerprint'i sonra ayrı bir build'de yapmak yeniden
+     * kurulum GEREKTİRMİYOR — paket adı o zaman değişmeyeceği için APK
+     * üstüne kurulur. Yani "en ucuz an şimdi" argümanı baştan zayıftı ve
+     * yarı göçmüş bir rebrand durumunu uzatmaya değmedi.
+     *
+     * Sıradaki deneme için ilk hamle `.fingerprintignore`'un başında.
+     */
+    runtimeVersion: { policy: 'appVersion' },
 
     /**
      * Varsayılan davranış (açıkça yazılmadı çünkü Expo dokümanı ilan ediyor,
