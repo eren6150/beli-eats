@@ -68,7 +68,26 @@ module.exports = ({ config }) => {
     ...config,
     // Expo bu ikisini zorunlu tutuyor; taban app.json'dan geliyor.
     name: config.name ?? 'Platestamp',
-    slug: config.slug ?? 'platestamp',
+    /**
+     * ⚠️ SLUG BİLEREK `beli-eats` — MARKA ADIYLA EŞLEŞMİYOR, DÜZELTMEYİN.
+     *
+     * EAS'te bir `projectId` TEK bir slug'a kalıcı olarak bağlı ve bu bağ
+     * değiştirilemiyor. Panelde görünen "Display name" alanı gerçek slug
+     * DEĞİL, yalnızca kozmetik bir etiket — onu değiştirmek proje URL'ini
+     * (`/beli-eats/`) değiştirmiyor.
+     *
+     * `slug`'ı `platestamp` yapmak şu hatayı üretiyor ve build'i durduruyor:
+     *   "Slug for project identified by extra.eas.projectId does not match
+     *    the slug field"
+     *
+     * Tek alternatif YENİ bir EAS projesi açmaktı — o da yeni bir
+     * `projectId`, yani `updates.url` değişir ve **OTA kanalı kopar**.
+     * Sahadaki kurulumlar bir daha güncelleme alamaz. Kabul edilemez.
+     *
+     * Bedeli sıfır: slug kullanıcıya HİÇBİR YERDE görünmüyor. Görünen ad
+     * (`name`), paket adı, scheme ve ikon — hepsi Platestamp.
+     */
+    slug: config.slug ?? 'beli-eats',
 
     /**
      * `appVersion` — runtime = `version` alanı ("1.0.0"), yani yerelde ve

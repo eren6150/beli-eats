@@ -3957,6 +3957,20 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > → OTA) · `app.json`'daki `name` ve üç izin metni (**native → build**) ·
 > `theme.ts`/`types` başlıkları · `docs/index.html` · `package.json`.
 >
+> 🔴 **SLUG DEĞİŞTİRİLEMEDİ ve `beli-eats` OLARAK KALDI (2026-08-21).**
+> Plan slug'ı da `platestamp` yapmayı öngörüyordu; **EAS buna izin vermiyor.**
+> Bir `projectId` TEK bir slug'a kalıcı bağlı. Paneldeki "Display name" alanı
+> gerçek slug DEĞİL, kozmetik bir etiket — değiştirmek proje URL'ini
+> (`/beli-eats/`) değiştirmiyor. Uyuşmazlıkta build şu hatayla duruyor:
+> *"Slug for project identified by extra.eas.projectId does not match the
+> slug field"*.
+> Tek alternatif yeni bir EAS projesiydi → yeni `projectId` → `updates.url`
+> değişir → **OTA kanalı kopar**, sahadaki kurulumlar bir daha güncelleme
+> alamaz. Kabul edilemez.
+> ⚠️ **Bedeli sıfır** (slug kullanıcıya hiçbir yerde görünmüyor) ama
+> **gelecekte "düzeltilmeye" çalışılacak bir tutarsızlık** — gerekçe
+> `app.config.js`'te slug satırının üstüne yazıldı.
+>
 > **Kimlik (B) — hepsi kullanıcıya GÖRÜNMEZ:**
 > `android.package` + `ios.bundleIdentifier` (`com.eren.belieats`) · `scheme`
 > (`belieats`) · `slug` · EAS `projectId` (UUID, isim taşımıyor) · Supabase
