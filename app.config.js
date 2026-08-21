@@ -88,7 +88,34 @@ module.exports = ({ config }) => {
      * JS gönderilir. Kural CLAUDE.md → Dağıtım §2'de yazılı: her build'de
      * `versionCode` artar; native bir şey değiştiyse `version` de artar.
      */
-    runtimeVersion: { policy: 'appVersion' },
+    /**
+     * ── 2026-08-20: `fingerprint`'e DÖNÜLDÜ (rebrand build'i) ────────────
+     *
+     * Neden şimdi: politikayı değiştirmek runtime'ı değiştirir ve sahadaki
+     * kurulumları OTA'dan koparır. O bedel bu build'de ZATEN ödeniyor —
+     * paket adı değiştiği için herkes uygulamayı kaldırıp yeniden kuruyor.
+     * Başka hiçbir build'de bu kadar ucuz olmayacak.
+     *
+     * Ön koşul `.fingerprintignore` (Fark 1) bu turda repoya EKLENDİ —
+     * CLAUDE.md "hazır" diyordu ama dosya commit'lenmemişti, yalnızca
+     * çözüm kanıtlanmıştı.
+     *
+     * 🔴 FARK 2 HÂLÂ TEŞHİS EDİLMEDİ ve iki farklı şekilde patlayabilir:
+     *   1. BUILD sırasında ("Configure expo-updates" aşaması) → GÜRÜLTÜLÜ,
+     *      sahaya hiçbir şey inmez, maliyeti bir build turu.
+     *   2. Build geçer ama `eas update` yerelde FARKLI bir fingerprint
+     *      hesaplarsa → SESSİZ: güncellemeler kimsenin sahip olmadığı bir
+     *      runtime'ı hedefler ve OTA çalışmaz.
+     *
+     * ⚠️ 2. ihtimal bu kararın kabul edilen riski. Yakalamanın tek yolu
+     * kurulumdan sonra BİR TEST OTA'SI gönderip indiğini görmek — Build
+     * 3'te de aynı kapı kullanılmıştı. O test GEÇMEDEN build "tamam"
+     * sayılmamalı.
+     *
+     * Geri dönüş tek satır: `{ policy: 'appVersion' }`. `.fingerprintignore`
+     * bırakılabilir, zararsız.
+     */
+    runtimeVersion: { policy: 'fingerprint' },
 
     /**
      * Varsayılan davranış (açıkça yazılmadı çünkü Expo dokümanı ilan ediyor,

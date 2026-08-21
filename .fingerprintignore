@@ -1,0 +1,45 @@
+# =====================================================================
+# .fingerprintignore — `runtimeVersion: fingerprint` politikasının ön koşulu
+# =====================================================================
+#
+# ── SORUN (Dağıtım §9, 2026-08-05'te bir build patlattı) ─────────────
+# `fingerprint` politikasında runtime, projenin hash'i. EAS o hash'i
+# `expo prebuild` ile native ağacı ÜRETTİKTEN SONRA hesaplıyor; yerelde
+# ise o ağaç HİÇ YOK (CNG projesi, `android/` ve `ios/` repoda değil).
+# İki taraf farklı hash üretince build "Configure expo-updates"
+# aşamasında düşüyor.
+#
+# ── FARK 1 — bu dosyanın çözdüğü şey ────────────────────────────────
+# `bareNativeDir` kaynağı: fingerprint, `android/` dizininin VARLIĞINA
+# bakıp onu hash'e katıyor.
+#
+# ⚠️ `.gitignore`'a `/android` EKLEMEK ÇÖZÜM DEĞİL — ilk akla gelen buydu
+# ve YANLIŞ. Workflow'u `managed`'a döndürüyor ama hash'i tabana
+# döndürmüyor, çünkü `sourcer/Bare.js` kaynağı workflow'a değil DİZİNİN
+# VARLIĞINA bakarak ekliyor. Doğru araç bu dosya: kaynak listede kalıyor
+# ama null hash'leniyor, yani fingerprint'e girmiyor.
+#
+# Kanıt (build ALMADAN, sahte bir `android/` ağacıyla ölçüldü): taban
+# hash `798d1817…` — hata logundaki "local machine" değeriyle BİREBİR
+# aynı, yani reprodüksiyon sadık. `android/` eklenince hash değişiyor;
+# bu dosya konunca TAM OLARAK tabana dönüyor.
+#
+# ⚠️ Dosyanın kendi varlığı tabanı BOZMUYOR — `DEFAULT_IGNORE_PATHS`
+# zaten onu eliyor.
+#
+# ── FARK 2 — bu dosya ÇÖZMÜYOR, hâlâ teşhis edilmedi ────────────────
+# 7 `node_modules` dizininin `rncoreAutolinkingAndroid` hash'i de
+# ıraksıyordu ve hepsi New Architecture codegen kullanan RN
+# kütüphaneleri (async-storage, gesture-handler, maps, reanimated,
+# safe-area-context, screens, worklets). Hipotez: EAS'te gradle codegen
+# bu paketlerin İÇİNE dosya üretiyor. KANITLANMADI ve yerelde
+# kanıtlanamaz — doğrulamak prebuild + gradle, yani bir build gerektiriyor.
+#
+# 🔴 BU YÜZDEN BU DOSYA TEK BAŞINA YETMEYEBİLİR. Build "Configure
+# expo-updates" aşamasında yine düşerse sebep Fark 2'dir; geri dönüş
+# `app.config.js`'te politikayı `appVersion`'a çevirmek (tek satır) ve
+# bu dosyayı bırakmak — zararsız.
+# =====================================================================
+
+android/
+ios/
