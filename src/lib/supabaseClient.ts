@@ -57,7 +57,7 @@ export const supabase = createClient(
        * ── NEDEN PKCE (supabase-js varsayılanı `implicit`) ───────────────────
        *
        * GÜVENLİK — Android'de teorik değil gerçek bir fark. Özel şema
-       * (`belieats://`) işletim sisteminde MÜNHASIR DEĞİL: başka bir uygulama
+       * (`com.eren.platestamp://`) işletim sisteminde MÜNHASIR DEĞİL: başka
        * da aynı şemayı kaydedip yönlendirmeyi yakalayabilir.
        *   implicit → yakalayanın eline gerçek `access_token` + `refresh_token`
        *              geçer, yani hesabın tamamı.
@@ -130,7 +130,7 @@ export const supabaseRecovery = createClient(
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
-      storageKey: 'sb-beli-eats-recovery',
+      storageKey: 'sb-platestamp-recovery',
     },
   }
 );

@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Beli Eats",
-    "slug": "beli-eats",
-    "scheme": "belieats",
-    "version": "1.3.1",
+    "name": "Platestamp",
+    "slug": "platestamp",
+    "scheme": "com.eren.platestamp",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,19 +14,19 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.eren.belieats",
+      "bundleIdentifier": "com.eren.platestamp",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Beli Eats, etrafındaki restoranları göstermek için konumuna ihtiyaç duyuyor.",
-        "NSLocationAlwaysUsageDescription": "Beli Eats, etrafındaki restoranları göstermek için konumuna ihtiyaç duyuyor."
+        "NSLocationWhenInUseUsageDescription": "Platestamp, etrafındaki restoranları göstermek için konumuna ihtiyaç duyuyor.",
+        "NSLocationAlwaysUsageDescription": "Platestamp, etrafındaki restoranları göstermek için konumuna ihtiyaç duyuyor."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#22C55E"
+        "backgroundColor": "#5F7527"
       },
-      "package": "com.eren.belieats",
-      "versionCode": 7,
+      "package": "com.eren.platestamp",
+      "versionCode": 8,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
@@ -42,8 +42,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Beli Eats, mekan fotoğrafı paylaşabilmen için galerine erişmek istiyor.",
-          "cameraPermission": "Beli Eats, mekanda anında fotoğraf çekebilmen için kameranı kullanmak istiyor.",
+          "photosPermission": "Platestamp, mekan fotoğrafı paylaşabilmen için galerine erişmek istiyor.",
+          "cameraPermission": "Platestamp, mekanda anında fotoğraf çekebilmen için kameranı kullanmak istiyor.",
           "microphonePermission": false
         }
       ]

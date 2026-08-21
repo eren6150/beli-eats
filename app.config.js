@@ -67,8 +67,8 @@ module.exports = ({ config }) => {
   return {
     ...config,
     // Expo bu ikisini zorunlu tutuyor; taban app.json'dan geliyor.
-    name: config.name ?? 'Beli Eats',
-    slug: config.slug ?? 'beli-eats',
+    name: config.name ?? 'Platestamp',
+    slug: config.slug ?? 'platestamp',
 
     /**
      * `appVersion` — runtime = `version` alanı ("1.0.0"), yani yerelde ve
