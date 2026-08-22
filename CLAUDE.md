@@ -2,7 +2,7 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-21 · 🏷️ REBRAND DEVAM EDİYOR
+## 📍 Nerede kaldık — 2026-08-22 · 🏷️ REBRAND SON ADIMDA
 
 > 🔴 **BU BÖLÜM AKTİF BİR OPERASYONUN ORTASINI ANLATIYOR.** Yeni bir sohbet
 > buradan devam etmeli; aşağıdaki "SIRADAKİ TEK ADIM" ile başla.
@@ -20,24 +20,43 @@ OTA'sı doğrulandı. Rebrand'in **en riskli kısmı bitti**.
 | 2 | Kod: Kategori A · B · görseller | ✅ `31bbe1c` `6849bf7` `fc4d23c` |
 | 3 | Build + 13 test + test OTA | ✅ **doğrulandı** |
 | 4 · Adım 1 | `docs/*.html` içerik (URL'ler DEĞİL) | ✅ `71220ae`, **canlıda doğrulandı** |
-| 4 · Adım 2-5 | Repo adı · remote · Site URL · Pages | ⏳ **KULLANICI ELLE YAPIYOR** |
-| 4 · Adım 6-7 | **`PRIVACY_URL` + OTA** | ⬜ **SIRADAKİ** |
+| 4 · Adım 2-5 | Repo adı · remote · Site URL · Pages | ✅ **kullanıcı elle yaptı, doğrulandı** |
+| 4 · Adım 6 | `PRIVACY_URL` kod değişikliği | ✅ typecheck temiz |
+| 4 · Adım 7 | **Commit + push + OTA + cihaz doğrulaması** | ⬜ **SIRADAKİ** |
 | 5 | Eski kayıtları sil | ⬜ |
 
-### ⏭️ SIRADAKİ TEK ADIM (Adım 6)
+### ✅ Adım 2-5 — kullanıcı elle tamamladı (2026-08-22)
 
-Kullanıcı repo adını `platestamp` yaptıktan ve Pages'i doğruladıktan sonra:
+- GitHub repo adı **`platestamp`** oldu
+- Yerel git remote güncellendi (`origin` → `platestamp.git`, doğrulandı)
+- Supabase **Site URL** → `https://eren6150.github.io/platestamp/`
+- Yeni Pages adresi canlı: ana sayfa ve `gizlilik.html` açılıyor, "Platestamp" yazıyor
 
-1. [EditProfileScreen.tsx](src/screens/EditProfileScreen.tsx) → `PRIVACY_URL`
-   `https://eren6150.github.io/beli-eats/gizlilik.html`
-   → `https://eren6150.github.io/platestamp/gizlilik.html`
-2. Commit + push
-3. `npx eas-cli@latest update --branch preview --environment preview --message "Gizlilik URL rebrand sonrasi"`
-4. Doğrulama: uygulamayı kapat-aç → Profili Düzenle → **Gizlilik Politikası**
+🔑 **BEKLENEN "KIRIK PENCERE" HİÇ OLUŞMADI — GitHub eski adresi YÖNLENDİRİYOR.**
+Repo yeniden adlandırılınca `https://eren6150.github.io/beli-eats/…` otomatik
+olarak yeni adrese yönleniyor. Yani sahadaki APK'nın bundle'ına gömülü ESKİ URL
+çalışmaya devam ediyor; Adım 7'nin OTA'sı **acil değil, hijyen**.
+
+⚠️ **Ama bu yönlendirmeye GÜVENİLMEZ ve kalıcı sayılmaz:** yalnızca eski adı
+kimse yeni bir repo olarak almadığı sürece yaşıyor. Adı alan biri o URL'in
+içeriğini eline geçirir — **gizlilik metni gibi bir sayfa için kabul edilemez.**
+Kod bu yüzden yine de yeni adrese sabitleniyor.
+
+### ✅ Adım 6 — YAPILDI (2026-08-22)
+
+[EditProfileScreen.tsx:38](src/screens/EditProfileScreen.tsx:38) → `PRIVACY_URL`
+artık `https://eren6150.github.io/platestamp/gizlilik.html`. **Typecheck temiz.**
+
+Tarama, eski URL'in projede **tek geçtiği yerin burası** olduğunu gösterdi —
+`docs/*.html` göreli bağlantı kullanıyor, `app.json` · `app.config.js` ·
+`supabase/` temiz. Yani madde gerçekten tek satırlık çıktı.
+
+### ⏭️ SIRADAKİ TEK ADIM (Adım 7)
+
+1. Commit + push
+2. `npx eas-cli@latest update --branch preview --environment preview --message "Gizlilik URL rebrand sonrasi"`
+3. Doğrulama: uygulamayı kapat-aç → Profili Düzenle → **Gizlilik Politikası**
    → yeni adres açılıyor mu
-
-⚠️ Repo adı değiştiği andan bu OTA inene kadar uygulamadaki gizlilik
-bağlantısı **kırık** — bilinen ve kabul edilen pencere, dakikalarla sınırlı.
 
 ### FAZ 5 — temizlik (Adım 7 doğrulandıktan SONRA)
 
@@ -4054,16 +4073,20 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >    Console'da güncellenmezse harita **sessizce boş** gelir.
 > 2. **`scheme` Supabase Redirect URLs'te kayıtlı** (`belieats://auth-callback`)
 >    — e-posta onayı ve Google girişi oradan geçiyor.
-> 3. **GitHub repo adı → GitHub Pages URL → Supabase Site URL.** Repo yeniden
->    adlandırılırsa onay maili iniş sayfası kırılır; ikisi **aynı oturumda**
->    yapılmalı.
->    ⚠️ **AYNI BAĞ ARTIK GİZLİLİK METNİ İÇİN DE GEÇERLİ (2026-08-20):**
->    `docs/gizlilik.html` de aynı Pages URL'inden yayınlanıyor. Repo adı
->    değişirse **iki sayfa birden** kırılır ve gizlilik metninin bağlantısı
->    mağazaya/uygulamaya verilmiş olabilir. Rebrand turunda kontrol listesi:
->    Site URL · gizlilik metni URL'i · varsa Play Store'daki gizlilik bağlantısı.
+> 3. ✅ **GitHub repo adı → GitHub Pages URL → Supabase Site URL — KAPANDI
+>    (2026-08-22).** Repo `platestamp` oldu, Site URL ve `PRIVACY_URL` yeni
+>    adrese çekildi, iki sayfa da canlıda doğrulandı.
+>    🔑 **Ölçüm bağın SERTLİĞİNİ yalanladı:** "iki sayfa birden kırılır, ikisi
+>    aynı oturumda yapılmalı" diye yazılmıştı — GitHub repo rename sonrası eski
+>    Pages adresini **otomatik yönlendiriyor**, yani hiçbir şey kırılmadı ve
+>    sahadaki APK'nın gömülü eski URL'i bugün de çalışıyor.
+>    ⚠️ **Yönlendirmeye GÜVENİLMEZ:** yalnızca eski adı kimse yeni bir repo
+>    olarak almadığı sürece yaşıyor. Adı alan biri gizlilik metninin URL'ini
+>    eline geçirir. Bir sonraki yeniden adlandırmada da plan buna dayanmamalı.
+>    Kontrol listesi aynen geçerli: Site URL · gizlilik metni URL'i · varsa
+>    Play Store'daki gizlilik bağlantısı.
 >    ⚠️ Ayrıca `docs/index.html` HÂLÂ ESKİ marka yeşilini (`#22c55e`) kullanıyor,
->    `gizlilik.html` ise güncel zeytini — **ikisi rebrand turunda hizalanmalı**.
+>    `gizlilik.html` ise güncel zeytini — **ikisi hâlâ hizalanmadı, açık iş**.
 >
 > **Panel işlerinin sırası:** EAS projesi yeniden adlandır → SHA-1'i al →
 > Google Cloud'a **yeni paketi EKLE** (eskisini SİLME) → Supabase'e **yeni

@@ -35,7 +35,7 @@ import DeleteAccountSheet from '../components/profile/DeleteAccountSheet';
  * ⚠️ Repo adına BAĞLI. Rebrand'de kırılacak üç yerden biri (diğerleri:
  * Supabase Site URL ve varsa mağazadaki gizlilik bağlantısı).
  */
-const PRIVACY_URL = 'https://eren6150.github.io/beli-eats/gizlilik.html';
+const PRIVACY_URL = 'https://eren6150.github.io/platestamp/gizlilik.html';
 import {
   normalizeUsername,
   validateUsername,
