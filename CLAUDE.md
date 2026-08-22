@@ -2,61 +2,94 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-22 · 🏷️ REBRAND KODU BİTTİ, SIRA TEMİZLİKTE
+## 📍 Nerede kaldık — 2026-08-22 · ✅ REBRAND TAMAMEN BİTTİ
 
-> 🟡 **FAZ 4 KAPANDI.** Kalan iş **yalnızca panel temizliği (FAZ 5)** — kod
-> değişikliği, build ve OTA **gerekmiyor**. Yeni bir sohbet aşağıdaki
-> "SIRADAKİ TEK ADIM" ile başlamalı.
+> 🟢 **AKTİF OPERASYON YOK.** Rebrand'in beş fazı da kapandı; kod, build, OTA
+> ve panel tarafında bekleyen hiçbir iş kalmadı. Aşağıdaki "SIRADAKİ TEK ADIM"
+> yeni bir gündemin başlangıcı — devam eden bir işin ortası değil.
+>
+> ℹ️ Bu bölümün altındaki **ders/teşhis kayıtları bilinçli olarak duruyor**
+> (dört kalıcı ders · branch↔channel · GitHub Pages). Benzer bir iş
+> geldiğinde sıfırdan teşhis gerekmesin diye referans olarak bırakıldı.
 
-**Uygulama artık PLATESTAMP ve rebrand'in kod tarafı tamamen sahada.**
-versionCode **8** / `version` **2.0.0**, 13 maddelik test listesi doğrulandı,
-repo · Pages · Supabase Site URL · `PRIVACY_URL` hepsi yeni adreste ve
-**cihazda doğrulandı**.
+**Uygulama PLATESTAMP.** versionCode **8** / `version` **2.0.0** sahada.
+Paket adı · scheme · görünen ad · ikon/splash · repo · GitHub Pages ·
+Supabase Site URL · `PRIVACY_URL` — hepsi yeni kimlikte ve **cihazda
+doğrulandı**. Eski kimliklerin panel kayıtları temizlendi.
 
-### Faz durumu
+### Faz durumu — HEPSİ KAPANDI
 
 | Faz | İş | Durum |
 |---|---|---|
 | 0 | Hazırlık, SHA-1, panel notları | ✅ |
-| 1 | Google Cloud + Supabase'e YENİ kimlikleri **EKLE** | ✅ (eskiler duruyor) |
+| 1 | Google Cloud + Supabase'e YENİ kimlikleri **EKLE** | ✅ |
 | 2 | Kod: Kategori A · B · görseller | ✅ `31bbe1c` `6849bf7` `fc4d23c` |
-| 3 | Build + 13 test + test OTA | ✅ **doğrulandı** |
-| 4 · Adım 1 | `docs/*.html` içerik (URL'ler DEĞİL) | ✅ `71220ae` |
-| 4 · Adım 2-5 | Repo adı · remote · Site URL · Pages | ✅ kullanıcı elle yaptı |
-| 4 · Adım 6 | `PRIVACY_URL` kod değişikliği | ✅ `d6ac44e` |
-| 4 · Adım 7 | Push + OTA + cihaz doğrulaması | ✅ **doğrulandı** |
-| **4** | **TAMAMI** | ✅ **KAPANDI (2026-08-22)** |
-| 5 | Eski kayıtları sil | ⬜ **SIRADAKİ** |
+| 3 | Build + 13 test + test OTA | ✅ |
+| 4 | `docs/*.html` · repo/remote/Site URL/Pages · `PRIVACY_URL` · OTA | ✅ `71220ae` `d6ac44e` |
+| 5 | Eski kayıtları sil (panel temizliği) | ✅ **2026-08-22** |
 
-### ⏭️ SIRADAKİ TEK ADIM — FAZ 5, ilk madde
+### ✅ FAZ 5 — kullanıcı panelde elle tamamladı (2026-08-22)
 
-**Google Cloud → Maps anahtarından `com.eren.belieats` satırını sil.**
+- **Google Cloud → `beli-eats-api` anahtarı:** Android restrictions listesinden
+  **`com.eren.belieats` satırı silindi**, kaydedildi. `com.eren.platestamp`
+  satırına dokunulmadı — harita onunla çalışıyor.
+- **Google Cloud → `Maps Platform API Key`:** kontrol edildi, Application
+  restrictions **`None`** olduğu için silinecek paket satırı **yoktu**.
+- **Supabase → Redirect URLs:** **`belieats://auth-callback` silindi**.
+  `platestamp://auth-callback` zaten kayıtlıydı.
+- **Supabase → Project Name:** **"Platestamp"** yapıldı *(kozmetik, URL
+  değişmiyor)*.
+- **Eski Beli Eats uygulaması telefonlardan kaldırıldı** *(paket adı değiştiği
+  için yeni APK üstüne kurulmuyordu, ayrı uygulama olarak duruyordu)*.
 
-Console → APIs & Services → Credentials → Maps anahtarı → Application
-restrictions → Android apps → `com.eren.belieats` + eski SHA-1 satırını
-kaldır. `com.eren.platestamp` satırı **KALACAK** — harita onunla çalışıyor.
+#### 🔑 OAuth tarafında paket adına bağlı Android client HİÇ OLMAMIŞ
 
-⚠️ **Yan etkisi bilinçli olsun:** telefonlarda eski Beli Eats uygulaması hâlâ
-kuruluysa o satırı silmek onun haritasını anında kırar. Zaten kaldırılacak
-(aşağıdaki 4. madde), ama sırayı bilerek seç.
+Temizlik sırasında doğrulandı ve kayda değer: Google Cloud'da **paket adı +
+SHA-1'e bağlı ayrı bir Android OAuth Client ID yok.** Tek OAuth istemcisi
+**Supabase'e bağlı bir "Web application" client** ve o **paket adından
+bağımsız** — Google girişi tarayıcı tabanlı yoldan geçtiği için (bkz. Build 1
+kararı: `expo-web-browser` + `scheme` + `Linking`), akış paket adını değil
+Supabase'in callback URL'ini kullanıyor.
 
-### FAZ 5 — temizlik (hepsi PANEL işi, kod/build/OTA YOK)
+**Sonuç:** rebrand'de OAuth tarafında yapılacak bir iş yoktu ve olmadı. Bu
+madde bir daha aranmasın diye yazıldı.
 
-- [ ] Google Cloud → Maps anahtarından **`com.eren.belieats` satırını sil**
-- [ ] Google Cloud → aynı anahtardan **Places API'yi kaldır**
-      *(artık ölü: anahtar Android kısıtlı, Places REST'i sunucudaki AYRI
-      anahtar yapıyor — inert ama gereksiz yüzey)*
-- [ ] Supabase → Redirect URLs'ten **`belieats://auth-callback` sil**
-- [ ] Telefonlardan **eski Beli Eats uygulamasını kaldır**
-- [ ] Supabase proje adını `platestamp` yap *(kozmetik, URL değişmiyor)*
+⚪ **Tek kozmetik artık:** o Web client'ın adı hâlâ **"Beli Eats Supabase"**.
+Yalnızca Google Cloud panelinde görünen bir etiket; **hiçbir işlevi yok,
+aciliyeti yok**. İstenirse tek tıkla yeniden adlandırılır.
 
-ℹ️ **`production` branch'inde ARTIK KULLANILMAYAN bir update duruyor**
-(*"PRIVACY_URL platestamp domain fix"*, 2026-08-22). **Silmeye gerek yok ve
-zararsız:** hiçbir channel o branch'e bakmıyor (bkz. 4. ders). İçeriği de
-`preview`'e giden update ile aynı commit. Kademe 3'te gerçek bir `production`
-channel'ı açılırsa orada geçerli bir başlangıç noktası olarak durur.
+### ⏭️ SIRADAKİ TEK ADIM — Kademe 2'nin SON koşulu: kendi alan adı
 
-### 🔑 Bu turun dört kalıcı dersi
+Rebrand bittiğine göre sıradaki gündem **Kademe 2 (davetli çevre)**. Dört
+koşuldan üçü kapalı; kalan tek koşul **kendi alan adı + SPF/DKIM**.
+
+**Neden gerekli:** bugün onay e-postaları imzasız gidiyor, yani Gmail/Outlook
+**spam'e düşürebilir**. Arkadaş testinde tolere edilir; davet edilen ama seni
+tanımayan biri onay mailini göremezse **hiç kaydolamaz** ve sebebini kimse
+bilmez.
+
+**Ön koşulu 2026-08-22'de kalktı:** bu madde *"Faz 4'le birleşiyor, marka adı
+kararlaşınca alınır"* diye bekliyordu — **Faz 4 kapandı**, isim **PLATESTAMP**.
+Bekleyen bağımlılık yok.
+
+Sıra:
+
+1. ⚠️ **Önce müsaitliği TEKRAR kontrol et.** `platestamp.com` 2026-08-20'de
+   RDAP ile **tescilsiz** doğrulanmıştı — o ölçüm iki günlük ve satın almadan
+   önce yenilenmeli.
+2. Alan adını al.
+3. **SendGrid → domain authentication** (SPF + DKIM kayıtlarını DNS'e ekle,
+   SendGrid doğrulasın).
+4. **Supabase → Authentication → SMTP** gönderen adresini yeni alan adına
+   çevir.
+5. Doğrulama: yeni bir adresle kaydol → onay maili **gelen kutusuna** düşüyor
+   mu (spam'e değil).
+
+⚠️ **Bu adım Supabase Site URL'ini DEĞİŞTİRMİYOR.** İniş sayfası GitHub
+Pages'te kalıyor; alan adı yalnızca **mail altyapısı** için. İkisini
+karıştırmak, yeni kapanan bir yarayı (Pages URL zinciri) tekrar açardı.
+
+### 🔑 REBRAND'İN DÖRT KALICI DERSİ *(arşiv — benzer iş için referans)*
 
 1. **EAS slug'ı DEĞİŞTİRİLEMİYOR** — `projectId` ↔ slug bağı kalıcı. `slug`
    bilerek `beli-eats` kaldı; gerekçe `app.config.js`'te o satırın üstünde.
@@ -4098,9 +4131,11 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   Şüpheliler: `useDiary`, `useActivityFeed`, `usePlaceVisits`. Migration ile
 >   istemci düzeltmesi **aynı diff'te** gitmeli.
 
-> ### 🏷️ REBRAND — UYGULANIYOR (2026-08-21). İsim: **PLATESTAMP**
-> **Güncel durum dosyanın başındaki "Nerede kaldık" bölümünde** — faz tablosu,
-> sıradaki tek adım ve FAZ 5 temizlik listesi orada.
+> ### ✅ 🏷️ REBRAND — TAMAMLANDI (2026-08-22). İsim: **PLATESTAMP**
+> **Beş fazın beşi de kapandı; bekleyen iş yok.** Kapanış özeti ve dersler
+> dosyanın başındaki "Nerede kaldık" bölümünde. Aşağısı **arşiv**: envanter,
+> üç gizli bağ ve slug kısıtı — benzer bir iş (ör. iOS bundle eklemek, ikinci
+> bir yeniden adlandırma) geldiğinde sıfırdan çıkarılmasın diye duruyor.
 >
 > ✅ **Uygulandı:** paket/bundle `com.eren.platestamp` · scheme **ters-DNS**
 > `com.eren.platestamp` (sonek DEĞİL — gerekçe: uydurma bileşik ad, çakışma
@@ -4742,7 +4777,7 @@ her biri bir öncekinin üstüne biniyor:
 | Kademe | Kim kullanıyor | Ne gerekiyor |
 |---|---|---|
 | **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
-| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⬜ — *son kalan koşul, ARTIK ENGELSİZ* |
+| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⬜ — *son kalan koşul, **SIRADAKİ İŞ*** |
 | **3 — genel yayın** | Herkes | Faz 4 (marka) + ~~Google çağrıları Edge Function arkasına~~ ✅ + Play Store için **AAB** |
 
 - **Kademe 2'nin koşulları DÖRDE ÇIKTI, ikisi kapandı (2026-08-09):**
