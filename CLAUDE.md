@@ -5,8 +5,11 @@
 ## 📍 Nerede kaldık — 2026-08-22 · ✅ REBRAND TAMAMEN BİTTİ
 
 > 🟢 **AKTİF OPERASYON YOK.** Rebrand'in beş fazı da kapandı; kod, build, OTA
-> ve panel tarafında bekleyen hiçbir iş kalmadı. Aşağıdaki "SIRADAKİ TEK ADIM"
-> yeni bir gündemin başlangıcı — devam eden bir işin ortası değil.
+> ve panel tarafında bekleyen hiçbir iş kalmadı.
+>
+> **Sıradaki gündem: Apple ile Giriş / iOS** — ve o iş **hiç başlanmadı**,
+> ilk adımı kod değil **iki bloklayıcı ön koşul** (aşağıda). Kademe 2'nin
+> alan adı koşulu **bilinçli olarak beklemede**, tetikleyici koşula bağlı.
 >
 > ℹ️ Bu bölümün altındaki **ders/teşhis kayıtları bilinçli olarak duruyor**
 > (dört kalıcı ders · branch↔channel · GitHub Pages). Benzer bir iş
@@ -58,36 +61,154 @@ madde bir daha aranmasın diye yazıldı.
 Yalnızca Google Cloud panelinde görünen bir etiket; **hiçbir işlevi yok,
 aciliyeti yok**. İstenirse tek tıkla yeniden adlandırılır.
 
-### ⏭️ SIRADAKİ TEK ADIM — Kademe 2'nin SON koşulu: kendi alan adı
+### ⏸️ BEKLEMEDE — alan adı / SPF-DKIM *(tetikleyici koşula bağlı)*
 
-Rebrand bittiğine göre sıradaki gündem **Kademe 2 (davetli çevre)**. Dört
-koşuldan üçü kapalı; kalan tek koşul **kendi alan adı + SPF/DKIM**.
+**Karar (2026-08-22): bilinçli olarak ERTELENDİ.** Kademe 2'nin son koşulu ama
+**bugün canlı bir sorun üretmiyor** — bu ölçekte onay mailleri gidiyor ve
+ulaşıyor. Kullanıcı kararı.
 
-**Neden gerekli:** bugün onay e-postaları imzasız gidiyor, yani Gmail/Outlook
-**spam'e düşürebilir**. Arkadaş testinde tolere edilir; davet edilen ama seni
-tanımayan biri onay mailini göremezse **hiç kaydolamaz** ve sebebini kimse
-bilmez.
+> 🔔 **TETİKLEYİCİ — takvim değil, KOŞUL:** e-posta gönderim limitlerine
+> gerçekten takılmaya başlanınca. Somut belirtiler:
+> - Kayıt/şifre sıfırlamada **`over_email_send_rate_limit`** görülmeye başlaması
+>   *(metni `AUTH_ERROR_TEXT`'te zaten eşli)*
+> - Yeni kullanıcılardan **"onay maili gelmedi"** şikayetlerinin gelmesi
+>   (spam klasöründe bulunuyorsa: SPF/DKIM eksikliğinin doğrudan belirtisi)
+> - Davetli çevrenin gerçekten büyümesi (Kademe 2'ye geçiş)
 
-**Ön koşulu 2026-08-22'de kalktı:** bu madde *"Faz 4'le birleşiyor, marka adı
-kararlaşınca alınır"* diye bekliyordu — **Faz 4 kapandı**, isim **PLATESTAMP**.
-Bekleyen bağımlılık yok.
+⚠️ **Erteleme "risk yok" demek DEĞİL, "risk henüz gerçekleşmedi" demek.**
+İmzasız mail spam'e düşebilir; **davet edilen ama seni tanımayan biri** onay
+mailini göremezse hiç kaydolamaz ve sebebini kimse bilmez. Arkadaş testinde
+tolere edilir, davetli çevrede edilmez.
 
-Sıra:
+**Ön koşulu 2026-08-22'de KALKTI** (Faz 4 kapandı, isim **PLATESTAMP**) —
+yani bekleyen bağımlılık yok, iş **hazır durumda bekliyor**.
 
-1. ⚠️ **Önce müsaitliği TEKRAR kontrol et.** `platestamp.com` 2026-08-20'de
-   RDAP ile **tescilsiz** doğrulanmıştı — o ölçüm iki günlük ve satın almadan
-   önce yenilenmeli.
+#### 📦 Kaldığı yerden devam etmek için — plan SAKLANIYOR
+
+1. ⚠️ **Önce müsaitliği TEKRAR ölç.** `platestamp.com` **2026-08-20'de RDAP
+   ile tescilsiz** doğrulanmıştı. Bu ölçüm **eskiyecek** — satın almadan önce
+   yenile, aradan geçen süre ne olursa olsun.
 2. Alan adını al.
-3. **SendGrid → domain authentication** (SPF + DKIM kayıtlarını DNS'e ekle,
-   SendGrid doğrulasın).
-4. **Supabase → Authentication → SMTP** gönderen adresini yeni alan adına
-   çevir.
+3. **SendGrid → domain authentication**: SPF + DKIM kayıtlarını DNS'e ekle,
+   SendGrid doğrulasın.
+4. **Supabase → Authentication → SMTP**: gönderen adresini yeni alan adına çevir.
 5. Doğrulama: yeni bir adresle kaydol → onay maili **gelen kutusuna** düşüyor
    mu (spam'e değil).
 
-⚠️ **Bu adım Supabase Site URL'ini DEĞİŞTİRMİYOR.** İniş sayfası GitHub
-Pages'te kalıyor; alan adı yalnızca **mail altyapısı** için. İkisini
-karıştırmak, yeni kapanan bir yarayı (Pages URL zinciri) tekrar açardı.
+⚠️ **Bu iş Supabase Site URL'ini DEĞİŞTİRMİYOR.** İniş sayfası GitHub Pages'te
+kalıyor; alan adı yalnızca **mail altyapısı** için. İkisini karıştırmak, yeni
+kapanan bir yarayı (Pages URL zinciri) tekrar açardı.
+
+### ⏭️ SIRADAKİ GÜNDEM — Apple ile Giriş / iOS
+
+> 🔴 **DURUM: HİÇ BAŞLANMADI.** Kod, yapılandırma ve CLAUDE.md tarandı —
+> **Apple Girişi'ne dair tek bir satır bile yok.** Aşağıdaki analiz sıfırdan
+> yapıldı; önceki bir sohbetten devralınan teknik ilerleme **mevcut değil**.
+
+**Ölçüm (2026-08-22):**
+
+| Aranan | Sonuç |
+|---|---|
+| CLAUDE.md'de Apple kararı / "Seçenek A" | ❌ yok — Apple yalnızca **2 yerde**, ikisi de hesap silme gerekçesi |
+| `expo-apple-authentication` | ❌ kurulu değil |
+| `app.json` → `ios.usesAppleSignIn` | ❌ yok |
+| `plugins` listesinde Apple eklentisi | ❌ yok |
+| Apple/iOS ile ilgili commit | ❌ yok |
+| iOS build (herhangi bir zamanda) | ❌ **hiç alınmadı** |
+
+⚠️ **"Seçenek A — tam Apple Girişi entegrasyonu" kararı kullanıcının
+BEYANINA dayanıyor** (2026-08-22 sohbeti), repoda kaydı yok. Diğer
+seçeneklerin (B, C) ne olduğu da kayıtlı değil. Karar geçerli kabul ediliyor;
+**provenance'ı burada yazılı olsun** ki ileride "nerede kararlaştırdık" diye
+aranmasın.
+
+#### 🎯 İşin gerçek sürücüsü: Apple bunu ZORUNLU kılıyor
+
+Bu bir "iyi olur" değil. App Store Review Guideline **4.8**: uygulama üçüncü
+taraf sosyal giriş sunuyorsa **Sign in with Apple da sunmak zorunda**. Bu
+projede **Google girişi var** (Build 1), dolayısıyla iOS'a çıkıldığı anda
+Apple Girişi **mecburi**.
+
+✅ **Apple'ın DİĞER şartı zaten karşılanmış:** uygulama içi hesap silme
+(5.1.1(v)) 2026-08-17'de yapıldı — ve **şifre değil kullanıcı adı** yazdırma
+kararı tam da bu yüzden doğruydu: Google ile girenin şifresi yok, şifre
+sorulsaydı o kullanıcılar hesabını hiç silemezdi.
+
+#### 🔴 İKİ BLOKLAYICI ÖN KOŞUL — ikisi de kod DEĞİL
+
+Bunlar çözülmeden yazılacak hiçbir kod doğrulanamaz:
+
+1. **Apple Developer Program üyeliği — 99 USD/yıl.** Onsuz App ID
+   oluşturulamaz, **Sign in with Apple capability açılamaz**, Supabase'in
+   istediği Services ID + private key üretilemez, imzalı build alınamaz.
+   Bireysel üyelikte onay genelde hızlı ama **anında değil**.
+2. **Test edilecek bir iPhone.** EAS bulutta derliyor, yani **Mac
+   GEREKMİYOR** — ama doğrulama için gerçek cihaz gerekiyor (simülatör Mac
+   ister). ⚠️ Bu projenin en pahalı dersi *"Expo Go'daki ölçüm kanıt
+   değildir"* ve kural *"cihazda doğrulanmadan tamam sayılmaz"*. Elde iPhone
+   yoksa iOS build'i **doğrulanamaz bir artefakt** olur.
+
+🔑 **İlk sorulacak soru bu ikincisidir** — cevabı "hayır"sa işin tamamı
+yeniden değerlendirilmeli, çünkü doğrulanamayan bir platforma para ve build
+turu harcanmış olur.
+
+#### ⏭️ İLK ADIM ÖNERİM: Apple Girişi DEĞİL, "çıplak" bir iOS build
+
+Ön koşullar tamamlandıktan sonra ilk iş **Apple Girişi'ni yazmak olmamalı**.
+Önce uygulamanın iOS'ta **çalışıp çalışmadığı** görülmeli.
+
+Gerekçe bu projenin kendi geçmişi: Build 2 `prop-types` yüzünden, rebrand
+build'i fingerprint yüzünden patladı; §5.1'de `expo-font` ilk APK'yı açılışta
+çökertti. **Ders her seferinde aynı: bir build'e teşhis edilmemiş iki değişken
+birden sokma.** Bu uygulamanın ~15 native modülü (maps · reanimated ·
+keyboard-controller · pager-view · webview · image-picker · updates …)
+**iOS'ta bir kez bile çalışmadı**. İlk build'in Apple Girişi ile ilgisi
+olmayan sorunlar çıkarması **beklenen** durum.
+
+Apple Girişi'nin eksikliği ancak **App Store'a submit** ederken reddedilme
+sebebi; internal/preview build'de sorun değil ve o an çok uzakta (Kademe 3).
+
+**Önerilen sıra:**
+
+1. iPhone var mı? *(blokolayıcı soru)* → Apple Developer üyeliği
+2. 🍎 **Console'da `Maps SDK for iOS`'u anahtara GERİ EKLE.** 2026-08-05'te
+   API kısıtlaması yapılırken **bilinçli olarak kaldırılmıştı** ve bu dosya o
+   gün şu uyarıyı düşmüştü: unutulursa iOS'ta harita **sessizce** kırılır —
+   uygulama açılır, her şey çalışır, yalnızca harita boş/gri gelir ve **sebebi
+   kodda görünmez**. `app.config.js` `ios.config.googleMapsApiKey`'i zaten
+   enjekte ediyor, yani **kod tarafı hazır**; eksik olan yalnızca Console izni.
+3. **Çıplak `preview` iOS build'i** (Apple Girişi YOK). Beklenen sürpriz:
+   **EAS iOS kimlik bilgilerini SIFIRDAN kuracak** — rebrand'in 2. dersi
+   ("paket adı değişince credentials sıfırdan") tam olarak bunun habercisiydi
+   ve o ders *"iOS bundle eklenirse aynı sürpriz tekrarlanacak"* diye biter.
+4. Cihazda doğrula: açılış · giriş · **harita** · arama · fotoğraf · deep link
+   · OTA. Android'in 13 maddelik listesi buraya uyarlanabilir.
+5. **Sonra** Apple Girişi kendi build'inde.
+
+#### 🧩 Apple Girişi geldiğinde — şimdiden bilinen dört tuzak
+
+Bunlar bu projenin mevcut kodundan çıkarıldı, genel tavsiye değil:
+
+1. 🔴 **Apple kullanıcının adını YALNIZCA İLK yetkilendirmede döndürür.** O an
+   yakalanmazsa **bir daha asla alınamaz** (hesap silinip yeniden
+   yetkilendirilmeden). `handle_new_user` ad üretimini e-postadan yapıyor,
+   yani ad kaybı kayıt akışını kırmaz — ama `full_name` kalıcı olarak boş
+   kalır.
+2. 🔴 **"Hide My Email" → `@privaterelay.appleid.com` takma adresi.** İki
+   sonucu var: (a) `handle_new_user` kullanıcı adını `split_part(email,'@',1)`
+   ile ürettiği için **rastgele karakter dizisi** bir kullanıcı adı çıkar
+   *(migration 012 çakışmayı çözer, çirkinliği çözmez)*; (b) **o adreslere
+   mail gönderebilmek için Apple'da gönderen alan adının kaydedilmesi
+   gerekiyor** — yani yukarıda **ertelenen alan adı işiyle doğrudan bağlı**.
+   ⚠️ Bu bağ, ertelenen maddenin tetikleyicilerinden biri sayılmalı.
+3. **`expo-apple-authentication` NATIVE** → build ister, ve **yalnızca
+   iOS'ta** çalışır. Android'de Apple Girişi istenirse yol farklı: tarayıcı
+   tabanlı OAuth, yani mevcut Google girişinin altyapısının aynısı
+   (`expo-web-browser` + `scheme` + `Linking`). **"Tam entegrasyon" iki
+   platformu da kapsıyor mu — kayıtlı bir karar YOK**, netleştirilmeli.
+4. **Sürüm ritüeli iOS'ta farklı isimde:** Android `versionCode`, iOS
+   `ios.buildNumber`. `appVersionSource: "local"` olduğu için ikisi de
+   **elle** yönetilecek; `app.json`'da bugün `buildNumber` **hiç yok**.
 
 ### 🔑 REBRAND'İN DÖRT KALICI DERSİ *(arşiv — benzer iş için referans)*
 
@@ -4777,7 +4898,7 @@ her biri bir öncekinin üstüne biniyor:
 | Kademe | Kim kullanıyor | Ne gerekiyor |
 |---|---|---|
 | **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
-| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⬜ — *son kalan koşul, **SIRADAKİ İŞ*** |
+| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⏸️ — *son kalan koşul, **BEKLEMEDE** (tetikleyici: mail limitleri)* |
 | **3 — genel yayın** | Herkes | Faz 4 (marka) + ~~Google çağrıları Edge Function arkasına~~ ✅ + Play Store için **AAB** |
 
 - **Kademe 2'nin koşulları DÖRDE ÇIKTI, ikisi kapandı (2026-08-09):**
@@ -4811,13 +4932,18 @@ her biri bir öncekinin üstüne biniyor:
     mekanizması ölçek büyüyünce yeniden değerlendirilecek.
   - ⬜ **Kendi alan adı** — SPF/DKIM olmadan onay mailleri spam'e düşebilir.
     **Kademe 2'nin TEK kalan koşulu bu.**
-    ✅ **ÖN KOŞULU KALKTI (2026-08-22):** bu madde "Faz 4'le birleşiyor, marka
-    adı kararlaşınca alınır" diye bekliyordu — **Faz 4 kapandı**, isim
-    **PLATESTAMP** ve `platestamp.com` 2026-08-20'de RDAP ile **tescilsiz**
-    doğrulanmıştı. Yani bekleyen bir bağımlılık yok, iş artık doğrudan
-    yapılabilir: alan adını al → SendGrid'de domain authentication (SPF/DKIM)
-    → Supabase SMTP gönderen adresini ona çevir.
-    ⚠️ Müsaitlik 2026-08-20 ölçümü — satın almadan önce **tekrar kontrol et**.
+    ✅ **ÖN KOŞULU KALKTI (2026-08-22):** "Faz 4'le birleşiyor, marka adı
+    kararlaşınca alınır" diye bekliyordu — **Faz 4 kapandı**, isim
+    **PLATESTAMP**. Bekleyen bağımlılık yok.
+    ⏸️ **AMA BİLİNÇLİ OLARAK ERTELENDİ (2026-08-22, kullanıcı kararı):** bugün
+    canlı bir sorun üretmiyor. **Tetikleyici koşul:** e-posta gönderim
+    limitlerine gerçekten takılmak — `over_email_send_rate_limit` görülmesi,
+    "onay maili gelmedi" şikayetleri, ya da davetli çevrenin büyümesi.
+    🔑 **İkinci bir tetikleyici Apple Girişi'nden gelebilir:** "Hide My Email"
+    ile gelen `@privaterelay.appleid.com` adreslerine mail gönderebilmek
+    Apple'da gönderen alan adının kayıtlı olmasını istiyor.
+    **Beş adımlık plan ve `platestamp.com`'un 2026-08-20 müsaitlik ölçümü
+    dosyanın başındaki "BEKLEMEDE — alan adı / SPF-DKIM" bölümünde saklı.**
 - ✅ **BOT KORUMASI (2026-08-17) — listede yoktu, sonradan eklendi ve kapandı.**
   Koşul olarak yazılmamıştı ama fiilen **"custom SMTP" koşulunu koruyan şey
   bu**: captcha olmadan bir bot, kayıt/tekrar-gönder uçlarına script atıp
