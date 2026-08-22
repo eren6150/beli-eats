@@ -2,7 +2,68 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-20
+## 📍 Nerede kaldık — 2026-08-21 · 🏷️ REBRAND DEVAM EDİYOR
+
+> 🔴 **BU BÖLÜM AKTİF BİR OPERASYONUN ORTASINI ANLATIYOR.** Yeni bir sohbet
+> buradan devam etmeli; aşağıdaki "SIRADAKİ TEK ADIM" ile başla.
+
+**Uygulama artık PLATESTAMP.** versionCode **8** / `version` **2.0.0** sahada,
+13 maddelik test listesi (harita · Google girişi · deep link dahil) ve test
+OTA'sı doğrulandı. Rebrand'in **en riskli kısmı bitti**.
+
+### Faz durumu
+
+| Faz | İş | Durum |
+|---|---|---|
+| 0 | Hazırlık, SHA-1, panel notları | ✅ |
+| 1 | Google Cloud + Supabase'e YENİ kimlikleri **EKLE** | ✅ (eskiler duruyor) |
+| 2 | Kod: Kategori A · B · görseller | ✅ `31bbe1c` `6849bf7` `fc4d23c` |
+| 3 | Build + 13 test + test OTA | ✅ **doğrulandı** |
+| 4 · Adım 1 | `docs/*.html` içerik (URL'ler DEĞİL) | ✅ `71220ae`, **canlıda doğrulandı** |
+| 4 · Adım 2-5 | Repo adı · remote · Site URL · Pages | ⏳ **KULLANICI ELLE YAPIYOR** |
+| 4 · Adım 6-7 | **`PRIVACY_URL` + OTA** | ⬜ **SIRADAKİ** |
+| 5 | Eski kayıtları sil | ⬜ |
+
+### ⏭️ SIRADAKİ TEK ADIM (Adım 6)
+
+Kullanıcı repo adını `platestamp` yaptıktan ve Pages'i doğruladıktan sonra:
+
+1. [EditProfileScreen.tsx](src/screens/EditProfileScreen.tsx) → `PRIVACY_URL`
+   `https://eren6150.github.io/beli-eats/gizlilik.html`
+   → `https://eren6150.github.io/platestamp/gizlilik.html`
+2. Commit + push
+3. `npx eas-cli@latest update --branch preview --environment preview --message "Gizlilik URL rebrand sonrasi"`
+4. Doğrulama: uygulamayı kapat-aç → Profili Düzenle → **Gizlilik Politikası**
+   → yeni adres açılıyor mu
+
+⚠️ Repo adı değiştiği andan bu OTA inene kadar uygulamadaki gizlilik
+bağlantısı **kırık** — bilinen ve kabul edilen pencere, dakikalarla sınırlı.
+
+### FAZ 5 — temizlik (Adım 7 doğrulandıktan SONRA)
+
+- [ ] Google Cloud → Maps anahtarından **`com.eren.belieats` satırını sil**
+- [ ] Google Cloud → aynı anahtardan **Places API'yi kaldır**
+      *(artık ölü: anahtar Android kısıtlı, Places REST'i sunucudaki AYRI
+      anahtar yapıyor — inert ama gereksiz yüzey)*
+- [ ] Supabase → Redirect URLs'ten **`belieats://auth-callback` sil**
+- [ ] Telefonlardan **eski Beli Eats uygulamasını kaldır**
+- [ ] Supabase proje adını `platestamp` yap *(kozmetik, URL değişmiyor)*
+
+### 🔑 Bu turun üç kalıcı dersi
+
+1. **EAS slug'ı DEĞİŞTİRİLEMİYOR** — `projectId` ↔ slug bağı kalıcı. `slug`
+   bilerek `beli-eats` kaldı; gerekçe `app.config.js`'te o satırın üstünde.
+2. **Paket adı değişince EAS kimlik bilgileri SIFIRDAN kuruluyor.** Android
+   credentials paket adına göre saklanıyor, `projectId`'ye göre değil — build
+   yeni keystore istedi. Yeni keystore = **yeni SHA-1**, yani FAZ 1'de girilen
+   Google Cloud kaydı güncellenmek zorunda kaldı. iOS bundle eklenirse **aynı
+   sürpriz tekrarlanacak**.
+3. **`.fingerprintignore` desenleri `**/*` ile bitmek zorunda** — detay
+   aşağıda, Build 3 / fingerprint bölümünde.
+
+---
+
+## 📍 (Önceki) Nerede kaldık — 2026-08-20
 
 **İSİM KARARI BEKLERKEN: temizlik + Dalga 0 + Dalga 1 bitti, hepsi sahada.**
 Kullanıcı TÜRKPATENT / alan adı araştırmasında; bu turda isme bağlı OLMAYAN
@@ -3947,11 +4008,23 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 >   Şüpheliler: `useDiary`, `useActivityFeed`, `usePlaceVisits`. Migration ile
 >   istemci düzeltmesi **aynı diff'te** gitmeli.
 
-> ### 🏷️ REBRAND — teşhis + plan HAZIR, isim kararı ERTELENDİ (2026-08-13)
-> "Beli-Eats" → **"Sofra"** kararı verilmiş, tam envanter ve sıralı plan
-> çıkarılmış, sonra **kullanıcı kararıyla park edilmişti** ("şimdilik bir
-> kenara bırakıyoruz, geri döneceğiz"). Yeniden başlarken sıfırdan teşhis
-> gerekmesin diye özet:
+> ### 🏷️ REBRAND — UYGULANIYOR (2026-08-21). İsim: **PLATESTAMP**
+> **Güncel durum dosyanın başındaki "Nerede kaldık" bölümünde** — faz tablosu,
+> sıradaki tek adım ve FAZ 5 temizlik listesi orada.
+>
+> ✅ **Uygulandı:** paket/bundle `com.eren.platestamp` · scheme **ters-DNS**
+> `com.eren.platestamp` (sonek DEĞİL — gerekçe: uydurma bileşik ad, çakışma
+> riski düşük; scheme zaten kırıcı değişiyordu, RFC 8252 biçimini almanın ek
+> maliyeti sıfırdı) · görünen ad Platestamp · `version` 2.0.0 · ikon/splash ·
+> `docs/*.html`.
+>
+> 🔴 **SLUG DEĞİŞTİRİLEMEDİ** — ayrıntı aşağıda.
+>
+> ⚠️ Aşağısı "Sofra" dönemine ait ENVANTER ve hâlâ geçerli (hangi alanın
+> nerede yaşadığı isimden bağımsız). "Sofra" ismi 2026-08-20'de bırakıldı;
+> risk notu tarihsel kayıt olarak duruyor.
+>
+> Özgün envanter:
 >
 > **Kozmetik (A):** dört ekrandaki görünen ad (splash + üç auth ekranı, saf JS
 > → OTA) · `app.json`'daki `name` ve üç izin metni (**native → build**) ·
