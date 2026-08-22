@@ -2,14 +2,16 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-22 · 🏷️ REBRAND SON ADIMDA
+## 📍 Nerede kaldık — 2026-08-22 · 🏷️ REBRAND KODU BİTTİ, SIRA TEMİZLİKTE
 
-> 🔴 **BU BÖLÜM AKTİF BİR OPERASYONUN ORTASINI ANLATIYOR.** Yeni bir sohbet
-> buradan devam etmeli; aşağıdaki "SIRADAKİ TEK ADIM" ile başla.
+> 🟡 **FAZ 4 KAPANDI.** Kalan iş **yalnızca panel temizliği (FAZ 5)** — kod
+> değişikliği, build ve OTA **gerekmiyor**. Yeni bir sohbet aşağıdaki
+> "SIRADAKİ TEK ADIM" ile başlamalı.
 
-**Uygulama artık PLATESTAMP.** versionCode **8** / `version` **2.0.0** sahada,
-13 maddelik test listesi (harita · Google girişi · deep link dahil) ve test
-OTA'sı doğrulandı. Rebrand'in **en riskli kısmı bitti**.
+**Uygulama artık PLATESTAMP ve rebrand'in kod tarafı tamamen sahada.**
+versionCode **8** / `version` **2.0.0**, 13 maddelik test listesi doğrulandı,
+repo · Pages · Supabase Site URL · `PRIVACY_URL` hepsi yeni adreste ve
+**cihazda doğrulandı**.
 
 ### Faz durumu
 
@@ -19,46 +21,26 @@ OTA'sı doğrulandı. Rebrand'in **en riskli kısmı bitti**.
 | 1 | Google Cloud + Supabase'e YENİ kimlikleri **EKLE** | ✅ (eskiler duruyor) |
 | 2 | Kod: Kategori A · B · görseller | ✅ `31bbe1c` `6849bf7` `fc4d23c` |
 | 3 | Build + 13 test + test OTA | ✅ **doğrulandı** |
-| 4 · Adım 1 | `docs/*.html` içerik (URL'ler DEĞİL) | ✅ `71220ae`, **canlıda doğrulandı** |
-| 4 · Adım 2-5 | Repo adı · remote · Site URL · Pages | ✅ **kullanıcı elle yaptı, doğrulandı** |
-| 4 · Adım 6 | `PRIVACY_URL` kod değişikliği | ✅ typecheck temiz |
-| 4 · Adım 7 | **Commit + push + OTA + cihaz doğrulaması** | ⬜ **SIRADAKİ** |
-| 5 | Eski kayıtları sil | ⬜ |
+| 4 · Adım 1 | `docs/*.html` içerik (URL'ler DEĞİL) | ✅ `71220ae` |
+| 4 · Adım 2-5 | Repo adı · remote · Site URL · Pages | ✅ kullanıcı elle yaptı |
+| 4 · Adım 6 | `PRIVACY_URL` kod değişikliği | ✅ `d6ac44e` |
+| 4 · Adım 7 | Push + OTA + cihaz doğrulaması | ✅ **doğrulandı** |
+| **4** | **TAMAMI** | ✅ **KAPANDI (2026-08-22)** |
+| 5 | Eski kayıtları sil | ⬜ **SIRADAKİ** |
 
-### ✅ Adım 2-5 — kullanıcı elle tamamladı (2026-08-22)
+### ⏭️ SIRADAKİ TEK ADIM — FAZ 5, ilk madde
 
-- GitHub repo adı **`platestamp`** oldu
-- Yerel git remote güncellendi (`origin` → `platestamp.git`, doğrulandı)
-- Supabase **Site URL** → `https://eren6150.github.io/platestamp/`
-- Yeni Pages adresi canlı: ana sayfa ve `gizlilik.html` açılıyor, "Platestamp" yazıyor
+**Google Cloud → Maps anahtarından `com.eren.belieats` satırını sil.**
 
-🔑 **BEKLENEN "KIRIK PENCERE" HİÇ OLUŞMADI — GitHub eski adresi YÖNLENDİRİYOR.**
-Repo yeniden adlandırılınca `https://eren6150.github.io/beli-eats/…` otomatik
-olarak yeni adrese yönleniyor. Yani sahadaki APK'nın bundle'ına gömülü ESKİ URL
-çalışmaya devam ediyor; Adım 7'nin OTA'sı **acil değil, hijyen**.
+Console → APIs & Services → Credentials → Maps anahtarı → Application
+restrictions → Android apps → `com.eren.belieats` + eski SHA-1 satırını
+kaldır. `com.eren.platestamp` satırı **KALACAK** — harita onunla çalışıyor.
 
-⚠️ **Ama bu yönlendirmeye GÜVENİLMEZ ve kalıcı sayılmaz:** yalnızca eski adı
-kimse yeni bir repo olarak almadığı sürece yaşıyor. Adı alan biri o URL'in
-içeriğini eline geçirir — **gizlilik metni gibi bir sayfa için kabul edilemez.**
-Kod bu yüzden yine de yeni adrese sabitleniyor.
+⚠️ **Yan etkisi bilinçli olsun:** telefonlarda eski Beli Eats uygulaması hâlâ
+kuruluysa o satırı silmek onun haritasını anında kırar. Zaten kaldırılacak
+(aşağıdaki 4. madde), ama sırayı bilerek seç.
 
-### ✅ Adım 6 — YAPILDI (2026-08-22)
-
-[EditProfileScreen.tsx:38](src/screens/EditProfileScreen.tsx:38) → `PRIVACY_URL`
-artık `https://eren6150.github.io/platestamp/gizlilik.html`. **Typecheck temiz.**
-
-Tarama, eski URL'in projede **tek geçtiği yerin burası** olduğunu gösterdi —
-`docs/*.html` göreli bağlantı kullanıyor, `app.json` · `app.config.js` ·
-`supabase/` temiz. Yani madde gerçekten tek satırlık çıktı.
-
-### ⏭️ SIRADAKİ TEK ADIM (Adım 7)
-
-1. Commit + push
-2. `npx eas-cli@latest update --branch preview --environment preview --message "Gizlilik URL rebrand sonrasi"`
-3. Doğrulama: uygulamayı kapat-aç → Profili Düzenle → **Gizlilik Politikası**
-   → yeni adres açılıyor mu
-
-### FAZ 5 — temizlik (Adım 7 doğrulandıktan SONRA)
+### FAZ 5 — temizlik (hepsi PANEL işi, kod/build/OTA YOK)
 
 - [ ] Google Cloud → Maps anahtarından **`com.eren.belieats` satırını sil**
 - [ ] Google Cloud → aynı anahtardan **Places API'yi kaldır**
@@ -68,7 +50,13 @@ Tarama, eski URL'in projede **tek geçtiği yerin burası** olduğunu gösterdi 
 - [ ] Telefonlardan **eski Beli Eats uygulamasını kaldır**
 - [ ] Supabase proje adını `platestamp` yap *(kozmetik, URL değişmiyor)*
 
-### 🔑 Bu turun üç kalıcı dersi
+ℹ️ **`production` branch'inde ARTIK KULLANILMAYAN bir update duruyor**
+(*"PRIVACY_URL platestamp domain fix"*, 2026-08-22). **Silmeye gerek yok ve
+zararsız:** hiçbir channel o branch'e bakmıyor (bkz. 4. ders). İçeriği de
+`preview`'e giden update ile aynı commit. Kademe 3'te gerçek bir `production`
+channel'ı açılırsa orada geçerli bir başlangıç noktası olarak durur.
+
+### 🔑 Bu turun dört kalıcı dersi
 
 1. **EAS slug'ı DEĞİŞTİRİLEMİYOR** — `projectId` ↔ slug bağı kalıcı. `slug`
    bilerek `beli-eats` kaldı; gerekçe `app.config.js`'te o satırın üstünde.
@@ -79,6 +67,89 @@ Tarama, eski URL'in projede **tek geçtiği yerin burası** olduğunu gösterdi 
    sürpriz tekrarlanacak**.
 3. **`.fingerprintignore` desenleri `**/*` ile bitmek zorunda** — detay
    aşağıda, Build 3 / fingerprint bölümünde.
+4. 🔴 **BRANCH ≠ CHANNEL. Aralarında hiçbir OTOMATİK bağ yok** — detay hemen
+   aşağıda, kendi başlığında.
+
+### 🔴 4. DERS — `--branch production` sahaya HİÇBİR ŞEY göndermez (2026-08-22)
+
+Adım 7'nin ilk denemesi `--branch production` ile yayınlandı. **Komut başarılı
+oldu**, panelde update göründü (Android + iOS, runtime 2.0.0), ve cihaz
+defalarca tamamen kapatılıp açılmasına rağmen **eski kodu çalıştırmaya devam
+etti.**
+
+**Kök neden: branch ile channel farklı şeyler ve isimlerinin aynı olması bir
+bağ kurmuyor.** Cihaz bir *channel* dinler; channel bir *branch*'e eşlenir; o
+eşleme **elle** kurulur.
+
+Ölçülen zincir:
+
+| Katman | Değer |
+|---|---|
+| Cihazdaki build `c50719b8` | `buildProfile: preview` → **`updateChannel: preview`** |
+| Channel `preview` | → branch **`preview`** (`branchMappingLogic: "true"`, %100) |
+| Update nereye gitti | branch **`production`** |
+| Channel `production` | 🔴 **HİÇ YOK** — `channel:list` tek channel döndürüyor |
+
+Yani o update'i alabilecek **tek bir kurulum bile mevcut değildi** — sadece bu
+cihaz değil, hiçbir cihaz. Sessiz başarısızlık, çünkü `eas update` "bunu kimse
+duyamaz" diye uyarmıyor.
+
+- 🔑 **`eas.json` yalnızca BUILD'in channel'ını yazar** (`preview` profili →
+  `channel: "preview"`). `eas update`'in `--branch`'iyle arasında hiçbir ilişki
+  kurmuyor; ikisini birleştiren tek şey channel→branch eşlemesi.
+- ⚠️ **`production` profili bugüne kadar HİÇ build almadı** (AAB üretiyor, Play
+  Store için — Kademe 3). Channel da o yüzden hiç doğmadı. Yani
+  `--branch production` bu projede **tanım gereği ölü bir adres**.
+- **Doğru komut değişmedi** ve bu dosya §8'de zaten bunu yazıyordu:
+  ```
+  npx eas-cli@latest update --branch preview --environment preview --message "..."
+  ```
+  `--environment preview` ayrıca **şart**: build `preview` ortamıyla alındı ve
+  bayrak olmadan `eas update` değişkenleri EAS ortamından değil **yerel
+  `.env`'den** okur (§8'in ıraksama dersi).
+- **REDDEDİLEN çözüm:** `channel:edit` ile `preview` channel'ını `production`
+  branch'ine çevirmek. Update'i indirirdi ama isimlendirmeyi kalıcı olarak ters
+  çevirir ve bundan sonraki her `--branch preview` update'i sessizce sahaya
+  ulaşmaz olurdu — bir kerelik hatayı kalıcı bir tuzağa dönüştürmek.
+- 🩺 **TEŞHİS KISAYOLU** — "OTA indi mi?" sorusunda ilk çalıştırılacak üç komut.
+  Runtime'a bakmadan **ÖNCE** channel eşlemesine bakılmalı; bu vakada runtime
+  iki tarafta da 2.0.0'dı, yani runtime'ı kovalamak boşa tur olurdu:
+  ```
+  npx eas-cli@latest channel:list --json --non-interactive
+  npx eas-cli@latest branch:list  --json --non-interactive
+  npx eas-cli@latest build:list --platform android --limit 1 --json --non-interactive
+  ```
+  Build kaydında bakılacak alan **`updateChannel.name`** — `channel` alanı
+  `undefined` geliyor ve aldatıcı.
+- ⚠️ **İki açılış kuralı:** doğru branch'e gönderildikten sonra bile ilk açılış
+  update'i yalnızca **indirir**, ikinci açılış **uygular**. "Bir kez açtım,
+  gelmedi" tek başına kanıt değil.
+
+### ⚠️ DÜZELTME — GitHub Pages eski adresi YÖNLENDİRMİYOR (ölçüldü)
+
+Bu bölüme 2026-08-22'de önce *"eski adres yönlendiriyor, kırık pencere hiç
+oluşmadı, OTA acil değil hijyen"* diye yazıldı. **ÖLÇÜLDÜ ve YANLIŞ ÇIKTI:**
+
+```
+https://eren6150.github.io/beli-eats/gizlilik.html  → HTTP 404
+https://eren6150.github.io/beli-eats/               → HTTP 404
+https://eren6150.github.io/platestamp/gizlilik.html → HTTP 200
+```
+
+🔑 **Ayrım şu: GitHub *repo* URL'lerini yönlendiriyor
+(`github.com/user/eski` → `github.com/user/yeni`), ama `user.github.io/<repo>/`
+*Pages* adreslerini yönlendirmiyor.** İkisi karıştırılmıştı — repo tarafındaki
+yönlendirmenin çalıştığı gözlem doğruydu, oradan Pages'e genellenmesi yanlıştı.
+
+**Sonucu işin aciliyetini değiştiriyor:** Adım 7'nin OTA'sı "hijyen" değildi;
+sahadaki uygulamada **gerçekten kırık** olan (404 veren) gizlilik bağlantısını
+düzeltti. Rebrand sırasında gizlilik metninin kırık kaldığı pencere **gerçekti**
+ve repo adının değiştiği andan OTA'nın indiği ana kadar sürdü.
+
+⚠️ **Bir sonraki yeniden adlandırmada plan buna dayanmalı:** Pages adresi
+değişiyorsa uygulamadaki bağlantı **aynı turda** OTA ile güncellenmeli;
+"GitHub nasılsa yönlendirir" varsayımı yanlış.
+
 
 ---
 
@@ -4076,15 +4147,18 @@ Not buraya, sırası geldiğinde sıfırdan bağlam kurmak gerekmesin diye düş
 > 3. ✅ **GitHub repo adı → GitHub Pages URL → Supabase Site URL — KAPANDI
 >    (2026-08-22).** Repo `platestamp` oldu, Site URL ve `PRIVACY_URL` yeni
 >    adrese çekildi, iki sayfa da canlıda doğrulandı.
->    🔑 **Ölçüm bağın SERTLİĞİNİ yalanladı:** "iki sayfa birden kırılır, ikisi
->    aynı oturumda yapılmalı" diye yazılmıştı — GitHub repo rename sonrası eski
->    Pages adresini **otomatik yönlendiriyor**, yani hiçbir şey kırılmadı ve
->    sahadaki APK'nın gömülü eski URL'i bugün de çalışıyor.
->    ⚠️ **Yönlendirmeye GÜVENİLMEZ:** yalnızca eski adı kimse yeni bir repo
->    olarak almadığı sürece yaşıyor. Adı alan biri gizlilik metninin URL'ini
->    eline geçirir. Bir sonraki yeniden adlandırmada da plan buna dayanmamalı.
->    Kontrol listesi aynen geçerli: Site URL · gizlilik metni URL'i · varsa
->    Play Store'daki gizlilik bağlantısı.
+>    🔴 **BAĞ SERT ÇIKTI — "yönlendirir" varsayımı ÖLÇÜMLE ÇÜRÜTÜLDÜ.** Bu
+>    satırlara bir ara *"GitHub eski Pages adresini otomatik yönlendiriyor,
+>    hiçbir şey kırılmadı"* yazıldı; `curl` bunu yalanladı:
+>    `user.github.io/beli-eats/…` → **404** (kök de, gizlilik.html de).
+>    GitHub yalnızca **repo** URL'lerini yönlendiriyor, `user.github.io/<repo>/`
+>    **Pages** adreslerini yönlendirmiyor. Yani uyarının orijinal hâli
+>    doğruydu: iki sayfa birden kırıldı ve gizlilik bağlantısı, repo adının
+>    değiştiği andan OTA'nın indiği ana kadar sahada **404 verdi**.
+>    ⚠️ **Sonraki yeniden adlandırmada Pages adresi değişiyorsa uygulamadaki
+>    bağlantı AYNI TURDA OTA ile güncellenmeli.** Kontrol listesi aynen
+>    geçerli: Site URL · gizlilik metni URL'i · varsa Play Store'daki gizlilik
+>    bağlantısı. Tam ölçüm: en üstteki "DÜZELTME — GitHub Pages" bölümü.
 >    ⚠️ Ayrıca `docs/index.html` HÂLÂ ESKİ marka yeşilini (`#22c55e`) kullanıyor,
 >    `gizlilik.html` ise güncel zeytini — **ikisi hâlâ hizalanmadı, açık iş**.
 >
@@ -4668,7 +4742,7 @@ her biri bir öncekinin üstüne biniyor:
 | Kademe | Kim kullanıyor | Ne gerekiyor |
 |---|---|---|
 | **1 — arkadaş testi** | Tanıdığın birkaç kişi | **Bugün çalışıyor.** Ek koşul yok. |
-| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⬜ — *son kalan koşul, Faz 4'e bağlı* |
+| **2 — davetli çevre** | Tanımadığın ama davetli kişiler | ~~E-posta onayı~~ ✅ · ~~**custom SMTP**~~ ✅ · ~~**fotoğraf moderasyonu**~~ ✅ · **kendi alan adı** (spam) ⬜ — *son kalan koşul, ARTIK ENGELSİZ* |
 | **3 — genel yayın** | Herkes | Faz 4 (marka) + ~~Google çağrıları Edge Function arkasına~~ ✅ + Play Store için **AAB** |
 
 - **Kademe 2'nin koşulları DÖRDE ÇIKTI, ikisi kapandı (2026-08-09):**
@@ -4701,8 +4775,14 @@ her biri bir öncekinin üstüne biniyor:
     dosya erişilebilir kalabiliyor. Metin bunu dürüstçe yazıyor. Retry/kuyruk
     mekanizması ölçek büyüyünce yeniden değerlendirilecek.
   - ⬜ **Kendi alan adı** — SPF/DKIM olmadan onay mailleri spam'e düşebilir.
-    Faz 4'le birleşiyor: marka adı kararlaşınca alan adı alınır.
     **Kademe 2'nin TEK kalan koşulu bu.**
+    ✅ **ÖN KOŞULU KALKTI (2026-08-22):** bu madde "Faz 4'le birleşiyor, marka
+    adı kararlaşınca alınır" diye bekliyordu — **Faz 4 kapandı**, isim
+    **PLATESTAMP** ve `platestamp.com` 2026-08-20'de RDAP ile **tescilsiz**
+    doğrulanmıştı. Yani bekleyen bir bağımlılık yok, iş artık doğrudan
+    yapılabilir: alan adını al → SendGrid'de domain authentication (SPF/DKIM)
+    → Supabase SMTP gönderen adresini ona çevir.
+    ⚠️ Müsaitlik 2026-08-20 ölçümü — satın almadan önce **tekrar kontrol et**.
 - ✅ **BOT KORUMASI (2026-08-17) — listede yoktu, sonradan eklendi ve kapandı.**
   Koşul olarak yazılmamıştı ama fiilen **"custom SMTP" koşulunu koruyan şey
   bu**: captcha olmadan bir bot, kayıt/tekrar-gönder uçlarına script atıp
