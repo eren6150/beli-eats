@@ -2,14 +2,21 @@
 
 # Beli-Eats
 
-## 📍 Nerede kaldık — 2026-08-22 · ✅ REBRAND TAMAMEN BİTTİ
+## 📍 Nerede kaldık — 2026-08-22 · ✅ REBRAND BİTTİ · ✅ SAHA TEMİZ
 
-> 🟢 **AKTİF OPERASYON YOK.** Rebrand'in beş fazı da kapandı; kod, build, OTA
-> ve panel tarafında bekleyen hiçbir iş kalmadı.
+> ✅ **REBRAND KAPANDI** — beş fazın beşi de bitti ve rebrand'in son kalıntısı
+> (`docs/index.html`'deki eski wordmark) da düzeltildi. Sahada açık sorun yok.
 >
-> **Sıradaki gündem: Apple ile Giriş / iOS** — ve o iş **hiç başlanmadı**,
-> ilk adımı kod değil **iki bloklayıcı ön koşul** (aşağıda). Kademe 2'nin
-> alan adı koşulu **bilinçli olarak beklemede**, tetikleyici koşula bağlı.
+> ✅ **AÇIK BLOKAJ YOK.** "Google Girişi çalışmıyor" vakası **2026-08-22'de
+> kapandı** — kök neden dağıtım hatasıydı (eski APK silinmeden yenisi
+> kurulmuş), **kodda değil**; uygulama kodunda hiçbir değişiklik yapılmadı.
+> Üç turun teşhisi ve **üç kalıcı ders** aşağıda arşivlendi.
+>
+> ⏭️ **SIRADAKİ GÜNDEM: Apple ile Giriş / iOS.** O iş **hiç başlanmadı** ve şu
+> an ⏸️ **Apple Developer hesap kurtarma bekliyor** — Apple ID şifresi
+> unutuldu, elde Apple cihazı olmadığı için kurtarma **günler sürecek**.
+> **Tamamen kullanıcı işlemi; kod tarafında hızlandırılabilecek bir şey yok.**
+> Kademe 2'nin alan adı koşulu da **beklemede**, tetikleyici koşula bağlı.
 >
 > ℹ️ Bu bölümün altındaki **ders/teşhis kayıtları bilinçli olarak duruyor**
 > (dört kalıcı ders · branch↔channel · GitHub Pages). Benzer bir iş
@@ -29,6 +36,7 @@ doğrulandı**. Eski kimliklerin panel kayıtları temizlendi.
 | 2 | Kod: Kategori A · B · görseller | ✅ `31bbe1c` `6849bf7` `fc4d23c` |
 | 3 | Build + 13 test + test OTA | ✅ |
 | 4 | `docs/*.html` · repo/remote/Site URL/Pages · `PRIVACY_URL` · OTA | ✅ `71220ae` `d6ac44e` |
+| 4 · artık | `docs/index.html` wordmark **BELİ EATS → Platestamp** | ✅ **2026-08-22** *(71220ae'nin atladığı satır)* |
 | 5 | Eski kayıtları sil (panel temizliği) | ✅ **2026-08-22** |
 
 ### ✅ FAZ 5 — kullanıcı panelde elle tamamladı (2026-08-22)
@@ -60,6 +68,131 @@ madde bir daha aranmasın diye yazıldı.
 ⚪ **Tek kozmetik artık:** o Web client'ın adı hâlâ **"Beli Eats Supabase"**.
 Yalnızca Google Cloud panelinde görünen bir etiket; **hiçbir işlevi yok,
 aciliyeti yok**. İstenirse tek tıkla yeniden adlandırılır.
+
+### ✅ KAPANDI — "Google Girişi çalışmıyor" vakası (2026-08-22, üç tur)
+
+> **Sonuç: sahada sorun YOK.** Kök neden **dağıtım hatasıydı**, kodda değil.
+> Uygulama kodunda **hiçbir değişiklik yapılmadı** ve gerekmedi.
+
+**Kök neden:** test kullanıcısı **eski Beli Eats APK'sını silmeden** yeni
+Platestamp APK'sını kurmuştu. Paket adı değiştiği için ikisi **ayrı uygulama**
+olarak yan yana durdu ve telefon **eskisini** çalıştırmaya devam etti. Eski
+uygulama `belieats://auth-callback` gönderiyor; o satır **aynı gün FAZ 5'te
+silinmişti**, dolayısıyla Supabase adresi tanımayıp **Site URL'e** düşüyordu.
+
+**Çözüm:** eski APK silindi, yeni APK **temiz kuruldu** → sorun tamamen bitti.
+
+✅ **Allowlist ŞÜPHESİ ELENDİ:** Supabase Redirect URLs panelde kontrol edildi —
+birebir `com.eren.platestamp://auth-callback`, **tek satır** ("Total URLs: 1").
+Yazım doğruydu; sorun allowlist'te değil cihazdaki uygulamadaydı.
+
+#### 🔴 DERS — paket adı değişen rebrand'de "üstüne kurulum" YETMEZ
+
+**Test kullanıcılarına açıkça söylenmeli: eski uygulamayı SİL, yenisini TEMİZ
+KUR.** Paket adı değişince yeni APK eskisinin **üstüne yüklenmiyor**; Android
+onu ayrı bir uygulama sayıyor ve ikisi yan yana yaşıyor. Kullanıcı çoğu zaman
+farkı görmüyor — ikon ve ad değiştiği için "güncellendi" sanıyor, oysa
+açtığı hâlâ **eski binary**.
+
+⚠️ **Bu ders, rebrand'in 2. dersinin (paket adı ↔ EAS credentials) SAHA
+tarafındaki ikizi.** O ders build'in kırıldığını söylüyordu; bu ders
+**kurulumun sessizce eskide kaldığını** söylüyor.
+
+🔑 **Neden özellikle sinsi:** eski uygulama **açılıyor**, giriş ekranı geliyor,
+Google butonu çalışıyor, `accounts.google.com` bile doğru açılıyor. Kırık olan
+tek şey **dönüş adresi** — yani hata, akışın en sonunda ve **sessizce**
+oluşuyor. Bu vakada üç tur teşhis harcandı.
+
+**Bir sonraki dağıtımda kontrol listesi:**
+- Paket adı değişti mi? → Evet ise dağıtım mesajına **"önce eskisini kaldır"**
+  cümlesi KOYULMALI.
+- Kullanıcıya doğrulatma: Ayarlar → Uygulamalar → **eski ad listede duruyor
+  mu**. Duruyorsa henüz temiz kurulum yapılmamıştır.
+- Eski scheme'in Redirect URL'i silindiği anda eski kurulumların girişi
+  **kırılır** — bu, temizliğin kabul edilen ve **öngörülebilir** bedeli.
+
+#### 🩺 GENEL DERS — "giriş sessizce başarısız oluyor" şikayetinde İLK bakılacak yer
+
+**Supabase `redirect_to`'yu allowlist'e karşı DÖNÜŞ yolunda doğruluyor.
+Uyuşmazsa hata vermiyor — sessizce `Site URL`'e düşüyor.**
+
+Bu davranışın üç sonucu var ve üçü de teşhisi zorlaştırıyor:
+
+1. **Akışın başı sağlam görünüyor.** `accounts.google.com` doğru açılır, hesap
+   seçimi çalışır — çünkü `redirect_to` o aşamada hiç kontrol edilmez.
+   *"Google ekranı geliyor demek ki yapılandırma doğru"* çıkarımı **yanlış**.
+2. **Kullanıcı YANILTICI bir sayfa görüyor.** Site URL bu projede
+   `docs/index.html` ve orada **"E-postan onaylandı"** yazıyor — oysa hiçbir
+   e-posta onaylanmadı. Sayfa akış türüne göre seçilmiyor; Site URL **her**
+   uyumsuz yönlendirmenin ortak fallback'i.
+3. 🔴 **Uygulama tarafında hata ÜRETİLMİYOR.**
+   `WebBrowser.openAuthSessionAsync` yalnızca tarayıcı `redirectTo`'ya
+   gittiğinde `success` döner. Site URL'e düşünce dönmez; kullanıcı sekmeyi
+   kapatınca sonuç `dismiss`/`cancel` olur ve `signInWithGoogle` bunu
+   **`cancelled`** sayar — `handleGoogle` erken çıkar, **Alert bile
+   gösterilmez**. Semptom: "butona basıyorum, hiçbir şey olmuyor".
+
+⚠️ **"Sekmeyi kapatıp uygulamaya dönersem giriş tamamlanır mı?" → HAYIR.**
+`?code=` statik sayfaya teslim edilir ve o sayfa onunla hiçbir şey yapmaz
+(script'i yalnızca `#hash` temizliyor, OAuth ise `?code=` query'si kullanıyor).
+PKCE doğrulayıcısı uygulamanın belleğinde, yani kodu **yalnızca uygulama**
+takas edebilir — ve ona hiç ulaşmaz.
+
+**Kontrol sırası (bu vakadan çıkarıldı):**
+1. Cihazdaki uygulama hangisi ve **hangi scheme'i** gönderiyor *(en sık
+   atlanan ve bu vakada kök neden olan adım)*
+2. `app.json` → `scheme` ile `Linking.createURL()` çıktısı
+3. Supabase → Redirect URLs listesinde **birebir** o adres var mı
+
+#### 🔤 DERS — `grep -i` REBRAND TARAMASINDA SAHTE "TEMİZ" VERİR
+
+Bu turda `grep -ri "beli"` ile yapılan tarama **TEMİZ raporladı**, ama
+`docs/index.html:146` içinde **`BELİ EATS`** duruyordu ve **canlıdaydı**.
+
+**Sebep: Türkçe büyük İ (U+0130) `-i` ile `i`'ye katlanmıyor.** Yani
+büyük harfle yazılmış Türkçe marka adları `-i` taramasında **görünmez**.
+Rebrand commit'i (`71220ae`) `<title>`'ı ve yorumları güncellemiş, tam da bu
+yüzden görünür wordmark'ı atlamıştı.
+
+✅ **Bundan sonra kullanılacak yöntem — `-i` bayrağına GÜVENME, varyantları
+AYRI AYRI ara:**
+```
+grep -rn "EATS\|Eats\|eats\|BELİ\|Beli\|beli" docs/ src/ app.json
+```
+Aynı tuzak `I/ı` çiftinde de var (`PLATESTAMP` ↔ `platestamp` sorun değil ama
+`İ` içeren her ad risklidir). **Bir sonraki yeniden adlandırmada tarama bu
+biçimde yapılmalı**, yoksa "temiz" raporu hiçbir şey kanıtlamaz.
+
+#### 🧩 AYRICA DOĞRULANDI — Linkify hipotezi DOĞRUYDU (2. tur)
+
+Hesap seçim ekranında **e-posta metni yerine avatara** dokunulduğunda compose
+ekranı **açılmadı** ve akış devam etti. Yani Android'in `Linkify` /
+TextClassifier katmanı gerçekten e-posta metnini tıklanabilir bir `mailto:`
+bağlantısına çevirip dokunuşu çalıyordu.
+
+- **Kod tarafında yapılacak bir şey YOK** — uygulamanın rolü URL'i sistem
+  tarayıcısına vermekle bitiyor, sonrası Custom Tabs + cihaz.
+- **Rebrand'le ilgisi yoktu**, zamanlama tesadüftü.
+- 🔑 **Bu vakanın asıl dersi: İKİ AYRI SORUN ÜST ÜSTE BİNMİŞTİ** ve biri
+  diğerini maskeliyordu. Compose ekranı (Linkify) o kadar dikkat çekiciydi ki
+  arkasındaki gerçek blokajı (scheme uyuşmazlığı) üç tur boyunca gizledi.
+  **Bir semptom açıklandığında "sorun bitti" varsayma — akışın SONUNA kadar
+  yürü.**
+
+#### 📋 Tur tur kanıt geçmişi *(arşiv)*
+
+| Tur | Kanıt | Sonuç |
+|---|---|---|
+| 1 | Kodda `mailto` yok, `docs/index.html`'de `<a href>` yok | İki hipotez elendi; allowlist şüphesi doğdu |
+| 2 | `accounts.google.com` doğru açılıyor, compose'da To = kişi rozeti | Allowlist bu semptomun sebebi olmaktan çıktı; **Linkify** öne geçti |
+| 3 | Avatara dokunma → compose YOK ama Site URL'e düşüyor | Linkify **doğrulandı**; asıl blokaj **scheme uyuşmazlığı** çıktı |
+
+⚪ **AÇIK KOZMETİK İŞ — iniş sayfası metni akıştan bağımsız değil.**
+`docs/index.html` her fallback'te **"E-postan onaylandı"** diyor; OAuth
+başarısızlığında bu **yanlış bilgi**. Akıştan bağımsız bir metin
+("Uygulamaya dönebilirsin" gibi) daha dürüst olurdu. **Aciliyeti yok** —
+bugün bilinen bir tetikleyicisi kalmadı, çünkü onu üreten dağıtım hatası
+kapandı. İstenirse tek commit + push (OTA gerekmez).
 
 ### ⏸️ BEKLEMEDE — alan adı / SPF-DKIM *(tetikleyici koşula bağlı)*
 
@@ -134,14 +267,34 @@ Apple Girişi **mecburi**.
 kararı tam da bu yüzden doğruydu: Google ile girenin şifresi yok, şifre
 sorulsaydı o kullanıcılar hesabını hiç silemezdi.
 
+#### ✅ KAPSAM KARARI (2026-08-22): Apple Girişi YALNIZCA iOS
+
+**Android'de gösterilmeyecek.** Gerekçe: Apple bunu yalnızca iOS'ta zorunlu
+kılıyor (Guideline 4.8) ve Android'de Google girişi zaten var, yani ikinci bir
+sağlayıcı net bir fayda getirmiyor.
+
+🔑 **Bu karar işi belirgin şekilde KÜÇÜLTÜYOR** ve yukarıdaki "3. tuzak"ı
+tamamen ortadan kaldırıyor: Android tarafı için tarayıcı tabanlı ikinci bir
+OAuth yolu kurulmayacak. Kalan tek yol **`expo-apple-authentication`** —
+native, yalnızca iOS'ta çalışıyor, ve zaten yalnızca orada gerekiyor.
+
+⚠️ **Butonun kendisi de platforma koşullu olmalı** (`Platform.OS === 'ios'`).
+Android'de görünen ama çalışmayan bir Apple butonu, bu projede dört kez
+pahalıya patlamış isim/davranış uyumsuzluğunun beşincisi olurdu.
+
 #### 🔴 İKİ BLOKLAYICI ÖN KOŞUL — ikisi de kod DEĞİL
 
 Bunlar çözülmeden yazılacak hiçbir kod doğrulanamaz:
 
-1. **Apple Developer Program üyeliği — 99 USD/yıl.** Onsuz App ID
-   oluşturulamaz, **Sign in with Apple capability açılamaz**, Supabase'in
-   istediği Services ID + private key üretilemez, imzalı build alınamaz.
-   Bireysel üyelikte onay genelde hızlı ama **anında değil**.
+1. ⏸️ **Apple Developer Program üyeliği — 99 USD/yıl. BAŞLADI, BLOKLANDI
+   (2026-08-22).** Onsuz App ID oluşturulamaz, **Sign in with Apple capability
+   açılamaz**, Supabase'in istediği Services ID + private key üretilemez,
+   imzalı build alınamaz.
+   🔴 **Bloklayan şey:** Apple ID şifresi unutuldu ve elde **hiç Apple cihazı
+   yok**, bu yüzden Apple'ın hesap kurtarma/doğrulama süreci **günler
+   sürecek**. Kullanıcı hesabına erişince Developer kaydına devam edecek.
+   ⚠️ Yani bu madde şu an **beklemede ve tamamen kullanıcı işlemi** — kod
+   tarafında hızlandırılabilecek hiçbir şey yok.
 2. **Test edilecek bir iPhone.** EAS bulutta derliyor, yani **Mac
    GEREKMİYOR** — ama doğrulama için gerçek cihaz gerekiyor (simülatör Mac
    ister). ⚠️ Bu projenin en pahalı dersi *"Expo Go'daki ölçüm kanıt
@@ -170,7 +323,7 @@ sebebi; internal/preview build'de sorun değil ve o an çok uzakta (Kademe 3).
 
 **Önerilen sıra:**
 
-1. iPhone var mı? *(blokolayıcı soru)* → Apple Developer üyeliği
+1. ⏸️ iPhone var mı? *(blokolayıcı soru)* → Apple Developer üyeliği **(şu an burada: hesap kurtarma bekleniyor)**
 2. 🍎 **Console'da `Maps SDK for iOS`'u anahtara GERİ EKLE.** 2026-08-05'te
    API kısıtlaması yapılırken **bilinçli olarak kaldırılmıştı** ve bu dosya o
    gün şu uyarıyı düşmüştü: unutulursa iOS'ta harita **sessizce** kırılır —
@@ -202,10 +355,10 @@ Bunlar bu projenin mevcut kodundan çıkarıldı, genel tavsiye değil:
    gerekiyor** — yani yukarıda **ertelenen alan adı işiyle doğrudan bağlı**.
    ⚠️ Bu bağ, ertelenen maddenin tetikleyicilerinden biri sayılmalı.
 3. **`expo-apple-authentication` NATIVE** → build ister, ve **yalnızca
-   iOS'ta** çalışır. Android'de Apple Girişi istenirse yol farklı: tarayıcı
-   tabanlı OAuth, yani mevcut Google girişinin altyapısının aynısı
-   (`expo-web-browser` + `scheme` + `Linking`). **"Tam entegrasyon" iki
-   platformu da kapsıyor mu — kayıtlı bir karar YOK**, netleştirilmeli.
+   iOS'ta** çalışır. ✅ **Bu artık bir sorun değil: kapsam yalnızca iOS
+   (2026-08-22 kararı).** Android için tarayıcı tabanlı ikinci bir yol
+   kurulmayacağı için bu tuzak kapandı; kalan tek iş butonu
+   `Platform.OS === 'ios'` ile koşullamak.
 4. **Sürüm ritüeli iOS'ta farklı isimde:** Android `versionCode`, iOS
    `ios.buildNumber`. `appVersionSource: "local"` olduğu için ikisi de
    **elle** yönetilecek; `app.json`'da bugün `buildNumber` **hiç yok**.
